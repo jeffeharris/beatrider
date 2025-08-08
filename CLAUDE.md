@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Beat Shooter game that synchronizes gameplay with Spotify music beats. The project consists of:
+This is Beatrider, a game that synchronizes gameplay with Spotify music beats. The project consists of:
 - A single-page web application (`index.html`) that combines Spotify Web API integration with a Phaser.js game
 - Uses Spotify's audio analysis API to extract beat timings from tracks
 - Implements PKCE OAuth flow for secure Spotify authentication

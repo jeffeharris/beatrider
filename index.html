@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Beat Shooter • Spotify Mode</title>
+  <title>Beatrider • Spotify Mode</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
@@ -174,13 +174,45 @@ function getAuthHeader(){ return { 'Authorization': 'Bearer '+accessToken }; }
 
 async function api(path, opts={}){
   const res = await fetch('https://api.spotify.com/v1'+path, { ...opts, headers: { 'Content-Type':'application/json', ...getAuthHeader(), ...(opts.headers||{}) } });
+  
   if(res.status===401){ // try refresh once
-    const cid = els('clientId').value.trim();
+    log('Token expired, attempting refresh...');
+    const cid = els('clientId').value.trim() || window.ENV?.SPOTIFY_CLIENT_ID;
     const nt = await refreshToken(cid);
-    if(nt){ accessToken = nt.access_token; return api(path, opts); }
+    if(nt){ 
+      accessToken = nt.access_token; 
+      log('Token refreshed successfully');
+      return api(path, opts); 
+    }
+    log('Token refresh failed - please login again');
+    throw new Error('Authentication failed');
   }
-  if(!res.ok) throw new Error('API '+path+' -> '+res.status);
-  return res.json();
+  
+  // Handle 204 No Content (successful but no response body)
+  if(res.status === 204 || res.status === 202) {
+    return null;
+  }
+  
+  // Read the response body
+  const text = await res.text();
+  
+  if(!res.ok) {
+    console.error('API error response:', text);
+    throw new Error(`API ${path} -> ${res.status}: ${text.substring(0, 100)}`);
+  }
+  
+  // Empty response is ok for some endpoints
+  if(!text || text.trim() === '') {
+    return null;
+  }
+  
+  // Try to parse JSON
+  try {
+    return JSON.parse(text);
+  } catch(e) {
+    console.error('Failed to parse API response as JSON:', text.substring(0, 200));
+    throw new Error('API returned invalid JSON: ' + text.substring(0, 100));
+  }
 }
 
 function parseSpotifyUrl(u){
@@ -207,7 +239,7 @@ async function ensureDevice(){
     
     window.onSpotifyWebPlaybackSDKReady = () => {
       player = new Spotify.Player({
-        name: 'Beat Shooter (Browser)',
+        name: 'Beatrider (Browser)',
         getOAuthToken: cb => cb(accessToken),
         volume: 0.8
       });
@@ -265,59 +297,115 @@ async function getPlayerState(){
 }
 
 /*******************
- * AUDIO ANALYSIS → BEAT SCHEDULER
+ * AUDIO ANALYSIS → BEAT DETECTION
  *******************/
-let beatTimesSec = []; // absolute timestamps (sec) since track start
-let beatIdx = 0;
 let beatCounter = 0;
-let schedulerTimer = null;
 let calibrationMs = 0;
+let audioContext = null;
+let analyser = null;
+let beatDetector = null;
 
 function setCalibration(ms){ calibrationMs = (+ms)|0; }
 
-async function fetchBeatsForCurrent(){
-  // Get current track ID
-  const state = await api('/me/player/currently-playing');
-  if(!state || !state.item) throw new Error('No current track');
-  const trackId = state.item.id;
-  const analysis = await api('/audio-analysis/'+trackId);
-  beatTimesSec = (analysis.beats||[]).map(b => b.start);
-  beatIdx = 0; beatCounter = 0;
-  log('Loaded beats: '+beatTimesSec.length+' • tempo '+(analysis.track?.tempo||'?'));
+// Beat detection using frequency analysis
+class BeatDetector {
+  constructor(analyser) {
+    this.analyser = analyser;
+    this.bufferLength = analyser.frequencyBinCount;
+    this.dataArray = new Uint8Array(this.bufferLength);
+    this.lastKick = 0;
+    this.kickThreshold = 0;
+    this.kickHistory = [];
+    this.minTimeBetweenBeats = 300; // ms - prevents double triggers
+  }
+  
+  detectBeat() {
+    this.analyser.getByteFrequencyData(this.dataArray);
+    
+    // Focus on kick drum frequencies (60-130 Hz)
+    // For 44100 Hz sample rate with 2048 FFT size: each bin = ~21.5 Hz
+    let kickEnergy = 0;
+    for(let i = 3; i < 7; i++) {
+      kickEnergy += this.dataArray[i];
+    }
+    kickEnergy = kickEnergy / 4;
+    
+    // Adaptive threshold based on recent history
+    this.kickHistory.push(kickEnergy);
+    if(this.kickHistory.length > 43) { // ~1 second at 43fps
+      this.kickHistory.shift();
+    }
+    
+    const avgEnergy = this.kickHistory.reduce((a,b) => a+b, 0) / this.kickHistory.length;
+    const threshold = avgEnergy * 1.5; // Beat is 50% above average
+    
+    const now = Date.now();
+    if(kickEnergy > threshold && kickEnergy > 150 && (now - this.lastKick) > this.minTimeBetweenBeats) {
+      this.lastKick = now;
+      return true;
+    }
+    return false;
+  }
+}
+
+async function setupAudioAnalysis(){
+  try {
+    // Create audio context and analyser
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.8;
+    
+    // Try to capture audio from the page
+    // Note: This is a simplified version - in production you'd need to handle 
+    // cross-origin issues and potentially use a different audio source
+    const audioElement = document.querySelector('audio') || document.createElement('audio');
+    const source = audioContext.createMediaElementSource(audioElement);
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+    
+    beatDetector = new BeatDetector(analyser);
+    log('Beat detector initialized');
+    return true;
+  } catch(err) {
+    log('Could not setup audio analysis: ' + err.message);
+    console.error('Audio setup error:', err);
+    return false;
+  }
 }
 
 function flashLED(){ const led=els('led'); led.style.background='#0f0'; setTimeout(()=>led.style.background='#030', 60); }
 
-function scheduleBeatsLoop(){
-  clearInterval(schedulerTimer);
-  schedulerTimer = setInterval(async ()=>{
-    const st = await getPlayerState();
-    if(!st || st.paused) return;
-    if(!st.position && st.position !== 0) return;
-    
-    const posSec = (st.position/1000) + (calibrationMs/1000);
-    
-    // Skip beats that have already passed
-    while (beatIdx < beatTimesSec.length && beatTimesSec[beatIdx] < posSec - 0.05){
-      beatIdx++;
+function startBeatDetection(){
+  log('Starting real-time beat detection...');
+  
+  // Animation frame loop for beat detection
+  let detecting = false;
+  
+  function detectLoop() {
+    if(!beatDetector || !analyser) {
+      requestAnimationFrame(detectLoop);
+      return;
     }
     
-    // Schedule upcoming beats within lookahead window
-    const lookahead = 0.25; // seconds
-    let scheduled = 0;
-    while (beatIdx < beatTimesSec.length && beatTimesSec[beatIdx] < posSec + lookahead){
-      const t = beatTimesSec[beatIdx];
-      const delayMs = Math.max(0, (t - posSec) * 1000);
-      setTimeout(()=>{ onBeat(); }, delayMs);
-      beatIdx++;
-      scheduled++;
-    }
+    // Check if music is playing
+    player.getCurrentState().then(state => {
+      if(state && !state.paused && !detecting) {
+        detecting = true;
+        
+        // Detect beat
+        if(beatDetector.detectBeat()) {
+          onBeat();
+        }
+        
+        detecting = false;
+      }
+    });
     
-    // Debug logging to see what's happening
-    if(scheduled > 0) {
-      console.log(`Scheduled ${scheduled} beats at position ${posSec.toFixed(2)}s`);
-    }
-  }, 50);
+    requestAnimationFrame(detectLoop);
+  }
+  
+  detectLoop();
 }
 
 function onBeat(){
@@ -403,14 +491,14 @@ const spotifyUrl = els('spotifyUrl');
 els('calib').addEventListener('change', (e)=> setCalibration(e.target.value));
 
 loginBtn.addEventListener('click', async ()=>{
-  const cid = els('clientId').value.trim();
+  const cid = els('clientId').value.trim() || window.ENV?.SPOTIFY_CLIENT_ID;
   if(!cid){ alert('Enter your Spotify Client ID (see Setup notes).'); return; }
   await startAuth(cid);
 });
 
 loadBtn.addEventListener('click', async ()=>{
   try{
-    const cid = els('clientId').value.trim();
+    const cid = els('clientId').value.trim() || window.ENV?.SPOTIFY_CLIENT_ID;
     if(!cid){ alert('Enter Client ID and login first.'); return; }
 
     // Acquire token (finish PKCE or use cached)
@@ -418,6 +506,7 @@ loadBtn.addEventListener('click', async ()=>{
     if(!tok){ tok = await finishAuth(cid); }
     if(!tok){ alert('Not logged in. Click Login.'); return; }
     accessToken = tok.access_token;
+    console.log('Access token set:', accessToken ? 'yes ('+accessToken.substring(0,20)+'...)' : 'no');
     setText('authState', 'token ok');
 
     // Get current user to verify Premium
@@ -443,10 +532,17 @@ loadBtn.addEventListener('click', async ()=>{
       return;
     }
 
-    setText('nowplay', 'Loading analysis…');
+    setText('nowplay', 'Setting up beat detection…');
     await new Promise(r=>setTimeout(r, 600)); // give player a moment to start
-    await fetchBeatsForCurrent();
-    scheduleBeatsLoop();
+    
+    // Setup audio analysis for beat detection
+    const audioReady = await setupAudioAnalysis();
+    if(!audioReady) {
+      log('Beat detection unavailable - manual rhythm mode');
+      // Could implement a timer-based beat here as fallback
+    }
+    
+    startBeatDetection();
     setText('nowplay', 'Ready. Hit Play.');
   }catch(err){ log('Load error: '+err.message); }
 });
@@ -479,6 +575,60 @@ pauseBtn.addEventListener('click', async ()=>{
     setText('nowplay','Paused'); 
   }
   catch(err){ log('Pause error: '+err.message); }
+});
+
+// Debug function to test API calls manually
+window.debugAPI = async function(endpoint) {
+  if(!accessToken) {
+    console.log('No access token set. Load a track first.');
+    return;
+  }
+  
+  console.log(`Testing API call to: ${endpoint}`);
+  console.log(`Using token: ${accessToken.substring(0, 20)}...`);
+  
+  try {
+    const res = await fetch('https://api.spotify.com/v1' + endpoint, {
+      headers: {
+        'Authorization': 'Bearer ' + accessToken,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('Response status:', res.status);
+    console.log('Response headers:', Object.fromEntries(res.headers.entries()));
+    
+    const text = await res.text();
+    console.log('Response body (first 500 chars):', text.substring(0, 500));
+    
+    try {
+      const json = JSON.parse(text);
+      console.log('Parsed JSON:', json);
+      return json;
+    } catch(e) {
+      console.log('Not valid JSON');
+      return text;
+    }
+  } catch(err) {
+    console.error('Request failed:', err);
+  }
+};
+
+// On page load, populate fields from environment variables
+window.addEventListener('DOMContentLoaded', ()=>{
+  if(window.ENV?.SPOTIFY_CLIENT_ID && !els('clientId').value) {
+    els('clientId').value = window.ENV.SPOTIFY_CLIENT_ID;
+    log('Client ID loaded from environment');
+  }
+  if(window.ENV?.SPOTIFY_DEFAULT_URL && !spotifyUrl.value) {
+    spotifyUrl.value = window.ENV.SPOTIFY_DEFAULT_URL;
+  }
+  
+  // Log debug instructions
+  console.log('Debug commands available:');
+  console.log('  debugAPI("/me") - test user endpoint');
+  console.log('  debugAPI("/me/player/currently-playing") - test current track');
+  console.log('  debugAPI("/audio-analysis/TRACK_ID") - test audio analysis');
 });
 </script>
 <script src="https://sdk.scdn.co/spotify-player.js"></script>
