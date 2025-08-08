@@ -1,0 +1,486 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Beat Shooter • Spotify Mode</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <style>
+    :root { --fg:#0f0; --fg2:#9f9; --bg:#000; }
+    html,body { height:100%;}
+    body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 monospace; }
+    #ui { position:absolute; left:10px; top:10px; background:rgba(0,0,0,.6); padding:10px; border:1px solid var(--fg); border-radius:6px; width:560px; max-width:calc(100% - 20px); z-index:10; }
+    #ui input[type="text"], #ui input[type="url"] { width: 360px; }
+    #ui input[type="number"] { width: 90px; }
+    #led { display:inline-block; width:10px; height:10px; margin-left:6px; background:#030; border:1px solid var(--fg); vertical-align:middle; }
+    button { cursor:pointer; }
+    .row { margin:6px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .muted { color:var(--fg2); }
+    .small { font-size:12px; }
+    #log { max-height:110px; overflow:auto; border:1px solid #083; padding:6px; font-size:12px; background:#010; }
+  </style>
+</head>
+<body>
+<div id="ui">
+  <div class="row"><strong>Spotify Mode Demo</strong> <span class="muted small">• Premium required for playback • HTTPS/127.0.0.1 only</span></div>
+
+  <div class="row">
+    <button id="loginBtn">Log in with Spotify</button>
+    <span id="authState" class="muted"></span>
+  </div>
+
+  <div class="row small">
+    <label>Calibration (ms)
+      <input id="calib" type="number" value="0" step="5" />
+    </label>
+    <span id="beatInfo" class="muted">Beats: 0</span>
+    <span id="led" title="Beat LED"></span>
+  </div>
+
+  <div class="row">
+    <input id="spotifyUrl" type="url" placeholder="Paste a Spotify track or playlist URL (e.g. https://open.spotify.com/track/...)" />
+    <button id="loadBtn">Load</button>
+  </div>
+
+  <div class="row">
+    <button id="playBtn">Play</button>
+    <button id="pauseBtn">Pause</button>
+    <span id="nowplay" class="muted small"></span>
+  </div>
+
+  <div class="row small">
+    <span>Device: <span id="deviceName" class="muted">(starting…)</span></span>
+    <span>SDK: <span id="sdkState" class="muted">waiting</span></span>
+  </div>
+
+  <div id="log" class="small"></div>
+
+  <div class="row small muted">
+    <details>
+      <summary>Setup notes</summary>
+      <div>
+        1) In Spotify Dashboard, set Redirect URI to <code><span id="redirHint"></span></code><br/>
+        2) Paste your Client ID below (temporary) and click Login.<br/>
+      </div>
+      <label>Client ID <input id="clientId" type="text" placeholder="YOUR_SPOTIFY_CLIENT_ID"/></label>
+    </details>
+  </div>
+</div>
+
+<script>
+/*******************
+ * CONFIG / PKCE AUTH
+ *******************/
+const REDIRECT_URI = (location.protocol+"//"+location.host+location.pathname).replace(/[#?].*$/,'');
+const SCOPES = [
+  'streaming',
+  'user-read-email',
+  'user-read-private',
+  'user-read-playback-state',
+  'user-modify-playback-state',
+  'playlist-read-private',
+  'playlist-read-collaborative'
+];
+
+const els = (id => document.getElementById(id));
+const logEl = els('log');
+function log(msg){ const t=document.createElement('div'); t.textContent=msg; logEl.prepend(t); }
+function setText(id, txt){ els(id).textContent = txt; }
+setText('redirHint', REDIRECT_URI);
+
+function base64url(arraybuffer){
+  let str = btoa(String.fromCharCode.apply(null, new Uint8Array(arraybuffer)));
+  return str.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function sha256(verifier){
+  const enc = new TextEncoder().encode(verifier);
+  return await crypto.subtle.digest('SHA-256', enc);
+}
+function randString(len=64){
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  let out=''; for(let i=0;i<len;i++) out+=chars[Math.floor(Math.random()*chars.length)];
+  return out;
+}
+
+function saveToken(tok){ localStorage.setItem('spotify_token', JSON.stringify({ ...tok, ts: Date.now() })); }
+function loadToken(){ try{ const t=JSON.parse(localStorage.getItem('spotify_token')||'null'); return t; }catch{return null;} }
+function clearToken(){ localStorage.removeItem('spotify_token'); }
+
+async function startAuth(clientId){
+  const verifier = randString(64);
+  const challenge = base64url(await sha256(verifier));
+  localStorage.setItem('pkce_verifier', verifier);
+  const url = new URL('https://accounts.spotify.com/authorize');
+  url.searchParams.set('client_id', clientId);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('redirect_uri', REDIRECT_URI);
+  url.searchParams.set('code_challenge_method', 'S256');
+  url.searchParams.set('code_challenge', challenge);
+  url.searchParams.set('scope', SCOPES.join(' '));
+  location.assign(url.toString());
+}
+
+async function finishAuth(clientId){
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  if(!code) return null;
+  const verifier = localStorage.getItem('pkce_verifier');
+  if(!verifier){ log('Missing PKCE verifier.'); return null; }
+  const body = new URLSearchParams();
+  body.set('client_id', clientId);
+  body.set('grant_type', 'authorization_code');
+  body.set('code', code);
+  body.set('redirect_uri', REDIRECT_URI);
+  body.set('code_verifier', verifier);
+  const res = await fetch('https://accounts.spotify.com/api/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+  if(!res.ok){ log('Token exchange failed: '+res.status); return null; }
+  const tok = await res.json();
+  saveToken(tok);
+  // cleanup query string
+  history.replaceState({}, '', REDIRECT_URI);
+  return tok;
+}
+
+async function refreshToken(clientId){
+  const tok = loadToken();
+  if(!tok || !tok.refresh_token) return null;
+  const body = new URLSearchParams();
+  body.set('client_id', clientId);
+  body.set('grant_type', 'refresh_token');
+  body.set('refresh_token', tok.refresh_token);
+  const res = await fetch('https://accounts.spotify.com/api/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+  if(!res.ok){ clearToken(); return null; }
+  const n = await res.json();
+  const merged = { ...tok, ...n };
+  saveToken(merged);
+  return merged;
+}
+
+/*******************
+ * SPOTIFY SDK + WEB API
+ *******************/
+let player, deviceId, accessToken, userPremium=false;
+let sdkReady = false;
+let sdkReadyResolve = null;
+
+// Define the callback immediately for when SDK loads
+window.onSpotifyWebPlaybackSDKReady = () => {
+  sdkReady = true;
+  if (sdkReadyResolve) sdkReadyResolve();
+};
+
+function getAuthHeader(){ return { 'Authorization': 'Bearer '+accessToken }; }
+
+async function api(path, opts={}){
+  const res = await fetch('https://api.spotify.com/v1'+path, { ...opts, headers: { 'Content-Type':'application/json', ...getAuthHeader(), ...(opts.headers||{}) } });
+  if(res.status===401){ // try refresh once
+    const cid = els('clientId').value.trim();
+    const nt = await refreshToken(cid);
+    if(nt){ accessToken = nt.access_token; return api(path, opts); }
+  }
+  if(!res.ok) throw new Error('API '+path+' -> '+res.status);
+  return res.json();
+}
+
+function parseSpotifyUrl(u){
+  try{
+    const url = new URL(u);
+    const parts = url.pathname.split('/').filter(Boolean);
+    const type = parts[0]; const id = parts[1];
+    return { type, id };
+  }catch{ return null; }
+}
+
+async function ensureDevice(){
+  // Check if SDK is already loaded and player exists
+  if(player && deviceId) {
+    log('Device already initialized: '+deviceId);
+    return;
+  }
+  
+  return new Promise((resolve, reject)=>{
+    // Set a timeout in case SDK doesn't initialize
+    const timeout = setTimeout(() => {
+      reject(new Error('SDK initialization timeout'));
+    }, 10000);
+    
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      player = new Spotify.Player({
+        name: 'Beat Shooter (Browser)',
+        getOAuthToken: cb => cb(accessToken),
+        volume: 0.8
+      });
+
+      player.addListener('ready', ({ device_id }) => { 
+        clearTimeout(timeout);
+        deviceId = device_id; 
+        setText('deviceName', device_id.slice(0,8)+'…'); 
+        log('SDK ready: device '+device_id); 
+        resolve(); 
+      });
+      player.addListener('not_ready', ({ device_id }) => { log('Device went offline: '+device_id); });
+      player.addListener('initialization_error', ({ message }) => { 
+        clearTimeout(timeout);
+        log('init error: '+message);
+        reject(new Error('SDK init error: '+message));
+      });
+      player.addListener('authentication_error', ({ message }) => { 
+        clearTimeout(timeout);
+        log('auth error: '+message);
+        reject(new Error('SDK auth error: '+message));
+      });
+      player.addListener('account_error', ({ message }) => { 
+        clearTimeout(timeout);
+        log('account error: '+message);
+        reject(new Error('SDK account error: '+message));
+      });
+
+      player.connect().then(ok => { setText('sdkState', ok? 'connected':'failed'); });
+    };
+    
+    // If SDK script is already loaded, trigger the ready callback
+    if(window.Spotify && window.Spotify.Player) {
+      window.onSpotifyWebPlaybackSDKReady();
+    }
+  });
+}
+
+async function transferPlayback(){
+  await api('/me/player', { method:'PUT', body: JSON.stringify({ device_ids:[deviceId], play:false }) });
+}
+
+async function playUris(uris){
+  await api(`/me/player/play?device_id=${deviceId}`, { method:'PUT', body: JSON.stringify({ uris }) });
+}
+
+async function playContext(context_uri){
+  await api(`/me/player/play?device_id=${deviceId}`, { method:'PUT', body: JSON.stringify({ context_uri }) });
+}
+
+async function pause(){ await api('/me/player/pause?device_id='+deviceId, { method:'PUT' }); }
+
+async function getPlayerState(){
+  try{ return await player.getCurrentState(); }catch{ return null; }
+}
+
+/*******************
+ * AUDIO ANALYSIS → BEAT SCHEDULER
+ *******************/
+let beatTimesSec = []; // absolute timestamps (sec) since track start
+let beatIdx = 0;
+let beatCounter = 0;
+let schedulerTimer = null;
+let calibrationMs = 0;
+
+function setCalibration(ms){ calibrationMs = (+ms)|0; }
+
+async function fetchBeatsForCurrent(){
+  // Get current track ID
+  const state = await api('/me/player/currently-playing');
+  if(!state || !state.item) throw new Error('No current track');
+  const trackId = state.item.id;
+  const analysis = await api('/audio-analysis/'+trackId);
+  beatTimesSec = (analysis.beats||[]).map(b => b.start);
+  beatIdx = 0; beatCounter = 0;
+  log('Loaded beats: '+beatTimesSec.length+' • tempo '+(analysis.track?.tempo||'?'));
+}
+
+function flashLED(){ const led=els('led'); led.style.background='#0f0'; setTimeout(()=>led.style.background='#030', 60); }
+
+function scheduleBeatsLoop(){
+  clearInterval(schedulerTimer);
+  schedulerTimer = setInterval(async ()=>{
+    const st = await getPlayerState();
+    if(!st || st.paused) return;
+    if(!st.position && st.position !== 0) return;
+    
+    const posSec = (st.position/1000) + (calibrationMs/1000);
+    
+    // Skip beats that have already passed
+    while (beatIdx < beatTimesSec.length && beatTimesSec[beatIdx] < posSec - 0.05){
+      beatIdx++;
+    }
+    
+    // Schedule upcoming beats within lookahead window
+    const lookahead = 0.25; // seconds
+    let scheduled = 0;
+    while (beatIdx < beatTimesSec.length && beatTimesSec[beatIdx] < posSec + lookahead){
+      const t = beatTimesSec[beatIdx];
+      const delayMs = Math.max(0, (t - posSec) * 1000);
+      setTimeout(()=>{ onBeat(); }, delayMs);
+      beatIdx++;
+      scheduled++;
+    }
+    
+    // Debug logging to see what's happening
+    if(scheduled > 0) {
+      console.log(`Scheduled ${scheduled} beats at position ${posSec.toFixed(2)}s`);
+    }
+  }, 50);
+}
+
+function onBeat(){
+  beatCounter++; 
+  flashLED(); 
+  setText('beatInfo', 'Beats: '+beatCounter);
+  console.log('Beat detected! Counter:', beatCounter, 'GameAPI exists:', !!window.GameAPI);
+  // tell game to spawn on-beat
+  if(window.GameAPI && typeof window.GameAPI.onBeat==='function') {
+    window.GameAPI.onBeat();
+  } else {
+    console.warn('GameAPI.onBeat not available!');
+  }
+}
+
+/*******************
+ * SIMPLE 5-LANE GAME (manual movement, no physics)
+ *******************/
+(function(){
+  const WIDTH=800, HEIGHT=600, LANES=5, LANE_W=WIDTH/LANES;
+  const PLAYER_Y=HEIGHT-60, ENEMY_SPEED_BASE=200, BULLET_SPEED=520, FIRE_COOLDOWN=110;
+  let sceneRef=null;
+
+  class Main extends Phaser.Scene {
+    create(){
+      this.cameras.main.setBackgroundColor('#000');
+      const g=this.add.graphics(); g.lineStyle(1,0x111111,1); for(let i=1;i<LANES;i++) g.lineBetween(i*LANE_W,0,i*LANE_W,HEIGHT);
+      const gfx=this.make.graphics({x:0,y:0,add:false});
+      gfx.fillStyle(0x00ffcc,1).fillRect(0,0,24,24).generateTexture('playerTex',24,24).clear();
+      gfx.fillStyle(0xff3366,1).fillRect(0,0,20,20).generateTexture('enemyTex',20,20).clear();
+      gfx.fillStyle(0xffffff,1).fillRect(0,0,6,12).generateTexture('bulletTex',6,12).destroy();
+
+      this.playerLane=2; this.player=this.add.image(this._laneX(this.playerLane), PLAYER_Y, 'playerTex');
+      this.enemies=[]; this.bullets=[]; this.lastShotAt=0;
+      this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,A,D,SPACE');
+      this.score=0; this.beats=0; this.scoreText=this.add.text(10, HEIGHT-24, 'score 0', {font:'16px monospace', fill:'#0f0'});
+
+      window.GameAPI = {
+        onBeat: ()=>{ 
+          console.log('GameAPI.onBeat called, beat #', this.beats);
+          this.beats++; 
+          const speed=ENEMY_SPEED_BASE + Math.floor(this.beats/16)*30; 
+          if(Math.random()<0.8){ 
+            const lane = Phaser.Math.Between(0,LANES-1);
+            console.log('Spawning enemy in lane', lane);
+            this._spawnEnemy(lane, speed); 
+          } 
+        },
+        reset: ()=>{ this.scene.restart(); }
+      };
+      sceneRef=this;
+    }
+
+    _laneX(i){ return i*LANE_W + LANE_W/2; }
+    _spawnEnemy(lane, speed){ const e=this.add.image(this._laneX(lane), -20, 'enemyTex'); e.vy=speed; e.w=20; e.h=20; this.enemies.push(e); }
+    _fire(){ const now=this.time.now; if(now-this.lastShotAt<FIRE_COOLDOWN) return; this.lastShotAt=now; const b=this.add.image(this.player.x, this.player.y-20, 'bulletTex'); b.vy=-BULLET_SPEED; b.w=6; b.h=12; this.bullets.push(b); }
+    _aabb(a,b){ return Math.abs(a.x-b.x) < (a.w+b.w)/2 && Math.abs(a.y-b.y) < (a.h+b.h)/2; }
+
+    update(_, dt){
+      if(Phaser.Input.Keyboard.JustDown(this.keys.LEFT)||Phaser.Input.Keyboard.JustDown(this.keys.A)){ this.playerLane=Math.max(0,this.playerLane-1); this.player.x=this._laneX(this.playerLane); }
+      if(Phaser.Input.Keyboard.JustDown(this.keys.RIGHT)||Phaser.Input.Keyboard.JustDown(this.keys.D)){ this.playerLane=Math.min(LANES-1,this.playerLane+1); this.player.x=this._laneX(this.playerLane); }
+      if(this.keys.SPACE.isDown) this._fire();
+
+      const dy=dt/1000; // seconds
+      for(let i=this.enemies.length-1;i>=0;i--){ const e=this.enemies[i]; e.y += e.vy*dy; if(e.y>PLAYER_Y){ this.scene.restart(); return; } if(e.y>HEIGHT+30){ e.destroy(); this.enemies.splice(i,1); } }
+      for(let i=this.bullets.length-1;i>=0;i--){ const b=this.bullets[i]; b.y += b.vy*dy; if(b.y<-30){ b.destroy(); this.bullets.splice(i,1); continue; } for(let j=this.enemies.length-1;j>=0;j--){ const e=this.enemies[j]; if(this._aabb({x:b.x,y:b.y,w:b.w,h:b.h},{x:e.x,y:e.y,w:e.w,h:e.h})){ b.destroy(); this.bullets.splice(i,1); e.destroy(); this.enemies.splice(j,1); this.score+=10; this.scoreText.setText('score '+this.score); break; } } }
+    }
+  }
+
+  new Phaser.Game({ type: Phaser.AUTO, width: WIDTH, height: HEIGHT, backgroundColor:'#000', scene:[Main] });
+})();
+
+/*******************
+ * UI WIRING
+ *******************/
+const loginBtn = els('loginBtn');
+const authState = els('authState');
+const loadBtn  = els('loadBtn');
+const playBtn  = els('playBtn');
+const pauseBtn = els('pauseBtn');
+const spotifyUrl = els('spotifyUrl');
+
+els('calib').addEventListener('change', (e)=> setCalibration(e.target.value));
+
+loginBtn.addEventListener('click', async ()=>{
+  const cid = els('clientId').value.trim();
+  if(!cid){ alert('Enter your Spotify Client ID (see Setup notes).'); return; }
+  await startAuth(cid);
+});
+
+loadBtn.addEventListener('click', async ()=>{
+  try{
+    const cid = els('clientId').value.trim();
+    if(!cid){ alert('Enter Client ID and login first.'); return; }
+
+    // Acquire token (finish PKCE or use cached)
+    let tok = loadToken();
+    if(!tok){ tok = await finishAuth(cid); }
+    if(!tok){ alert('Not logged in. Click Login.'); return; }
+    accessToken = tok.access_token;
+    setText('authState', 'token ok');
+
+    // Get current user to verify Premium
+    const me = await api('/me');
+    userPremium = (me?.product === 'premium');
+    if(!userPremium){ log('Warning: account is not Premium; playback via SDK may fail.'); }
+
+    // Ensure SDK device
+    await ensureDevice();
+    await transferPlayback();
+
+    const parsed = parseSpotifyUrl(spotifyUrl.value.trim());
+    if(!parsed){ alert('Paste a valid Spotify track or playlist URL.'); return; }
+
+    if(parsed.type === 'track'){
+      await playUris([`spotify:track:${parsed.id}`]);
+    } else if(parsed.type === 'playlist'){
+      await playContext(`spotify:playlist:${parsed.id}`);
+    } else if(parsed.type === 'album'){
+      await playContext(`spotify:album:${parsed.id}`);
+    } else {
+      alert('Only track / playlist / album URLs are supported in this demo.');
+      return;
+    }
+
+    setText('nowplay', 'Loading analysis…');
+    await new Promise(r=>setTimeout(r, 600)); // give player a moment to start
+    await fetchBeatsForCurrent();
+    scheduleBeatsLoop();
+    setText('nowplay', 'Ready. Hit Play.');
+  }catch(err){ log('Load error: '+err.message); }
+});
+
+playBtn.addEventListener('click', async ()=>{
+  try{ 
+    if(!deviceId) { log('No device ready. Click Load first.'); return; }
+    await api(`/me/player/play?device_id=${deviceId}`, { method:'PUT', body: JSON.stringify({}) }); 
+    setText('nowplay','Playing');
+    
+    // Reset beat index to resync with current position
+    const st = await getPlayerState();
+    if(st && st.position !== undefined) {
+      const posSec = st.position/1000;
+      beatIdx = 0;
+      // Find the right beat index for current position
+      while (beatIdx < beatTimesSec.length && beatTimesSec[beatIdx] < posSec) {
+        beatIdx++;
+      }
+      log(`Resumed at ${posSec.toFixed(1)}s, beat index: ${beatIdx}`);
+    }
+  }
+  catch(err){ log('Play error: '+err.message); }
+});
+
+pauseBtn.addEventListener('click', async ()=>{
+  try{ 
+    if(!deviceId) { log('No device ready. Click Load first.'); return; }
+    await pause(); 
+    setText('nowplay','Paused'); 
+  }
+  catch(err){ log('Pause error: '+err.message); }
+});
+</script>
+<script src="https://sdk.scdn.co/spotify-player.js"></script>
+</body>
+</html>
