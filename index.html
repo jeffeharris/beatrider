@@ -1639,6 +1639,25 @@ class Main extends Phaser.Scene {
     this.gridVisible = gridEnabled; // Use persistent grid setting
     this.gridText=this.add.text(10, 10, 'GRID: ' + (gridEnabled ? 'ON' : 'OFF') + ' [G]', {font:'12px monospace', fill:'#0f0'});
 
+    // Mobile controls setup
+    this.setupMobileControls();
+    
+    // Add mobile control hints (only on touch devices)
+    if(this.input.activePointer.wasTouch || 'ontouchstart' in window) {
+      const controlsText = this.add.text(WIDTH/2, HEIGHT - 80, 
+        'SWIPE: Move • SWIPE UP: Jump • TAP: Fire • HOLD: Auto-fire', 
+        {font:'12px monospace', fill:'#0f0', alpha: 0.5}
+      );
+      controlsText.setOrigin(0.5);
+      // Fade out after 5 seconds
+      this.tweens.add({
+        targets: controlsText,
+        alpha: 0,
+        delay: 5000,
+        duration: 1000
+      });
+    }
+
     // GameAPI is triggered by our drums
     window.GameAPI = {
       onBeat: ()=>{ 
@@ -1675,6 +1694,265 @@ class Main extends Phaser.Scene {
       },
       reset: ()=>{ this.scene.restart(); }
     };
+  }
+
+  setupMobileControls() {
+    // Touch control state
+    this.touchStartX = 0;
+    this.touchStartY = 0;
+    this.touchStartTime = 0;
+    this.isTouchFiring = false;
+    this.swipeThreshold = 50; // Minimum distance for swipe
+    this.swipeTimeLimit = 300; // Max time for swipe gesture (ms)
+    
+    // Touch start - anywhere on screen
+    this.input.on('pointerdown', (pointer) => {
+      this.touchStartX = pointer.x;
+      this.touchStartY = pointer.y;
+      this.touchStartTime = this.time.now;
+      
+      // Start firing timer for hold-to-fire
+      this.fireHoldTimer = this.time.delayedCall(200, () => {
+        this.isTouchFiring = true;
+      });
+    });
+    
+    // Touch move - detect swipes
+    this.input.on('pointermove', (pointer) => {
+      if (!pointer.isDown) return;
+      
+      const dx = pointer.x - this.touchStartX;
+      const dy = pointer.y - this.touchStartY;
+      const elapsed = this.time.now - this.touchStartTime;
+      
+      // Check for swipe gestures (quick movements)
+      if (elapsed < this.swipeTimeLimit) {
+        // Horizontal swipe
+        if (Math.abs(dx) > this.swipeThreshold && Math.abs(dx) > Math.abs(dy)) {
+          if (dx > 0 && !this.isMoving) {
+            // Swipe right
+            this.moveRight();
+            this.touchStartX = pointer.x; // Reset for continuous swipes
+          } else if (dx < 0 && !this.isMoving) {
+            // Swipe left
+            this.moveLeft();
+            this.touchStartX = pointer.x; // Reset for continuous swipes
+          }
+        }
+        
+        // Vertical swipe up for jump
+        if (dy < -this.swipeThreshold && Math.abs(dy) > Math.abs(dx)) {
+          if (!this.isJumping) {
+            this.jump();
+            this.touchStartY = pointer.y; // Reset for next swipe
+          }
+        }
+      }
+    });
+    
+    // Touch end
+    this.input.on('pointerup', (pointer) => {
+      // Cancel firing timer if it hasn't triggered yet
+      if (this.fireHoldTimer) {
+        this.fireHoldTimer.remove();
+        this.fireHoldTimer = null;
+      }
+      
+      // Stop firing
+      this.isTouchFiring = false;
+      
+      // Check for tap (no significant movement and quick release)
+      const dx = pointer.x - this.touchStartX;
+      const dy = pointer.y - this.touchStartY;
+      const elapsed = this.time.now - this.touchStartTime;
+      
+      if (Math.abs(dx) < 20 && Math.abs(dy) < 20 && elapsed < 200) {
+        // It's a tap - fire once
+        this._fire();
+      }
+    });
+  }
+
+  moveLeft() {
+    if(this.isMoving) return;
+    this.playerLane=Math.max(-1,this.playerLane-1); // Can go to -1 (off-screen left)
+    const targetX = this._laneX(this.playerLane);
+    
+    // Check if we're jumping for special animation
+    if(this.isJumping) {
+      // Mid-air twirl animation
+      this.isMoving = true;
+      this.tweens.add({
+        targets: this.player,
+        x: targetX,
+        duration: 200,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.isMoving = false;
+        }
+      });
+      
+      // Add horizontal spin (barrel roll to the left)
+      this.tweens.add({
+        targets: this.player,
+        angle: '-=360', // Spin counterclockwise
+        duration: 300,
+        ease: 'Cubic.easeOut'
+      });
+      
+      // Add extra flair with scale pulse
+      this.tweens.add({
+        targets: this.player,
+        scaleX: 1.5,
+        scaleY: 0.7,
+        duration: 100,
+        yoyo: true,
+        ease: 'Sine.easeInOut'
+      });
+    } else {
+      // Ground movement - original animation
+      this.isMoving = true;
+      this.tweens.add({
+        targets: this.player,
+        x: targetX,
+        duration: 150,
+        ease: 'Sine.easeInOut',
+        onStart: () => {
+          // Squash and tilt during movement
+          this.player.setScale(0.8, 1.2);
+          this.player.angle = -15; // Tilt left
+        },
+        onComplete: () => {
+          this.player.setScale(1, 1);
+          this.player.angle = 0;
+          this.isMoving = false;
+        }
+      });
+    }
+    
+    // Reset rubber band timer when moving off-screen
+    if(this.playerLane < 0 || this.playerLane >= LANES){
+      this.offScreenTimer = 800; // 800ms before rubber band pulls back
+      this.player.setAlpha(0.7); // Semi-transparent when off-screen
+    } else {
+      this.player.setAlpha(1);
+    }
+    // Play movement sound
+    try {
+      const note = getGameNote(Math.max(0, Math.min(4, this.playerLane))) + "5";
+      gameSounds.move.triggerAttackRelease(note, "32n");
+    } catch(e) {}
+  }
+
+  moveRight() {
+    if(this.isMoving) return;
+    this.playerLane=Math.min(LANES,this.playerLane+1); // Can go to 5 (off-screen right)
+    const targetX = this._laneX(this.playerLane);
+    
+    // Check if we're jumping for special animation
+    if(this.isJumping) {
+      // Mid-air twirl animation
+      this.isMoving = true;
+      this.tweens.add({
+        targets: this.player,
+        x: targetX,
+        duration: 200,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.isMoving = false;
+        }
+      });
+      
+      // Add horizontal spin (barrel roll to the right)
+      this.tweens.add({
+        targets: this.player,
+        angle: '+=360', // Spin clockwise
+        duration: 300,
+        ease: 'Cubic.easeOut'
+      });
+      
+      // Add extra flair with scale pulse
+      this.tweens.add({
+        targets: this.player,
+        scaleX: 1.5,
+        scaleY: 0.7,
+        duration: 100,
+        yoyo: true,
+        ease: 'Sine.easeInOut'
+      });
+    } else {
+      // Ground movement - original animation
+      this.isMoving = true;
+      this.tweens.add({
+        targets: this.player,
+        x: targetX,
+        duration: 150,
+        ease: 'Sine.easeInOut',
+        onStart: () => {
+          // Squash and tilt during movement
+          this.player.setScale(0.8, 1.2);
+          this.player.angle = 15; // Tilt right
+        },
+        onComplete: () => {
+          this.player.setScale(1, 1);
+          this.player.angle = 0;
+          this.isMoving = false;
+        }
+      });
+    }
+    
+    // Reset rubber band timer when moving off-screen
+    if(this.playerLane < 0 || this.playerLane >= LANES){
+      this.offScreenTimer = 800; // 800ms before rubber band pulls back
+      this.player.setAlpha(0.7); // Semi-transparent when off-screen
+    } else {
+      this.player.setAlpha(1);
+    }
+    // Play movement sound
+    try {
+      const note = getGameNote(Math.max(0, Math.min(4, this.playerLane))) + "5";
+      gameSounds.move.triggerAttackRelease(note, "32n");
+    } catch(e) {}
+  }
+
+  jump() {
+    if(this.isJumping) return;
+    this.isJumping = true;
+    
+    // Jump animation - higher jump to clear obstacles better
+    this.tweens.add({
+      targets: this.player,
+      y: PLAYER_Y - 120, // Higher jump
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 250,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onComplete: () => {
+        this.isJumping = false;
+        this.player.y = PLAYER_Y;
+        // Reset rotation if no mid-air move was performed
+        if(Math.abs(this.player.angle % 360) < 10) {
+          this.player.angle = 0;
+        }
+      }
+    });
+    
+    // Only do a simple forward flip if no directional input
+    // Mid-air directional moves will override this
+    this.jumpSpinTween = this.tweens.add({
+      targets: this.player,
+      angle: 360,
+      duration: 500, // Match total jump time (250 * 2)
+      ease: 'Linear'
+    });
+    
+    // Jump sound effect
+    try {
+      const now = Tone.now();
+      gameSounds.move.triggerAttackRelease("C6", "16n", now);
+      gameSounds.move.triggerAttackRelease("G6", "16n", now + 0.05);
+    } catch(e) {}
   }
 
   _laneX(lane, progress = 1){ 
@@ -2084,143 +2362,11 @@ class Main extends Phaser.Scene {
     }
     
     // Movement with rubber band effect and smooth transitions
-    if(!this.isMoving && (Phaser.Input.Keyboard.JustDown(this.keys.LEFT)||Phaser.Input.Keyboard.JustDown(this.keys.A))){ 
-      this.playerLane=Math.max(-1,this.playerLane-1); // Can go to -1 (off-screen left)
-      const targetX = this._laneX(this.playerLane);
-      
-      // Check if we're jumping for special animation
-      if(this.isJumping) {
-        // Mid-air twirl animation
-        this.isMoving = true;
-        this.tweens.add({
-          targets: this.player,
-          x: targetX,
-          duration: 200,
-          ease: 'Quad.easeOut',
-          onComplete: () => {
-            this.isMoving = false;
-          }
-        });
-        
-        // Add horizontal spin (barrel roll to the left)
-        this.tweens.add({
-          targets: this.player,
-          angle: '-=360', // Spin counterclockwise
-          duration: 300,
-          ease: 'Cubic.easeOut'
-        });
-        
-        // Add extra flair with scale pulse
-        this.tweens.add({
-          targets: this.player,
-          scaleX: 1.5,
-          scaleY: 0.7,
-          duration: 100,
-          yoyo: true,
-          ease: 'Sine.easeInOut'
-        });
-      } else {
-        // Ground movement - original animation
-        this.isMoving = true;
-        this.tweens.add({
-          targets: this.player,
-          x: targetX,
-          duration: 150,
-          ease: 'Sine.easeInOut',
-          onStart: () => {
-            // Squash and tilt during movement
-            this.player.setScale(0.8, 1.2);
-            this.player.angle = -15; // Tilt left
-          },
-          onComplete: () => {
-            this.player.setScale(1, 1);
-            this.player.angle = 0;
-            this.isMoving = false;
-          }
-        });
-      }
-      
-      // Reset rubber band timer when moving off-screen
-      if(this.playerLane < 0 || this.playerLane >= LANES){
-        this.offScreenTimer = 800; // 800ms before rubber band pulls back
-        this.player.setAlpha(0.7); // Semi-transparent when off-screen
-      } else {
-        this.player.setAlpha(1);
-      }
-      // Play movement sound
-      try {
-        const note = getGameNote(Math.max(0, Math.min(4, this.playerLane))) + "5";
-        gameSounds.move.triggerAttackRelease(note, "32n");
-      } catch(e) {}
+    if(Phaser.Input.Keyboard.JustDown(this.keys.LEFT)||Phaser.Input.Keyboard.JustDown(this.keys.A)){ 
+      this.moveLeft();
     }
-    if(!this.isMoving && (Phaser.Input.Keyboard.JustDown(this.keys.RIGHT)||Phaser.Input.Keyboard.JustDown(this.keys.D))){ 
-      this.playerLane=Math.min(LANES,this.playerLane+1); // Can go to 5 (off-screen right)
-      const targetX = this._laneX(this.playerLane);
-      
-      // Check if we're jumping for special animation
-      if(this.isJumping) {
-        // Mid-air twirl animation
-        this.isMoving = true;
-        this.tweens.add({
-          targets: this.player,
-          x: targetX,
-          duration: 200,
-          ease: 'Quad.easeOut',
-          onComplete: () => {
-            this.isMoving = false;
-          }
-        });
-        
-        // Add horizontal spin (barrel roll to the right)
-        this.tweens.add({
-          targets: this.player,
-          angle: '+=360', // Spin clockwise
-          duration: 300,
-          ease: 'Cubic.easeOut'
-        });
-        
-        // Add extra flair with scale pulse
-        this.tweens.add({
-          targets: this.player,
-          scaleX: 1.5,
-          scaleY: 0.7,
-          duration: 100,
-          yoyo: true,
-          ease: 'Sine.easeInOut'
-        });
-      } else {
-        // Ground movement - original animation
-        this.isMoving = true;
-        this.tweens.add({
-          targets: this.player,
-          x: targetX,
-          duration: 150,
-          ease: 'Sine.easeInOut',
-          onStart: () => {
-            // Squash and tilt during movement
-            this.player.setScale(0.8, 1.2);
-            this.player.angle = 15; // Tilt right
-          },
-          onComplete: () => {
-            this.player.setScale(1, 1);
-            this.player.angle = 0;
-            this.isMoving = false;
-          }
-        });
-      }
-      
-      // Reset rubber band timer when moving off-screen
-      if(this.playerLane < 0 || this.playerLane >= LANES){
-        this.offScreenTimer = 800; // 800ms before rubber band pulls back
-        this.player.setAlpha(0.7); // Semi-transparent when off-screen
-      } else {
-        this.player.setAlpha(1);
-      }
-      // Play movement sound
-      try {
-        const note = getGameNote(Math.max(0, Math.min(4, this.playerLane))) + "5";
-        gameSounds.move.triggerAttackRelease(note, "32n");
-      } catch(e) {}
+    if(Phaser.Input.Keyboard.JustDown(this.keys.RIGHT)||Phaser.Input.Keyboard.JustDown(this.keys.D)){ 
+      this.moveRight();
     }
     
     // Rubber band effect - pull player back if off-screen too long
@@ -2305,46 +2451,12 @@ class Main extends Phaser.Scene {
     }
     
     // Jump mechanic - UP or W key
-    if(!this.isJumping && (Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W))){
-      this.isJumping = true;
-      
-      // Jump animation - higher jump to clear obstacles better
-      this.tweens.add({
-        targets: this.player,
-        y: PLAYER_Y - 120, // Higher jump
-        scaleX: 1.2,
-        scaleY: 1.2,
-        duration: 250,
-        ease: 'Quad.easeOut',
-        yoyo: true,
-        onComplete: () => {
-          this.isJumping = false;
-          this.player.y = PLAYER_Y;
-          // Reset rotation if no mid-air move was performed
-          if(Math.abs(this.player.angle % 360) < 10) {
-            this.player.angle = 0;
-          }
-        }
-      });
-      
-      // Only do a simple forward flip if no directional input
-      // Mid-air directional moves will override this
-      this.jumpSpinTween = this.tweens.add({
-        targets: this.player,
-        angle: 360,
-        duration: 500, // Match total jump time (250 * 2)
-        ease: 'Linear'
-      });
-      
-      // Jump sound effect
-      try {
-        const now = Tone.now();
-        gameSounds.move.triggerAttackRelease("C6", "16n", now);
-        gameSounds.move.triggerAttackRelease("G6", "16n", now + 0.05);
-      } catch(e) {}
+    if(Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)){
+      this.jump();
     }
     
-    if(this.keys.SPACE.isDown) this._fire();
+    // Firing - keyboard space or touch hold
+    if(this.keys.SPACE.isDown || this.isTouchFiring) this._fire();
 
     // Update enemies with perspective
     const vanishY = HEIGHT * 0.15;
