@@ -1361,8 +1361,18 @@ class StartupScene extends Phaser.Scene {
       repeat: subtitleText.length - 1
     });
     
-    // Instructions
-    const instructions = [
+    // Check if mobile device
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
+                     ('ontouchstart' in window) || 
+                     (navigator.maxTouchPoints > 0);
+    
+    // Instructions - different for mobile vs desktop
+    const instructions = isMobile ? [
+      'SWIPE LEFT/RIGHT - MOVE',
+      'SWIPE UP - JUMP', 
+      'TAP - FIRE',
+      'HOLD - AUTO-FIRE'
+    ] : [
       'ARROWS/A/D - MOVE',
       'W/UP - JUMP',
       'SPACE - FIRE',
@@ -1386,8 +1396,9 @@ class StartupScene extends Phaser.Scene {
       });
     });
     
-    // Press start message
-    const startText = this.add.text(WIDTH/2, HEIGHT - 100, 'PRESS SPACE TO START', {
+    // Press start message - different for mobile
+    const startMessage = isMobile ? 'TAP TO START' : 'PRESS SPACE TO START';
+    const startText = this.add.text(WIDTH/2, HEIGHT - 100, startMessage, {
       font: 'bold 28px monospace',
       fill: '#ffff00',
       stroke: '#ffff00',
@@ -1465,15 +1476,8 @@ class StartupScene extends Phaser.Scene {
       });
     }
     
-    // Add debug text for iOS
-    const debugText = this.add.text(10, HEIGHT - 30, 'Touch anywhere to start', {
-      font: '14px monospace',
-      fill: '#ff0'
-    });
-    
-    // Listen for space key to start
-    this.input.keyboard.once('keydown-SPACE', async () => {
-      debugText.setText('Starting from keyboard...');
+    // Start handler function
+    const startGame = async () => {
       // Start Tone.js from user gesture
       if (typeof Tone !== 'undefined') {
         await Tone.start();
@@ -1484,29 +1488,19 @@ class StartupScene extends Phaser.Scene {
       this.time.delayedCall(500, () => {
         this.scene.start('Main');
       });
-    });
+    };
     
-    // Also support click/touch to start  
-    this.input.once('pointerdown', async (pointer) => {
-      debugText.setText(`Touch detected at ${Math.round(pointer.x)}, ${Math.round(pointer.y)}`);
-      
-      // Start Tone.js from user gesture
-      if (typeof Tone !== 'undefined') {
-        try {
-          await Tone.start();
-          debugText.setText('Tone started, transitioning...');
-        } catch(e) {
-          debugText.setText('Error: ' + e.message);
-          console.error('Tone.start error:', e);
-        }
-      }
-      
-      // Transition to game
-      this.cameras.main.fadeOut(500, 0, 0, 0);
-      this.time.delayedCall(500, () => {
-        this.scene.start('Main');
-      });
-    });
+    // Listen for space key to start
+    this.input.keyboard.once('keydown-SPACE', startGame);
+    
+    // Touch/click to start - using multiple event types for better compatibility
+    this.input.on('pointerdown', startGame);
+    this.input.on('pointerup', startGame);  // Some mobile browsers work better with up
+    
+    // Also add a fullscreen invisible button as fallback for iOS
+    const invisibleButton = this.add.rectangle(WIDTH/2, HEIGHT/2, WIDTH, HEIGHT, 0x000000, 0);
+    invisibleButton.setInteractive();
+    invisibleButton.once('pointerdown', startGame);
   }
 }
 
@@ -1656,20 +1650,6 @@ class Main extends Phaser.Scene {
 
     // Mobile controls setup
     this.setupMobileControls();
-    
-    // Add mobile control hints (always show for now to test)
-    const controlsText = this.add.text(WIDTH/2, HEIGHT - 80, 
-      'SWIPE: Move • SWIPE UP: Jump • TAP: Fire • HOLD: Auto-fire', 
-      {font:'12px monospace', fill:'#0f0', alpha: 0.7}
-    );
-    controlsText.setOrigin(0.5);
-    // Fade out after 5 seconds
-    this.tweens.add({
-      targets: controlsText,
-      alpha: 0,
-      delay: 5000,
-      duration: 1000
-    });
 
     // GameAPI is triggered by our drums
     window.GameAPI = {
