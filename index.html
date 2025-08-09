@@ -29,17 +29,25 @@
     }
     .left-panel {
       position: absolute;
-      top: 10px;
+      top: 70px;
       left: 10px;
       width: 380px;
-      max-height: calc(100vh - 20px);
-      overflow-y: auto;
-      background: rgba(0, 0, 0, 0.9);
+      max-height: 0;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.95);
       border: 1px solid #0f0;
-      border-radius: 8px;
-      padding: 10px;
-      z-index: 10;
+      border-radius: 0 0 8px 8px;
+      border-top: none;
+      z-index: 9;
       backdrop-filter: blur(5px);
+      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s;
+      padding: 0 10px;
+    }
+    
+    .left-panel.expanded {
+      max-height: 400px;
+      padding: 10px;
+      overflow-y: auto;
     }
     #gameContainer {
       position: absolute;
@@ -61,7 +69,38 @@
       background: #222; 
       box-shadow: 0 0 10px #0f0;
     }
-    .controls { margin: 20px 0; }
+    .controls { 
+      margin: 20px 0; 
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+      gap: 10px;
+    }
+    .slider-label {
+      min-width: 80px;
+      text-align: right;
+      color: #0f0;
+    }
+    .slider {
+      flex: 1;
+      max-width: 200px;
+    }
+    .slider-value {
+      min-width: 40px;
+      color: #ff0;
+      font-weight: bold;
+    }
+    .sound-select {
+      flex: 1;
+      max-width: 200px;
+      background: #111;
+      color: #0f0;
+      border: 1px solid #0f0;
+      padding: 4px;
+      font-family: monospace;
+    }
     h1 { 
       color: #ff0; 
       text-shadow: 0 0 20px #ff0;
@@ -114,63 +153,135 @@
       border: 1px solid #0f0;
       background: #010;
     }
+    
+    /* Minimized music controls */
+    .music-controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid #0f0;
+      border-radius: 8px;
+      padding: 10px;
+      z-index: 10;
+      backdrop-filter: blur(5px);
+    }
+    
+    .control-btn {
+      width: 40px;
+      height: 40px;
+      background: #111;
+      color: #0f0;
+      border: 1px solid #0f0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    
+    .control-btn:hover {
+      background: #222;
+      box-shadow: 0 0 10px #0f0;
+    }
+    
+    .track-squares {
+      display: flex;
+      gap: 8px;
+      padding: 0 10px;
+      border-left: 1px solid #0f0;
+      border-right: 1px solid #0f0;
+    }
+    
+    .track-square {
+      width: 30px;
+      height: 30px;
+      background: #030;
+      border: 2px solid #0f0;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .track-square.active {
+      background: #0f0;
+      box-shadow: 0 0 15px #0f0;
+    }
+    
+    .track-square.muted {
+      background: #300;
+      border-color: #f00;
+      opacity: 0.5;
+    }
+    
+    .track-square.flash {
+      animation: flash 0.1s;
+    }
+    
+    @keyframes flash {
+      0% { background: #0f0; box-shadow: 0 0 20px #0f0; }
+      100% { background: #030; box-shadow: none; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div id="gameContainer"></div>
-    <div class="left-panel">
+    
+    <!-- Minimized music controls -->
+    <div id="musicControls" class="music-controls">
+      <button id="playBtn" class="control-btn" title="Play">▶</button>
+      <button id="stopBtn" class="control-btn" title="Stop">■</button>
+      <div class="track-squares">
+        <div class="track-square" id="kickSquare" data-track="kick" title="Kick"></div>
+        <div class="track-square" id="snareSquare" data-track="snare" title="Snare"></div>
+        <div class="track-square" id="hatSquare" data-track="hat" title="Hi-hat"></div>
+        <div class="track-square" id="acidSquare" data-track="acid" title="Acid"></div>
+        <div class="track-square" id="stabSquare" data-track="stab" title="Stab"></div>
+        <div class="track-square" id="subSquare" data-track="sub" title="Sub"></div>
+      </div>
+      <button id="expandBtn" class="control-btn" title="Settings">⚙</button>
+    </div>
+    
+    <!-- Expanded panel (hidden by default) -->
+    <div class="left-panel" id="expandedPanel">
       <h1>MELODIC TECHNO ENGINE</h1>
+      <button id="minimizeBtn" style="float: right; margin-top: -30px;">×</button>
       
       <div class="controls">
-    <button id="playBtn">PLAY</button>
-    <button id="stopBtn">STOP</button>
-    <label>BPM: <input type="range" id="bpmSlider" min="120" max="150" value="132"></label>
-    <span id="bpmDisplay">132</span>
-    <label>ENERGY: <input type="range" id="energySlider" min="0" max="100" value="50"></label>
-    <span id="energyDisplay">50</span>
-    <label>TENSION: <input type="range" id="tensionSlider" min="0" max="100" value="30"></label>
-    <span id="tensionDisplay">30</span>
-  </div>
-  
-  <div id="tracks">
-    <div class="track-row">
-      <span class="track-name">KICK:</span>
-      <button class="mute-btn" id="kickMute">ON</button>
-      <span class="beat-indicator" id="kickIndicator"></span>
-      <span class="pattern-display" id="kickPattern"></span>
-    </div>
-    <div class="track-row">
-      <span class="track-name">SNARE:</span>
-      <button class="mute-btn" id="snareMute">ON</button>
-      <span class="beat-indicator" id="snareIndicator"></span>
-      <span class="pattern-display" id="snarePattern"></span>
-    </div>
-    <div class="track-row">
-      <span class="track-name">HIHAT:</span>
-      <button class="mute-btn" id="hatMute">ON</button>
-      <span class="beat-indicator" id="hatIndicator"></span>
-      <span class="pattern-display" id="hatPattern"></span>
-    </div>
-    <div class="track-row">
-      <span class="track-name">ACID:</span>
-      <button class="mute-btn" id="acidMute">ON</button>
-      <span class="beat-indicator" id="acidIndicator"></span>
-      <span class="pattern-display" id="acidPattern"></span>
-    </div>
-    <div class="track-row">
-      <span class="track-name">STAB:</span>
-      <button class="mute-btn" id="stabMute">ON</button>
-      <span class="beat-indicator" id="stabIndicator"></span>
-      <span class="pattern-display" id="stabPattern"></span>
-    </div>
-    <div class="track-row">
-      <span class="track-name">SUB:</span>
-      <button class="mute-btn" id="subMute">ON</button>
-      <span class="beat-indicator" id="subIndicator"></span>
-      <span class="pattern-display" id="subPattern"></span>
-    </div>
-  </div>
+        <div class="slider-row">
+          <label class="slider-label">BPM:</label>
+          <input type="range" id="bpmSlider" min="120" max="150" value="132" class="slider">
+          <span id="bpmDisplay" class="slider-value">132</span>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">ENERGY:</label>
+          <input type="range" id="energySlider" min="0" max="100" value="50" class="slider">
+          <span id="energyDisplay" class="slider-value">50</span>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">TENSION:</label>
+          <input type="range" id="tensionSlider" min="0" max="100" value="30" class="slider">
+          <span id="tensionDisplay" class="slider-value">30</span>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">SHOT:</label>
+          <select id="soundSelector" class="sound-select">
+            <option value="0">Triangle</option>
+            <option value="1">Acid</option>
+            <option value="2">Chord</option>
+            <option value="3">Echo</option>
+            <option value="4">Pluck</option>
+            <option value="5">Pew Pew</option>
+          </select>
+          <span id="soundDisplay" class="slider-value">Triangle</span>
+        </div>
+      </div>
   
   <div id="progression">
     <div>SECTION: <span id="section">INTRO</span></div>
@@ -452,10 +563,12 @@ function humanize(time, amount = 0.01) {
 
 // Visual feedback
 function flashIndicator(id) {
-  const el = document.getElementById(id);
-  if (el) {
-    el.style.background = '#0f0';
-    setTimeout(() => el.style.background = '#030', 60);
+  // Flash the minimized track square
+  const trackName = id.replace('Indicator', '');
+  const square = document.getElementById(trackName + 'Square');
+  if (square && !muteStates[trackName]) {
+    square.classList.add('flash');
+    setTimeout(() => square.classList.remove('flash'), 100);
   }
 }
 
@@ -639,16 +752,11 @@ function updatePatterns() {
   // Generate melodic acid sequence FIRST
   if (currentBar % 2 === 0) {
     acidSequence = generateMelodicAcidSequence(chordInfo, section, acidSequence);
-    document.getElementById('acidPattern').textContent = acidSequence.map(n => n ? '♪' : '·').join('');
+    // Pattern displays were removed with minimized UI
   }
   
   // THEN generate patterns (so stabs can respond to acid)
   const patterns = generatePatterns(section, currentBar, energyLevel);
-  
-  // Update pattern displays
-  document.getElementById('kickPattern').textContent = patterns.kick.join('');
-  document.getElementById('snarePattern').textContent = patterns.snare.join('');
-  document.getElementById('hatPattern').textContent = patterns.hihat.join('');
   
   // Clear and recreate sequences
   if (kickLoop) kickLoop.dispose();
@@ -981,18 +1089,60 @@ document.getElementById('tensionSlider').addEventListener('input', (e) => {
   }
 });
 
+// Sound selector
+document.getElementById('soundSelector').addEventListener('change', (e) => {
+  gameSounds.currentLaserSound = parseInt(e.target.value);
+  document.getElementById('soundDisplay').textContent = e.target.options[e.target.selectedIndex].text;
+});
+
 // Initial BPM
 Tone.Transport.bpm.value = 132;
 
-// Mute button handlers
+// Track square handlers for minimized controls
 ['kick', 'snare', 'hat', 'acid', 'stab', 'sub'].forEach(track => {
-  const btn = document.getElementById(track + 'Mute');
-  btn.addEventListener('click', () => {
-    muteStates[track] = !muteStates[track];
-    btn.textContent = muteStates[track] ? 'OFF' : 'ON';
-    btn.classList.toggle('muted', muteStates[track]);
-  });
+  const square = document.getElementById(track + 'Square');
+  if (square) {
+    // Initialize as active (not muted)
+    square.classList.add('active');
+    
+    square.addEventListener('click', () => {
+      muteStates[track] = !muteStates[track];
+      if (muteStates[track]) {
+        square.classList.remove('active');
+        square.classList.add('muted');
+      } else {
+        square.classList.add('active');
+        square.classList.remove('muted');
+      }
+    });
+  }
 });
+
+// Expand/minimize panel with smooth animation
+const expandBtn = document.getElementById('expandBtn');
+const minimizeBtn = document.getElementById('minimizeBtn');
+const expandedPanel = document.getElementById('expandedPanel');
+
+if (expandBtn) {
+  expandBtn.addEventListener('click', () => {
+    if (expandedPanel.classList.contains('expanded')) {
+      // Panel is open, close it
+      expandedPanel.classList.remove('expanded');
+      expandBtn.innerHTML = '⚙';
+    } else {
+      // Panel is closed, open it
+      expandedPanel.classList.add('expanded');
+      expandBtn.innerHTML = '▼';
+    }
+  });
+}
+
+if (minimizeBtn) {
+  minimizeBtn.addEventListener('click', () => {
+    expandedPanel.classList.remove('expanded');
+    expandBtn.innerHTML = '⚙';
+  });
+}
 
 // Game sounds that blend with the music - route through sidechain for cohesion
 const gameReverb = new Tone.Reverb({
@@ -1011,14 +1161,60 @@ const gameSounds = {
     volume: -18
   }).connect(gameReverb),
   
-  // Laser - musical blip that fits the techno aesthetic
-  laser: new Tone.MonoSynth({
-    oscillator: { type: "triangle" },
-    envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.01 },
-    filter: { frequency: 3000, rolloff: -12 },
-    filterEnvelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01, baseFrequency: 1500, octaves: -1 },
-    volume: -12
-  }).connect(sidechain), // Direct to sidechain for punch
+  // Multiple laser sounds that complement the music
+  laserSounds: [
+    // 0: Original - Triangle wave with filter sweep
+    new Tone.MonoSynth({
+      oscillator: { type: "triangle" },
+      envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.01 },
+      filter: { frequency: 3000, rolloff: -12 },
+      filterEnvelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01, baseFrequency: 1500, octaves: -1 },
+      volume: -12
+    }).connect(sidechain),
+    
+    // 1: Acid stab - mimics the 303 acid line
+    new Tone.MonoSynth({
+      oscillator: { type: "sawtooth" },
+      envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.02 },
+      filter: { frequency: 2000, rolloff: -24, Q: 8 },
+      filterEnvelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.02, baseFrequency: 800, octaves: 2 },
+      volume: -10
+    }).connect(acidFilter1), // Route through acid filter for consistency
+    
+    // 2: Chord stab - harmonizes with the techno stabs
+    new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: "square4" },
+      envelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01 },
+      volume: -14
+    }).connect(stabReverb), // Use the stab reverb for space
+    
+    // 3: Echo Pulse - metallic sound with delay
+    new Tone.MonoSynth({
+      oscillator: { type: "pulse", width: 0.2 },
+      envelope: { attack: 0.001, decay: 0.04, sustain: 0.2, release: 0.05 },
+      filter: { frequency: 4000, rolloff: -12, Q: 3 },
+      filterEnvelope: { attack: 0.001, decay: 0.02, sustain: 0.5, release: 0.02, baseFrequency: 2000, octaves: 2 },
+      volume: -8
+    }).connect(new Tone.FeedbackDelay("16n", 0.5).connect(gameReverb)), // Add echo effect
+    
+    // 4: Pluck - organic melodic sound
+    new Tone.PluckSynth({
+      attackNoise: 0.8,
+      dampening: 4000,
+      resonance: 0.9,
+      volume: -10
+    }).connect(gameReverb),
+    
+    // 5: Pew Pew - classic laser with pitch sweep
+    new Tone.MonoSynth({
+      oscillator: { type: "sine" },
+      envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.05 },
+      portamento: 0.08, // Glide between pitches
+      volume: -6
+    }).connect(sidechain)
+  ],
+  
+  currentLaserSound: 0, // Track which sound to use
   
   // Explosion - filtered noise burst that sounds like a snare hit
   explosion: new Tone.NoiseSynth({
@@ -1072,10 +1268,245 @@ const LANES=5, LANE_W=WIDTH/LANES;
 
 // Session highscore tracking
 let sessionHighScore = 0;
+// Persistent grid setting
+let gridEnabled = true;
 // Game dimensions initialized based on viewport
 const PLAYER_Y=HEIGHT-60, ENEMY_SPEED_BASE=200, BULLET_SPEED=520, FIRE_COOLDOWN=110;
 
+// Startup screen scene
+class StartupScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'StartupScene' });
+  }
+  
+  create() {
+    const WIDTH = this.cameras.main.width;
+    const HEIGHT = this.cameras.main.height;
+    
+    // Black background
+    this.cameras.main.setBackgroundColor('#000');
+    
+    // Create grid effect in background
+    const gridGraphics = this.add.graphics();
+    gridGraphics.lineStyle(1, 0x00ff00, 0.1);
+    
+    // Vertical lines
+    for(let x = 0; x < WIDTH; x += 40) {
+      gridGraphics.lineBetween(x, 0, x, HEIGHT);
+    }
+    // Horizontal lines  
+    for(let y = 0; y < HEIGHT; y += 40) {
+      gridGraphics.lineBetween(0, y, WIDTH, y);
+    }
+    
+    // Animated scan line effect
+    const scanline = this.add.rectangle(0, 0, WIDTH, 3, 0x00ff00, 0.5);
+    this.tweens.add({
+      targets: scanline,
+      y: HEIGHT,
+      duration: 3000,
+      repeat: -1,
+      ease: 'Linear'
+    });
+    
+    // Title with glow effect
+    const titleStyle = {
+      font: 'bold 72px monospace',
+      fill: '#00ffcc',
+      stroke: '#00ffcc',
+      strokeThickness: 2,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: '#00ffcc',
+        blur: 20,
+        fill: true
+      }
+    };
+    
+    const title = this.add.text(WIDTH/2, HEIGHT/3, 'BEATRIDER', titleStyle);
+    title.setOrigin(0.5);
+    
+    // Pulsing glow animation for title
+    this.tweens.add({
+      targets: title,
+      scaleX: 1.05,
+      scaleY: 1.05,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+    
+    // Subtitle with typewriter effect
+    const subtitleText = 'MELODIC TECHNO EDITION';
+    const subtitle = this.add.text(WIDTH/2, HEIGHT/3 + 80, '', {
+      font: '24px monospace',
+      fill: '#ff00ff',
+      stroke: '#ff00ff',
+      strokeThickness: 1
+    });
+    subtitle.setOrigin(0.5);
+    
+    // Typewriter effect
+    let charIndex = 0;
+    this.time.addEvent({
+      delay: 100,
+      callback: () => {
+        if(charIndex < subtitleText.length) {
+          subtitle.text += subtitleText[charIndex];
+          charIndex++;
+        }
+      },
+      repeat: subtitleText.length - 1
+    });
+    
+    // Instructions
+    const instructions = [
+      'ARROWS/A/D - MOVE',
+      'W/UP - JUMP',
+      'SPACE - FIRE',
+      'G - TOGGLE GRID'
+    ];
+    
+    instructions.forEach((text, index) => {
+      const instruction = this.add.text(WIDTH/2, HEIGHT/2 + 40 + index * 30, text, {
+        font: '18px monospace',
+        fill: '#00ff00'
+      });
+      instruction.setOrigin(0.5);
+      instruction.setAlpha(0);
+      
+      // Fade in with delay
+      this.tweens.add({
+        targets: instruction,
+        alpha: 1,
+        delay: 1500 + index * 200,
+        duration: 500
+      });
+    });
+    
+    // Press start message
+    const startText = this.add.text(WIDTH/2, HEIGHT - 100, 'PRESS SPACE TO START', {
+      font: 'bold 28px monospace',
+      fill: '#ffff00',
+      stroke: '#ffff00',
+      strokeThickness: 1
+    });
+    startText.setOrigin(0.5);
+    
+    // Blinking effect
+    this.tweens.add({
+      targets: startText,
+      alpha: 0,
+      duration: 500,
+      yoyo: true,
+      repeat: -1
+    });
+    
+    // Retro computer boot sequence text
+    const bootLines = [
+      'INITIALIZING BEAT DETECTION SYSTEM...',
+      'LOADING MELODIC ALGORITHMS...',
+      'CALIBRATING PERSPECTIVE MATRIX...',
+      'SYNTHESIZERS ONLINE',
+      'SYSTEM READY'
+    ];
+    
+    const bootY = 60;
+    bootLines.forEach((line, index) => {
+      this.time.delayedCall(index * 300, () => {
+        const bootText = this.add.text(40, bootY + index * 20, '> ' + line, {
+          font: '14px monospace',
+          fill: '#0f0'
+        });
+        
+        // Type-in effect for boot text
+        bootText.setAlpha(0);
+        this.tweens.add({
+          targets: bootText,
+          alpha: 1,
+          duration: 200
+        });
+        
+        // Add a blinking cursor after the last line
+        if(index === bootLines.length - 1) {
+          const cursor = this.add.text(bootText.x + bootText.width + 5, bootText.y, '_', {
+            font: '14px monospace',
+            fill: '#0f0'
+          });
+          this.tweens.add({
+            targets: cursor,
+            alpha: 0,
+            duration: 400,
+            yoyo: true,
+            repeat: -1
+          });
+        }
+      });
+    });
+    
+    // Floating particles in background
+    for(let i = 0; i < 30; i++) {
+      const particle = this.add.circle(
+        Math.random() * WIDTH,
+        Math.random() * HEIGHT,
+        Math.random() * 2 + 1,
+        0x00ff00,
+        Math.random() * 0.3 + 0.1
+      );
+      
+      this.tweens.add({
+        targets: particle,
+        y: particle.y - HEIGHT - 100,
+        duration: Math.random() * 10000 + 10000,
+        repeat: -1,
+        delay: Math.random() * 5000
+      });
+    }
+    
+    // Listen for space key to start
+    this.input.keyboard.once('keydown-SPACE', async () => {
+      // Start Tone.js from user gesture
+      if (typeof Tone !== 'undefined') {
+        await Tone.start();
+      }
+      
+      // Transition to game
+      this.cameras.main.fadeOut(500, 0, 0, 0);
+      this.time.delayedCall(500, () => {
+        this.scene.start('Main');
+      });
+    });
+    
+    // Also support click/touch to start  
+    this.input.once('pointerdown', async () => {
+      // Start Tone.js from user gesture
+      if (typeof Tone !== 'undefined') {
+        await Tone.start();
+      }
+      
+      // Transition to game
+      this.cameras.main.fadeOut(500, 0, 0, 0);
+      this.time.delayedCall(500, () => {
+        this.scene.start('Main');
+      });
+    });
+  }
+}
+
 class Main extends Phaser.Scene {
+  constructor() {
+    super({ key: 'Main' });
+  }
+  updateSoundDisplay() {
+    const soundNames = ['Triangle', 'Acid', 'Chord', 'Sub', 'Pluck', 'Pew Pew'];
+    const display = document.getElementById('soundDisplay');
+    if (display) {
+      display.textContent = soundNames[gameSounds.currentLaserSound];
+    }
+  }
+  
   createStarfield() {
     // Create three layers of stars for parallax effect
     this.stars = [
@@ -1108,6 +1539,7 @@ class Main extends Phaser.Scene {
   }
   
   updateStarfield(dt) {
+    if (!this.starGraphics) return; // Safety check
     this.starGraphics.clear();
     const vanishY = HEIGHT * 0.15;
     const vanishX = WIDTH / 2;
@@ -1152,8 +1584,21 @@ class Main extends Phaser.Scene {
   create(){
     this.cameras.main.setBackgroundColor('#000');
     
-    // Create starfield background
+    // Create starfield background FIRST
     this.createStarfield();
+    
+    // Start the music automatically when game starts
+    if (typeof Tone !== 'undefined' && Tone.Transport.state !== 'started') {
+      // Tone should already be started from the startup screen
+      currentBar = 0;
+      currentChordIndex = 0;
+      lastSection = '';
+      updatePatterns();
+      Tone.Transport.start();
+      if (document.getElementById('status')) {
+        document.getElementById('status').textContent = 'PLAYING';
+      }
+    }
     
     // Initialize trail system
     this.trails = [];
@@ -1186,13 +1631,13 @@ class Main extends Phaser.Scene {
     this.offScreenTimer = 0; // Timer for rubber band effect
     this.isMoving = false; // Prevent shooting while transitioning
     this.isJumping = false; // Track jump state
-    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,A,D,W,SPACE,G');
+    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,A,D,W,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX');
     this.score=0; 
     this.beats=0; 
     this.scoreText=this.add.text(10, HEIGHT-24, 'score 0', {font:'16px monospace', fill:'#0f0'});
     this.highScoreText=this.add.text(10, HEIGHT-48, 'high ' + sessionHighScore, {font:'16px monospace', fill:'#ff0'});
-    this.gridVisible = true; // Grid visibility toggle
-    this.gridText=this.add.text(10, 10, 'GRID: ON [G]', {font:'12px monospace', fill:'#0f0'});
+    this.gridVisible = gridEnabled; // Use persistent grid setting
+    this.gridText=this.add.text(10, 10, 'GRID: ' + (gridEnabled ? 'ON' : 'OFF') + ' [G]', {font:'12px monospace', fill:'#0f0'});
 
     // GameAPI is triggered by our drums
     window.GameAPI = {
@@ -1257,6 +1702,84 @@ class Main extends Phaser.Scene {
     e.setScale(0.1); // Start tiny at horizon
     e.trailPoints = []; // Store trail history
     this.enemies.push(e); 
+  }
+  
+  _createSplatEffect(x, y) {
+    // Create a splat/squish effect for hitting walls
+    const splatColor = 0x00ffcc;
+    
+    // Main splat circle that expands and fades
+    const splat = this.add.circle(x, y, 10, splatColor, 1);
+    this.tweens.add({
+      targets: splat,
+      scaleX: 4,
+      scaleY: 0.5, // Squish vertically
+      alpha: 0,
+      duration: 400,
+      ease: 'Power2',
+      onComplete: () => splat.destroy()
+    });
+    
+    // Splatter particles that spray outward
+    for(let i = 0; i < 12; i++) {
+      const particle = this.add.rectangle(x, y, 8, 8, splatColor);
+      const angle = (Math.PI * 2 / 12) * i;
+      const speed = 150 + Math.random() * 100;
+      
+      // Particles spray more horizontally than vertically
+      const xVel = Math.cos(angle) * speed * 1.5;
+      const yVel = Math.sin(angle) * speed * 0.5;
+      
+      this.tweens.add({
+        targets: particle,
+        x: x + xVel,
+        y: y + yVel,
+        scaleX: 0.2,
+        scaleY: 2, // Stretch vertically as they fall
+        alpha: 0,
+        rotation: Math.random() * Math.PI,
+        duration: 600,
+        ease: 'Power2',
+        onComplete: () => particle.destroy()
+      });
+    }
+    
+    // Screen flash
+    this.cameras.main.flash(200, 0, 255, 204, true);
+  }
+  
+  _createDeathExplosion(playerX, playerY, enemyX, enemyY) {
+    // Multi-stage explosion for dramatic effect
+    const colors = [0x00ffcc, 0xff3366, 0xffff00, 0xffffff];
+    
+    // Stage 1: Initial impact
+    this._createExplosion(playerX, playerY, 0x00ffcc, 25);
+    this._createExplosion(enemyX, enemyY, 0xff3366, 15);
+    
+    // Stage 2: Shockwave ring
+    const ring = this.add.circle(playerX, playerY, 20, 0xffffff, 0);
+    ring.setStrokeStyle(4, 0x00ffff, 1);
+    this.tweens.add({
+      targets: ring,
+      scale: 5,
+      alpha: 0,
+      duration: 500,
+      ease: 'Power2',
+      onComplete: () => ring.destroy()
+    });
+    
+    // Stage 3: Delayed secondary explosions
+    this.time.delayedCall(100, () => {
+      for(let i = 0; i < 3; i++) {
+        const offsetX = (Math.random() - 0.5) * 60;
+        const offsetY = (Math.random() - 0.5) * 60;
+        this._createExplosion(playerX + offsetX, playerY + offsetY, colors[i % colors.length], 10);
+      }
+    });
+    
+    // Camera shake and flash
+    this.cameras.main.shake(500, 0.02);
+    this.cameras.main.flash(300, 255, 0, 0, true);
   }
   
   _createExplosion(x, y, color = 0xff3366, particleCount = 8){
@@ -1428,14 +1951,44 @@ class Main extends Phaser.Scene {
       // Only play sound sometimes in rapid fire to avoid timing errors
       if(Math.random() < 0.3){
         try {
-          const note = getGameNote(Math.floor(Math.random() * 3) + 4) + "6";
-          gameSounds.laser.triggerAttackRelease(note, "32n", Tone.now() + 0.01);
+          // Use a consistent note in rapid fire instead of random
+          const note = getGameNote(this.playerLane) + "6"; // Higher octave but same lane note
+          const sound = gameSounds.laserSounds[gameSounds.currentLaserSound];
+          if (sound.triggerAttackRelease) {
+            sound.triggerAttackRelease(note, "32n", Tone.now() + 0.01);
+          } else if (sound.triggerAttack) {
+            // For PluckSynth which uses triggerAttack
+            sound.triggerAttack(note, Tone.now() + 0.01);
+          }
         } catch(e) {}
       }
     } else {
       try {
         const note = getGameNote(this.playerLane) + "5";
-        gameSounds.laser.triggerAttackRelease(note, "32n", Tone.now() + 0.01);
+        const sound = gameSounds.laserSounds[gameSounds.currentLaserSound];
+        
+        // Different sounds need different trigger methods
+        if (gameSounds.currentLaserSound === 2) {
+          // Chord stab - play a mini chord
+          const chordNotes = [note, getGameNote(this.playerLane + 2) + "5", getGameNote(this.playerLane + 4) + "5"];
+          sound.triggerAttackRelease(chordNotes, "32n", Tone.now() + 0.01);
+        } else if (gameSounds.currentLaserSound === 4) {
+          // PluckSynth uses triggerAttack
+          sound.triggerAttack(note, Tone.now() + 0.01);
+        } else if (gameSounds.currentLaserSound === 5) {
+          // Pew pew - play high note then quickly sweep down
+          const highNote = getGameNote(this.playerLane) + "6";
+          const lowNote = getGameNote(this.playerLane) + "3";
+          sound.triggerAttackRelease(highNote, "16n", Tone.now());
+          // Ramp the frequency down for pew pew effect
+          sound.frequency.exponentialRampToValueAtTime(
+            Tone.Frequency(lowNote).toFrequency(),
+            Tone.now() + 0.15
+          );
+        } else {
+          // Regular MonoSynth sounds
+          sound.triggerAttackRelease(note, "32n", Tone.now() + 0.01);
+        }
       } catch(e) {}
     }
     this.bullets.push(b); 
@@ -1484,10 +2037,37 @@ class Main extends Phaser.Scene {
     // Toggle grid with G key
     if(Phaser.Input.Keyboard.JustDown(this.keys.G)){
       this.gridVisible = !this.gridVisible;
+      gridEnabled = this.gridVisible; // Save to persistent setting
       this.gridText.setText('GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]');
       if(!this.gridVisible && this.gridGraphics) {
         this.gridGraphics.clear();
       }
+    }
+    
+    // Switch laser sounds with number keys
+    if(Phaser.Input.Keyboard.JustDown(this.keys.ONE)) {
+      gameSounds.currentLaserSound = 0;
+      this.updateSoundDisplay();
+    }
+    if(Phaser.Input.Keyboard.JustDown(this.keys.TWO)) {
+      gameSounds.currentLaserSound = 1;
+      this.updateSoundDisplay();
+    }
+    if(Phaser.Input.Keyboard.JustDown(this.keys.THREE)) {
+      gameSounds.currentLaserSound = 2;
+      this.updateSoundDisplay();
+    }
+    if(Phaser.Input.Keyboard.JustDown(this.keys.FOUR)) {
+      gameSounds.currentLaserSound = 3;
+      this.updateSoundDisplay();
+    }
+    if(Phaser.Input.Keyboard.JustDown(this.keys.FIVE)) {
+      gameSounds.currentLaserSound = 4;
+      this.updateSoundDisplay();
+    }
+    if(Phaser.Input.Keyboard.JustDown(this.keys.SIX)) {
+      gameSounds.currentLaserSound = 5;
+      this.updateSoundDisplay();
     }
     
     // Add pulse shift to grid movement
@@ -1646,9 +2226,26 @@ class Main extends Phaser.Scene {
     // Rubber band effect - pull player back if off-screen too long
     if(this.playerLane < 0 || this.playerLane >= LANES){
       this.offScreenTimer -= dt;
+      
+      // Apply distortion effects when off-screen
+      // Screen shake intensity based on how long off-screen
+      const shakeIntensity = Math.max(0, 1 - (this.offScreenTimer / 800)) * 4;
+      this.cameras.main.shake(100, shakeIntensity * 0.01);
+      
+      // Add chromatic aberration effect via camera tint
+      if(this.playerLane < 0) {
+        // Left side - cyan/red split
+        this.cameras.main.setPostPipeline('ChromaticAberration');
+      } else {
+        // Right side - magenta/green split  
+        this.cameras.main.setPostPipeline('ChromaticAberration');
+      }
+      
       // Visual warning - flash player when time is running out
       if(this.offScreenTimer < 300){
         this.player.setTint(0xff0000); // Red tint warning
+        // Increase shake as timer runs out
+        this.cameras.main.shake(100, 0.02);
       }
       // Pull back when timer expires
       if(this.offScreenTimer <= 0){
@@ -1701,8 +2298,10 @@ class Main extends Phaser.Scene {
         } catch(e) {}
       }
     } else {
-      // Clear any warning tint when back in bounds
+      // Clear any warning tint and effects when back in bounds
       if(!this.rapidFire) this.player.clearTint();
+      // Reset camera effects
+      this.cameras.main.resetPostPipeline();
     }
     
     // Jump mechanic - UP or W key
@@ -1796,9 +2395,10 @@ class Main extends Phaser.Scene {
         if(this.score > sessionHighScore) {
           sessionHighScore = this.score;
         }
-        // Player hit by enemy - big explosion
-        this._createExplosion(this.player.x, this.player.y, 0x00ffcc, 20);
-        this._createExplosion(e.x, e.y, 0xff3366, 12);
+        
+        // Create dramatic explosion for enemy hit
+        this._createDeathExplosion(this.player.x, this.player.y, e.x, e.y);
+        
         try {
           // Player death sound - descending pitch
           const now = Tone.now();
@@ -1807,7 +2407,15 @@ class Main extends Phaser.Scene {
           gameSounds.obstacleHit.triggerAttackRelease("G1", "16n", now + 0.1);
           gameSounds.explosion.triggerAttackRelease("8n", now + 0.02);
         } catch(e) {}
-        this.scene.restart(); 
+        
+        // Hide player and enemy immediately
+        this.player.setVisible(false);
+        e.destroy();
+        
+        // Delay restart to show animation
+        this.time.delayedCall(800, () => {
+          this.scene.restart();
+        });
       }
     }
     
@@ -1830,14 +2438,20 @@ class Main extends Phaser.Scene {
         if(this.score > sessionHighScore) {
           sessionHighScore = this.score;
         }
-        // Hit obstacle - explosion and restart
-        this._createExplosion(this.player.x, this.player.y, 0x00ffcc, 16);
+        
+        // Create splat effect for hitting wall
+        this._createSplatEffect(this.player.x, this.player.y);
+        
         try {
           // Low impact thud with pitch bend down
           gameSounds.obstacleHit.triggerAttackRelease("C2", "8n");
           gameSounds.explosion.triggerAttackRelease("8n");
         } catch(e) {}
-        this.scene.restart();
+        
+        // Delay restart to show animation
+        this.time.delayedCall(500, () => {
+          this.scene.restart();
+        });
       }
       else if(o.progress > 1.1){ 
         o.destroy(); 
@@ -2055,7 +2669,7 @@ const game = new Phaser.Game({
   width: WIDTH,
   height: HEIGHT,
   parent: 'gameContainer',
-  scene: Main
+  scene: [StartupScene, Main]
 });
 </script>
 </body>
