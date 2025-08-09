@@ -1642,21 +1642,19 @@ class Main extends Phaser.Scene {
     // Mobile controls setup
     this.setupMobileControls();
     
-    // Add mobile control hints (only on touch devices)
-    if(this.input.activePointer.wasTouch || 'ontouchstart' in window) {
-      const controlsText = this.add.text(WIDTH/2, HEIGHT - 80, 
-        'SWIPE: Move • SWIPE UP: Jump • TAP: Fire • HOLD: Auto-fire', 
-        {font:'12px monospace', fill:'#0f0', alpha: 0.5}
-      );
-      controlsText.setOrigin(0.5);
-      // Fade out after 5 seconds
-      this.tweens.add({
-        targets: controlsText,
-        alpha: 0,
-        delay: 5000,
-        duration: 1000
-      });
-    }
+    // Add mobile control hints (always show for now to test)
+    const controlsText = this.add.text(WIDTH/2, HEIGHT - 80, 
+      'SWIPE: Move • SWIPE UP: Jump • TAP: Fire • HOLD: Auto-fire', 
+      {font:'12px monospace', fill:'#0f0', alpha: 0.7}
+    );
+    controlsText.setOrigin(0.5);
+    // Fade out after 5 seconds
+    this.tweens.add({
+      targets: controlsText,
+      alpha: 0,
+      delay: 5000,
+      duration: 1000
+    });
 
     // GameAPI is triggered by our drums
     window.GameAPI = {
@@ -1705,21 +1703,37 @@ class Main extends Phaser.Scene {
     this.swipeThreshold = 50; // Minimum distance for swipe
     this.swipeTimeLimit = 300; // Max time for swipe gesture (ms)
     
+    // Create touch indicator (for debugging)
+    this.touchIndicator = this.add.circle(0, 0, 20, 0x00ff00, 0.3);
+    this.touchIndicator.setVisible(false);
+    
     // Touch start - anywhere on screen
     this.input.on('pointerdown', (pointer) => {
       this.touchStartX = pointer.x;
       this.touchStartY = pointer.y;
       this.touchStartTime = this.time.now;
       
+      // Show touch indicator
+      this.touchIndicator.setPosition(pointer.x, pointer.y);
+      this.touchIndicator.setVisible(true);
+      this.touchIndicator.setAlpha(0.5);
+      
       // Start firing timer for hold-to-fire
       this.fireHoldTimer = this.time.delayedCall(200, () => {
         this.isTouchFiring = true;
+        // Visual feedback for auto-fire mode
+        this.touchIndicator.setFillStyle(0xff0000, 0.5);
       });
     });
     
-    // Touch move - detect swipes
+    // Touch move - detect swipes and update indicator
     this.input.on('pointermove', (pointer) => {
       if (!pointer.isDown) return;
+      
+      // Update touch indicator position
+      if (this.touchIndicator && this.touchIndicator.visible) {
+        this.touchIndicator.setPosition(pointer.x, pointer.y);
+      }
       
       const dx = pointer.x - this.touchStartX;
       const dy = pointer.y - this.touchStartY;
@@ -1752,6 +1766,12 @@ class Main extends Phaser.Scene {
     
     // Touch end
     this.input.on('pointerup', (pointer) => {
+      // Hide touch indicator
+      if (this.touchIndicator) {
+        this.touchIndicator.setVisible(false);
+        this.touchIndicator.setFillStyle(0x00ff00, 0.3); // Reset color
+      }
+      
       // Cancel firing timer if it hasn't triggered yet
       if (this.fireHoldTimer) {
         this.fireHoldTimer.remove();
