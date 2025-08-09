@@ -236,7 +236,14 @@ const acid = new Tone.MonoSynth({
   portamento: 0.05  // Add glide between notes!
 }).connect(acidDistortion);
 
-// Rave stabs
+// Rave stabs with filter for automation
+const stabFilter = new Tone.Filter({
+  frequency: 2000,
+  type: "lowpass",
+  rolloff: -12,
+  Q: 2
+}).connect(sidechain);
+
 const raveSynth = new Tone.PolySynth(Tone.Synth, {
   oscillator: { type: "sawtooth" },
   envelope: {
@@ -246,7 +253,7 @@ const raveSynth = new Tone.PolySynth(Tone.Synth, {
     release: 0.4
   },
   volume: -6
-}).connect(sidechain);
+}).connect(stabFilter);
 
 // Sub bass with EQ to prevent mud
 const subEQ = new Tone.EQ3({
@@ -535,12 +542,38 @@ function generatePatterns(section, bar, energy) {
     }
   }
   
-  // Stab pattern - call and response with acid
-  const stabTiming = bar % 4;
-  if (stabTiming === 0 || stabTiming === 2) {
-    patterns.stab = [0,0,0,1, 0,0,1,0, 0,0,0,1, 0,0,0,0];
+  // Stab patterns that complement the acid line
+  // Look at where acid pattern has gaps and fill them
+  const acidDensity = acidSequence ? acidSequence.filter(n => n).length : 8;
+  
+  const stabPatterns = [
+    [0,0,0,1, 0,0,1,0, 0,0,0,1, 0,0,0,0], // Classic off-beat
+    [0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0], // Minimal - just two hits
+    [0,1,0,0, 0,0,0,0, 0,1,0,0, 0,0,0,0], // Answer pattern (different timing)
+    new Array(16).fill(0) // Rest
+  ];
+  
+  // Create call-and-response with acid
+  if (section === 'BREAK') {
+    patterns.stab = stabPatterns[3]; // No stabs in break
+  } else if (section === 'DROP') {
+    // If acid is busy, use minimal stabs. If acid is sparse, use more stabs
+    patterns.stab = acidDensity > 10 ? stabPatterns[1] : stabPatterns[0];
+  } else if (section === 'BUILD') {
+    // Answer the acid pattern - when acid plays, stabs rest and vice versa
+    patterns.stab = (bar % 2 === 0) ? stabPatterns[2] : stabPatterns[3];
+  } else if (section === 'MAIN') {
+    // Complementary phrasing
+    const phrasePosition = bar % 4;
+    if (phrasePosition === 3) {
+      patterns.stab = stabPatterns[3]; // Rest before the drop
+    } else {
+      // Use opposite density to acid
+      patterns.stab = acidDensity < 6 ? stabPatterns[0] : stabPatterns[1];
+    }
   } else {
-    patterns.stab = new Array(16).fill(0);
+    // INTRO/OUTRO - minimal
+    patterns.stab = (bar % 4 === 0) ? stabPatterns[1] : stabPatterns[3];
   }
   
   return patterns;
@@ -635,13 +668,37 @@ function updatePatterns() {
     }
   }, acidSequence, "16n");
   
-  // Stabs with slight spread
-  chordLoop = new Tone.Sequence((time, hit) => {
+  // Stabs with slight spread and filter variation
+  chordLoop = new Tone.Sequence((time, hit, index) => {
     if (hit && !muteStates.stab) {
       const humanTime = humanize(time, 0.006);
-      chordInfo.chord.forEach((note, i) => {
-        // Slight strum effect with more variation
-        const noteTime = humanTime + i * (0.008 + Math.random() * 0.004);
+      
+      // Vary the filter based on section
+      const currentSection = getSection(currentBar);
+      if (currentSection === 'DROP') {
+        stabFilter.frequency.setValueAtTime(3500, humanTime);
+      } else if (currentSection === 'BUILD') {
+        // Gradually open filter in builds
+        stabFilter.frequency.exponentialRampToValueAtTime(2500, humanTime + 0.2);
+      } else {
+        stabFilter.frequency.setValueAtTime(2000, humanTime);
+      }
+      
+      // Choose chord voicing based on what acid is doing
+      // If acid is playing high, play stabs lower and vice versa
+      const acidNote = acidSequence[index];
+      let chordToPlay = chordInfo.chord;
+      
+      if (acidNote && acidNote.includes('3')) {
+        // Acid is high, play stabs an octave lower
+        chordToPlay = chordInfo.chord.map(note => 
+          note.replace(/(\d)/, (match) => parseInt(match) - 1)
+        );
+      }
+      
+      chordToPlay.forEach((note, i) => {
+        // Slight strum effect
+        const noteTime = humanTime + i * 0.01;
         raveSynth.triggerAttackRelease(note, "8n", noteTime);
       });
       Tone.Draw.schedule(() => flashIndicator('stabIndicator'), humanTime);
