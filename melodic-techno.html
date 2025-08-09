@@ -693,7 +693,13 @@ function updatePatterns() {
       const duration = Math.random() > 0.8 ? "16n" : "32n"; // Occasional longer hat
       hihat.triggerAttackRelease(duration, humanTime);
       hihat.volume.setValueAtTime(-15 + (velocity * 10), humanTime); // Subtle volume variation
-      Tone.Draw.schedule(() => flashIndicator('hatIndicator'), humanTime);
+      Tone.Draw.schedule(() => {
+        flashIndicator('hatIndicator');
+        // Spawn obstacles on some hi-hat hits
+        if (Math.random() < 0.2 && window.GameAPI && window.GameAPI.onHihat) {
+          window.GameAPI.onHihat();
+        }
+      }, humanTime);
     }
   }, patterns.hihat, "16n");
   
@@ -716,7 +722,13 @@ function updatePatterns() {
       }
       
       acid.triggerAttackRelease(note, "16n", humanTime);
-      Tone.Draw.schedule(() => flashIndicator('acidIndicator'), humanTime);
+      Tone.Draw.schedule(() => {
+        flashIndicator('acidIndicator');
+        // Spawn power-up occasionally
+        if (Math.random() < 0.1 && window.GameAPI && window.GameAPI.onAcid) {
+          window.GameAPI.onAcid();
+        }
+      }, humanTime);
     }
   }, acidSequence, "16n");
   
@@ -754,7 +766,13 @@ function updatePatterns() {
         raveSynth.triggerAttackRelease(note, "4n", noteTime); // Longer note for reverb tail
       });
       
-      Tone.Draw.schedule(() => flashIndicator('stabIndicator'), humanTime);
+      Tone.Draw.schedule(() => {
+        flashIndicator('stabIndicator');
+        // Spawn drifter enemy
+        if (window.GameAPI && window.GameAPI.onStab) {
+          window.GameAPI.onStab();
+        }
+      }, humanTime);
     }
   }, patterns.stab, "16n");
   
@@ -777,7 +795,13 @@ function updatePatterns() {
         const octaveUp = note.replace(/\d/, (match) => parseInt(match) + 1);
         subBass.triggerAttackRelease(octaveUp, "2n", humanTime + 0.01, 0.3); // Quieter octave
       }
-      Tone.Draw.schedule(() => flashIndicator('subIndicator'), humanTime);
+      Tone.Draw.schedule(() => {
+        flashIndicator('subIndicator');
+        // Pulse the grid
+        if (window.GameAPI && window.GameAPI.onSub) {
+          window.GameAPI.onSub();
+        }
+      }, humanTime);
     }
   }, subPattern, "16n");
   
@@ -963,6 +987,60 @@ Tone.Transport.bpm.value = 132;
   });
 });
 
+// Game sounds that blend with the music - route through sidechain for cohesion
+const gameReverb = new Tone.Reverb({
+  decay: 0.5,
+  wet: 0.2
+}).connect(sidechain);
+
+// Game sound effects - musical and in-key
+const gameSounds = {
+  // Movement - subtle filter sweep in key
+  move: new Tone.MonoSynth({
+    oscillator: { type: "sine" },
+    envelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01 },
+    filter: { frequency: 2000, rolloff: -12, Q: 5 },
+    filterEnvelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01, baseFrequency: 800, octaves: 1 },
+    volume: -18
+  }).connect(gameReverb),
+  
+  // Laser - musical blip that fits the techno aesthetic
+  laser: new Tone.MonoSynth({
+    oscillator: { type: "triangle" },
+    envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.01 },
+    filter: { frequency: 3000, rolloff: -12 },
+    filterEnvelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01, baseFrequency: 1500, octaves: -1 },
+    volume: -12
+  }).connect(sidechain), // Direct to sidechain for punch
+  
+  // Explosion - filtered noise burst that sounds like a snare hit
+  explosion: new Tone.NoiseSynth({
+    noise: { type: "pink" },
+    envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.02 },
+    volume: -8
+  }).connect(new Tone.Filter(1200, "highpass").connect(sidechain)),
+  
+  // Power-up - use same synth style as acid for consistency
+  powerUp: new Tone.MonoSynth({
+    oscillator: { type: "sawtooth" },
+    envelope: { attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.2 },
+    filter: { frequency: 2000, rolloff: -12, Q: 3 },
+    filterEnvelope: { attack: 0.001, decay: 0.2, sustain: 0.3, release: 0.2, baseFrequency: 400, octaves: 3 },
+    volume: -10
+  }).connect(acidFilter1) // Route through acid filter for consistency
+};
+
+// Helper to get notes in current scale
+function getGameNote(index) {
+  const scales = {
+    minor: ["C", "D", "Eb", "F", "G", "Ab", "Bb"],
+    dorian: ["C", "D", "Eb", "F", "G", "A", "Bb"],
+    phrygian: ["C", "Db", "Eb", "F", "G", "Ab", "Bb"]
+  };
+  const scale = scales.minor; // Default to minor
+  return scale[index % scale.length];
+}
+
 // Initialize Phaser game - use most of viewport
 const viewportHeight = window.innerHeight - 20; // Minimal padding
 const viewportWidth = window.innerWidth - 440; // Account for left panel (400) + gap (20) + padding (20)
@@ -980,14 +1058,24 @@ class Main extends Phaser.Scene {
     gfx.fillStyle(0x00ffcc,1).fillRect(0,0,24,24).generateTexture('playerTex',24,24).clear();
     gfx.fillStyle(0xff3366,1).fillRect(0,0,20,20).generateTexture('enemyTex',20,20).clear();
     gfx.fillStyle(0xffff00,1).fillTriangle(10,0,0,20,20,20).generateTexture('fastEnemyTex',20,20).clear();
-    gfx.fillStyle(0xffffff,1).fillRect(0,0,6,12).generateTexture('bulletTex',6,12).destroy();
+    gfx.fillStyle(0xffffff,1).fillRect(0,0,6,12).generateTexture('bulletTex',6,12).clear();
+    gfx.fillStyle(0x8800ff,1).fillRect(0,0,30,8).generateTexture('obstacleTex',30,8).clear(); // Purple barrier
+    gfx.fillStyle(0x00ff00,1).fillCircle(10,10,10).generateTexture('powerUpTex',20,20).clear(); // Green power-up
+    gfx.fillStyle(0xff00ff,1).fillStyle(0xff00ff,1).fillRect(2,2,16,16).generateTexture('drifterTex',20,20).destroy(); // Magenta drifter
 
     this.playerLane=2; 
     this.player=this.add.image(this._laneX(this.playerLane), PLAYER_Y, 'playerTex');
     this.enemies=[]; 
     this.bullets=[]; 
+    this.obstacles = [];
+    this.powerUps = [];
     this.lastShotAt=0;
-    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,A,D,SPACE');
+    this.rapidFire = false;
+    this.rapidFireTimer = 0;
+    this.offScreenTimer = 0; // Timer for rubber band effect
+    this.isMoving = false; // Prevent shooting while transitioning
+    this.isJumping = false; // Track jump state
+    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,A,D,W,SPACE');
     this.score=0; 
     this.beats=0; 
     this.scoreText=this.add.text(10, HEIGHT-24, 'score 0', {font:'16px monospace', fill:'#0f0'});
@@ -1007,6 +1095,25 @@ class Main extends Phaser.Scene {
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnEnemy(lane, speed, 'fastEnemyTex'); 
       },
+      onHihat: ()=>{
+        // Spawn obstacles that block shots
+        const lane = Phaser.Math.Between(0,LANES-1);
+        this._spawnObstacle(lane);
+      },
+      onAcid: ()=>{
+        // Spawn power-up for rapid fire
+        const lane = Phaser.Math.Between(0,LANES-1);
+        this._spawnPowerUp(lane);
+      },
+      onStab: ()=>{
+        // Spawn lane-changing enemy
+        const lane = Phaser.Math.Between(0,LANES-1);
+        this._spawnDrifter(lane);
+      },
+      onSub: ()=>{
+        // Pulse the grid
+        this._pulseGrid();
+      },
       reset: ()=>{ this.scene.restart(); }
     };
   }
@@ -1014,7 +1121,14 @@ class Main extends Phaser.Scene {
   _laneX(lane, progress = 1){ 
     // Interpolate X position between vanishing point and lane position based on progress
     const vanishX = WIDTH / 2;
-    const bottomLaneX = lane * LANE_W + LANE_W / 2;
+    // Clamp off-screen lanes to be partially visible
+    let clampedLane = lane;
+    if(lane < 0) {
+      clampedLane = -0.7; // Show 30% of ship on left edge
+    } else if(lane >= LANES) {
+      clampedLane = LANES - 0.3; // Show 30% of ship on right edge
+    }
+    const bottomLaneX = clampedLane * LANE_W + LANE_W / 2;
     return vanishX + (bottomLaneX - vanishX) * progress;
   }
   _spawnEnemy(lane, speed, texture='enemyTex'){ 
@@ -1029,8 +1143,52 @@ class Main extends Phaser.Scene {
     e.setScale(0.1); // Start tiny at horizon
     this.enemies.push(e); 
   }
-  _spawnHorizBar(){
-    // Don't spawn individual bars anymore - we'll draw a continuous grid
+  _spawnObstacle(lane){
+    const vanishY = HEIGHT * 0.15;
+    const o = this.add.image(this._laneX(lane, 0), vanishY, 'obstacleTex');
+    o.lane = lane;
+    o.progress = 0;
+    o.vy = ENEMY_SPEED_BASE * 0.7; // Slower than enemies
+    o.baseSize = 30;
+    o.w = o.baseSize; o.h = 8;
+    o.setScale(0.1);
+    this.obstacles.push(o);
+  }
+  
+  _spawnPowerUp(lane){
+    const vanishY = HEIGHT * 0.15;
+    const p = this.add.image(this._laneX(lane, 0), vanishY, 'powerUpTex');
+    p.lane = lane;
+    p.progress = 0;
+    p.vy = ENEMY_SPEED_BASE * 1.2;
+    p.baseSize = 20;
+    p.setScale(0.1);
+    this.powerUps.push(p);
+  }
+  
+  _spawnDrifter(lane){
+    const vanishY = HEIGHT * 0.15;
+    const d = this.add.image(this._laneX(lane, 0), vanishY, 'drifterTex');
+    d.lane = lane;
+    d.targetLane = lane; // Will change
+    d.progress = 0;
+    d.vy = ENEMY_SPEED_BASE * 0.8;
+    d.baseSize = 20;
+    d.w = d.baseSize; d.h = d.baseSize;
+    d.enemyType = 'drifterTex';
+    d.isDrifter = true;
+    d.driftTimer = 0;
+    d.setScale(0.1);
+    this.enemies.push(d); // Add to enemies array for collision
+  }
+  
+  _pulseGrid(){
+    // Set a pulse flag and timer with random direction
+    this.pulseActive = true;
+    this.pulseTimer = 150; // milliseconds
+    this.pulsePhase = 0;
+    // Random pulse type: 0 = forward, 1 = left, 2 = right
+    this.pulseType = Math.floor(Math.random() * 3);
   }
   
   _drawPerspectiveGrid(){
@@ -1085,13 +1243,32 @@ class Main extends Phaser.Scene {
     }
   }
   _fire(){ 
+    // Can't shoot while moving or off-screen
+    if(this.isMoving || this.playerLane < 0 || this.playerLane >= LANES) return;
+    
     const now=this.time.now; 
-    if(now-this.lastShotAt<FIRE_COOLDOWN) return; 
+    const cooldown = this.rapidFire ? FIRE_COOLDOWN/3 : FIRE_COOLDOWN;
+    if(now-this.lastShotAt<cooldown) return; 
     this.lastShotAt=now; 
     const b=this.add.image(this.player.x, this.player.y-20, 'bulletTex'); 
     b.lane = this.playerLane;
     b.progress = 0.95; // Start near player
     b.vy=-BULLET_SPEED; b.w=6; b.h=12; 
+    if(this.rapidFire) {
+      b.vy *= 1.5; // Faster bullets in rapid fire
+      // Only play sound sometimes in rapid fire to avoid timing errors
+      if(Math.random() < 0.3){
+        try {
+          const note = getGameNote(Math.floor(Math.random() * 3) + 4) + "6";
+          gameSounds.laser.triggerAttackRelease(note, "32n", "+0.01");
+        } catch(e) {}
+      }
+    } else {
+      try {
+        const note = getGameNote(this.playerLane) + "5";
+        gameSounds.laser.triggerAttackRelease(note, "32n", "+0.01");
+      } catch(e) {}
+    }
     this.bullets.push(b); 
   }
   _aabb(a,b){ 
@@ -1099,23 +1276,217 @@ class Main extends Phaser.Scene {
   }
 
   update(_, dt){
+    // Handle pulse effect - shift in different directions
+    let pulseShift = 0;
+    let pulseXShift = 0;
+    if(this.pulseActive){
+      this.pulseTimer -= dt;
+      if(this.pulseTimer <= 0){
+        this.pulseActive = false;
+      } else {
+        // Create a pulse curve
+        const t = 1 - (this.pulseTimer / 150);
+        const amount = Math.sin(t * Math.PI);
+        
+        if(this.pulseType === 0){
+          // Forward pulse
+          pulseShift = amount * 0.05;
+        } else if(this.pulseType === 1){
+          // Left pulse
+          pulseXShift = -amount * 30; // pixels
+        } else {
+          // Right pulse
+          pulseXShift = amount * 30;
+        }
+      }
+    }
+    
     // Animate the perspective grid tied to BPM
     if(!this.gridOffset) this.gridOffset = 0;
     // Get current BPM from Tone.Transport or use default
     const currentBPM = (typeof Tone !== 'undefined' && Tone.Transport) ? Tone.Transport.bpm.value : 132;
     // Scale grid speed to BPM - higher BPM = faster scrolling
-    this.gridOffset += (dt / 1000) * (currentBPM / 60); // Lines per second based on BPM
+    // Add pulse shift to grid movement
+    this.gridOffset += (dt / 1000) * (currentBPM / 60) + pulseShift * 2; // Lines per second based on BPM
     this._drawPerspectiveGrid();
     
-    // Movement
-    if(Phaser.Input.Keyboard.JustDown(this.keys.LEFT)||Phaser.Input.Keyboard.JustDown(this.keys.A)){ 
-      this.playerLane=Math.max(0,this.playerLane-1); 
-      this.player.x=this._laneX(this.playerLane); 
+    // Apply horizontal shift to grid
+    if(this.gridGraphics && pulseXShift !== 0){
+      this.gridGraphics.x = pulseXShift;
+    } else if(this.gridGraphics){
+      this.gridGraphics.x = 0;
     }
-    if(Phaser.Input.Keyboard.JustDown(this.keys.RIGHT)||Phaser.Input.Keyboard.JustDown(this.keys.D)){ 
-      this.playerLane=Math.min(LANES-1,this.playerLane+1); 
-      this.player.x=this._laneX(this.playerLane); 
+    
+    // Movement with rubber band effect and smooth transitions
+    if(!this.isMoving && (Phaser.Input.Keyboard.JustDown(this.keys.LEFT)||Phaser.Input.Keyboard.JustDown(this.keys.A))){ 
+      this.playerLane=Math.max(-1,this.playerLane-1); // Can go to -1 (off-screen left)
+      const targetX = this._laneX(this.playerLane);
+      
+      // Smooth transition with squash and stretch
+      this.isMoving = true;
+      this.tweens.add({
+        targets: this.player,
+        x: targetX,
+        duration: 150,
+        ease: 'Sine.easeInOut',
+        onStart: () => {
+          // Squash and tilt during movement
+          this.player.setScale(0.8, 1.2);
+          this.player.angle = -15; // Tilt left
+        },
+        onComplete: () => {
+          this.player.setScale(1, 1);
+          this.player.angle = 0;
+          this.isMoving = false;
+        }
+      });
+      
+      // Reset rubber band timer when moving off-screen
+      if(this.playerLane < 0 || this.playerLane >= LANES){
+        this.offScreenTimer = 800; // 800ms before rubber band pulls back
+        this.player.setAlpha(0.7); // Semi-transparent when off-screen
+      } else {
+        this.player.setAlpha(1);
+      }
+      // Play movement sound
+      try {
+        const note = getGameNote(Math.max(0, Math.min(4, this.playerLane))) + "5";
+        gameSounds.move.triggerAttackRelease(note, "32n");
+      } catch(e) {}
     }
+    if(!this.isMoving && (Phaser.Input.Keyboard.JustDown(this.keys.RIGHT)||Phaser.Input.Keyboard.JustDown(this.keys.D))){ 
+      this.playerLane=Math.min(LANES,this.playerLane+1); // Can go to 5 (off-screen right)
+      const targetX = this._laneX(this.playerLane);
+      
+      // Smooth transition with squash and stretch
+      this.isMoving = true;
+      this.tweens.add({
+        targets: this.player,
+        x: targetX,
+        duration: 150,
+        ease: 'Sine.easeInOut',
+        onStart: () => {
+          // Squash and tilt during movement
+          this.player.setScale(0.8, 1.2);
+          this.player.angle = 15; // Tilt right
+        },
+        onComplete: () => {
+          this.player.setScale(1, 1);
+          this.player.angle = 0;
+          this.isMoving = false;
+        }
+      });
+      
+      // Reset rubber band timer when moving off-screen
+      if(this.playerLane < 0 || this.playerLane >= LANES){
+        this.offScreenTimer = 800; // 800ms before rubber band pulls back
+        this.player.setAlpha(0.7); // Semi-transparent when off-screen
+      } else {
+        this.player.setAlpha(1);
+      }
+      // Play movement sound
+      try {
+        const note = getGameNote(Math.max(0, Math.min(4, this.playerLane))) + "5";
+        gameSounds.move.triggerAttackRelease(note, "32n");
+      } catch(e) {}
+    }
+    
+    // Rubber band effect - pull player back if off-screen too long
+    if(this.playerLane < 0 || this.playerLane >= LANES){
+      this.offScreenTimer -= dt;
+      // Visual warning - flash player when time is running out
+      if(this.offScreenTimer < 300){
+        this.player.setTint(0xff0000); // Red tint warning
+      }
+      // Pull back when timer expires
+      if(this.offScreenTimer <= 0){
+        // Store the off-screen position for animation
+        const fromX = this.player.x;
+        
+        if(this.playerLane < 0){
+          this.playerLane = 0;
+        } else if(this.playerLane >= LANES){
+          this.playerLane = LANES - 1;
+        }
+        
+        const targetX = this._laneX(this.playerLane);
+        
+        // Rubber band snap animation - overshoot then settle
+        this.tweens.add({
+          targets: this.player,
+          x: targetX,
+          duration: 300,
+          ease: 'Back.easeOut', // Elastic overshoot effect
+          onStart: () => {
+            // Stretch effect during snap
+            this.player.setScale(1.5, 0.7); // Stretch horizontally, squash vertically
+          },
+          onComplete: () => {
+            // Bounce settle animation
+            this.tweens.add({
+              targets: this.player,
+              scaleX: 1,
+              scaleY: 1,
+              duration: 200,
+              ease: 'Bounce.easeOut'
+            });
+          }
+        });
+        
+        // Spin the player during snap-back
+        this.tweens.add({
+          targets: this.player,
+          angle: 360,
+          duration: 300,
+          ease: 'Power2'
+        });
+        
+        this.player.clearTint();
+        this.player.setAlpha(1); // Restore full opacity
+        // Rubber band snap sound
+        try {
+          gameSounds.move.triggerAttackRelease("C3", "16n");
+        } catch(e) {}
+      }
+    } else {
+      // Clear any warning tint when back in bounds
+      if(!this.rapidFire) this.player.clearTint();
+    }
+    
+    // Jump mechanic - UP or W key
+    if(!this.isJumping && (Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W))){
+      this.isJumping = true;
+      
+      // Jump animation
+      this.tweens.add({
+        targets: this.player,
+        y: PLAYER_Y - 100, // Jump height
+        scaleX: 1.2,
+        scaleY: 1.2,
+        duration: 200,
+        ease: 'Quad.easeOut',
+        yoyo: true,
+        onComplete: () => {
+          this.isJumping = false;
+          this.player.y = PLAYER_Y;
+        }
+      });
+      
+      // Spin during jump
+      this.tweens.add({
+        targets: this.player,
+        angle: 360,
+        duration: 400,
+        ease: 'Linear'
+      });
+      
+      // Jump sound effect
+      try {
+        gameSounds.move.triggerAttackRelease("C6", "16n");
+        gameSounds.move.triggerAttackRelease("G6", "16n", "+0.05");
+      } catch(e) {}
+    }
+    
     if(this.keys.SPACE.isDown) this._fire();
 
     // Update enemies with perspective
@@ -1123,15 +1494,29 @@ class Main extends Phaser.Scene {
     for(let i=this.enemies.length-1; i>=0; i--){
       const e=this.enemies[i]; 
       
-      // Move along perspective curve
-      e.progress += (e.vy * dt/1000) / (HEIGHT * 0.8);
+      // Move along perspective curve - add pulse shift
+      e.progress += (e.vy * dt/1000) / (HEIGHT * 0.8) + pulseShift;
+      
+      // Handle drifting enemies
+      if(e.isDrifter){
+        e.driftTimer += dt;
+        if(e.driftTimer > 1000){ // Change lane every second
+          e.driftTimer = 0;
+          e.targetLane = Phaser.Math.Between(0, LANES-1);
+        }
+        // Smoothly interpolate to target lane
+        const laneDiff = e.targetLane - e.lane;
+        if(Math.abs(laneDiff) > 0.1){
+          e.lane += laneDiff * 0.05;
+        }
+      }
       
       // Calculate position on exponential curve (same as grid)
       const y = vanishY + (HEIGHT - vanishY) * Math.pow(e.progress, 2.5);
       e.y = y;
       
-      // Update X position along perspective lane
-      e.x = this._laneX(e.lane, e.progress);
+      // Update X position along perspective lane + pulse shift
+      e.x = this._laneX(e.lane, e.progress) + pulseXShift;
       
       // Scale based on distance
       const scale = 0.1 + e.progress * 1.2; // Start tiny, grow to normal size
@@ -1141,9 +1526,61 @@ class Main extends Phaser.Scene {
       e.w = e.baseSize * scale;
       e.h = e.baseSize * scale;
       
-      // Remove or check collision
+      // Remove or check collision (can't hit while jumping)
       if(e.progress > 1.1){ e.destroy(); this.enemies.splice(i,1); }
-      else if(e.progress > 0.9 && this._aabb(e, this.player)){ this.scene.restart(); }
+      else if(e.progress > 0.9 && !this.isJumping && this._aabb(e, this.player)){ this.scene.restart(); }
+    }
+    
+    // Update obstacles
+    for(let i=this.obstacles.length-1; i>=0; i--){
+      const o=this.obstacles[i];
+      o.progress += (o.vy * dt/1000) / (HEIGHT * 0.8) + pulseShift;
+      const y = vanishY + (HEIGHT - vanishY) * Math.pow(o.progress, 2.5);
+      o.y = y;
+      o.x = this._laneX(o.lane, o.progress) + pulseXShift;
+      const scale = 0.1 + o.progress * 1.2;
+      o.setScale(scale, scale * 0.3); // Flatten vertically
+      o.w = o.baseSize * scale;
+      if(o.progress > 1.1){ o.destroy(); this.obstacles.splice(i,1); }
+    }
+    
+    // Update power-ups
+    for(let i=this.powerUps.length-1; i>=0; i--){
+      const p=this.powerUps[i];
+      p.progress += (p.vy * dt/1000) / (HEIGHT * 0.8) + pulseShift;
+      const y = vanishY + (HEIGHT - vanishY) * Math.pow(p.progress, 2.5);
+      p.y = y;
+      p.x = this._laneX(p.lane, p.progress) + pulseXShift;
+      const scale = 0.1 + p.progress * 1.2;
+      p.setScale(scale);
+      p.angle += dt * 0.2; // Rotate
+      
+      // Check collection
+      if(p.progress > 0.9 && p.lane === this.playerLane){
+        p.destroy();
+        this.powerUps.splice(i,1);
+        this.rapidFire = true;
+        this.rapidFireTimer = 5000; // 5 seconds
+        this.player.setTint(0x00ff00); // Green tint
+        // Play quick arpeggio for power-up
+        try {
+          gameSounds.powerUp.triggerAttackRelease("C5", "32n", "+0.01");
+          gameSounds.powerUp.triggerAttackRelease("E5", "32n", "+0.05");
+          gameSounds.powerUp.triggerAttackRelease("G5", "32n", "+0.09");
+        } catch(e) {}
+      } else if(p.progress > 1.1){
+        p.destroy();
+        this.powerUps.splice(i,1);
+      }
+    }
+    
+    // Update rapid fire timer
+    if(this.rapidFire){
+      this.rapidFireTimer -= dt;
+      if(this.rapidFireTimer <= 0){
+        this.rapidFire = false;
+        this.player.clearTint();
+      }
     }
 
     // Update bullets with perspective
@@ -1166,16 +1603,32 @@ class Main extends Phaser.Scene {
       
       if(b.progress < 0){ b.destroy(); this.bullets.splice(i,1); continue; }
       
-      // Check collision with enemies
-      for(let j=this.enemies.length-1; j>=0; j--){
-        const e = this.enemies[j];
-        // Check if in same lane and close in progress
-        if(e.lane === b.lane && Math.abs(e.progress - b.progress) < 0.05){
-          b.destroy(); this.bullets.splice(i,1);
-          e.destroy(); this.enemies.splice(j,1);
-          this.score += 10; 
-          this.scoreText.setText('score '+this.score);
-          break;
+      // Check collision with obstacles first
+      let hitObstacle = false;
+      for(let j=this.obstacles.length-1; j>=0; j--){
+        const o = this.obstacles[j];
+        if(o.lane === b.lane && Math.abs(o.progress - b.progress) < 0.05){
+          b.destroy(); 
+          this.bullets.splice(i,1);
+          hitObstacle = true;
+          break; // Obstacle blocks the shot
+        }
+      }
+      
+      // Check collision with enemies if not blocked
+      if(!hitObstacle){
+        for(let j=this.enemies.length-1; j>=0; j--){
+          const e = this.enemies[j];
+          // Check if in same lane and close in progress
+          if(Math.abs(e.lane - b.lane) < 0.5 && Math.abs(e.progress - b.progress) < 0.05){
+            b.destroy(); this.bullets.splice(i,1);
+            e.destroy(); this.enemies.splice(j,1);
+            const points = e.isDrifter ? 30 : 10;
+            this.score += points; 
+            this.scoreText.setText('score '+this.score);
+            gameSounds.explosion.triggerAttackRelease("16n");
+            break;
+          }
         }
       }
     }
