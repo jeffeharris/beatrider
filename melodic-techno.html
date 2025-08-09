@@ -1072,12 +1072,92 @@ const LANES=5, LANE_W=WIDTH/LANES;
 
 // Session highscore tracking
 let sessionHighScore = 0;
-console.log('Game dimensions:', WIDTH, 'x', HEIGHT, 'Viewport:', window.innerWidth, 'x', window.innerHeight);
+// Game dimensions initialized based on viewport
 const PLAYER_Y=HEIGHT-60, ENEMY_SPEED_BASE=200, BULLET_SPEED=520, FIRE_COOLDOWN=110;
 
 class Main extends Phaser.Scene {
+  createStarfield() {
+    // Create three layers of stars for parallax effect
+    this.stars = [
+      [], // Far stars (slow)
+      [], // Medium stars
+      []  // Near stars (fast)
+    ];
+    
+    const starColors = [0x444444, 0x666666, 0x888888];
+    const starCounts = [100, 50, 25];
+    const starSizes = [1, 1.5, 2];
+    
+    this.starGraphics = this.add.graphics();
+    
+    // Generate random stars for each layer - they start at random positions along their path
+    for(let layer = 0; layer < 3; layer++) {
+      for(let i = 0; i < starCounts[layer]; i++) {
+        this.stars[layer].push({
+          // Stars spread across the whole screen area
+          baseX: Math.random() * WIDTH * 2 - WIDTH/2, // Can be off-screen horizontally
+          baseY: Math.random() * HEIGHT * 2 - HEIGHT, // Can go above and below screen
+          progress: Math.random(), // Random starting position along path
+          speed: (layer + 1) * 0.3, // Different speeds for parallax
+          size: starSizes[layer],
+          color: starColors[layer],
+          twinkle: Math.random() * Math.PI * 2 // Random twinkle phase
+        });
+      }
+    }
+  }
+  
+  updateStarfield(dt) {
+    this.starGraphics.clear();
+    const vanishY = HEIGHT * 0.15;
+    const vanishX = WIDTH / 2;
+    
+    // Update and draw each star layer
+    for(let layer = 0; layer < 3; layer++) {
+      for(let star of this.stars[layer]) {
+        // Move stars along perspective (increase progress)
+        star.progress += star.speed * (dt/1000);
+        
+        // Wrap around when star passes the player
+        if(star.progress > 1.2) {
+          star.progress = 0;
+          star.baseX = Math.random() * WIDTH * 2 - WIDTH/2; // New random X spread
+          star.baseY = Math.random() * HEIGHT * 2 - HEIGHT; // New random Y spread
+        }
+        
+        // Calculate positions - stars follow same exponential curve as grid
+        const curvedProgress = Math.pow(star.progress, 2.5); // Same curve as grid/objects
+        const y = vanishY + (star.baseY - vanishY) * curvedProgress;
+        const x = vanishX + (star.baseX - vanishX) * curvedProgress;
+        
+        // Skip stars that are off-screen
+        if(x < -50 || x > WIDTH + 50) continue;
+        
+        // Scale based on distance (smaller when far)
+        const size = star.size * (0.1 + star.progress * 1.5);
+        
+        // Add subtle twinkling and fade based on distance
+        star.twinkle += dt * 0.003;
+        const twinkleAlpha = 0.7 + Math.sin(star.twinkle) * 0.3;
+        const distanceAlpha = Math.min(1, star.progress * 2); // Fade in as they approach
+        const alpha = twinkleAlpha * distanceAlpha * 0.6;
+        
+        // Draw star
+        this.starGraphics.fillStyle(star.color, alpha);
+        this.starGraphics.fillCircle(x, y, size);
+      }
+    }
+  }
+  
   create(){
     this.cameras.main.setBackgroundColor('#000');
+    
+    // Create starfield background
+    this.createStarfield();
+    
+    // Initialize trail system
+    this.trails = [];
+    this.trailGraphics = this.add.graphics();
     
     const gfx=this.make.graphics({x:0,y:0,add:false});
     gfx.fillStyle(0x00ffcc,1).fillRect(0,0,24,24).generateTexture('playerTex',24,24).clear();
@@ -1102,11 +1182,13 @@ class Main extends Phaser.Scene {
     this.offScreenTimer = 0; // Timer for rubber band effect
     this.isMoving = false; // Prevent shooting while transitioning
     this.isJumping = false; // Track jump state
-    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,A,D,W,SPACE');
+    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,A,D,W,SPACE,G');
     this.score=0; 
     this.beats=0; 
     this.scoreText=this.add.text(10, HEIGHT-24, 'score 0', {font:'16px monospace', fill:'#0f0'});
     this.highScoreText=this.add.text(10, HEIGHT-48, 'high ' + sessionHighScore, {font:'16px monospace', fill:'#ff0'});
+    this.gridVisible = true; // Grid visibility toggle
+    this.gridText=this.add.text(10, 10, 'GRID: ON [G]', {font:'12px monospace', fill:'#0f0'});
 
     // GameAPI is triggered by our drums
     window.GameAPI = {
@@ -1169,6 +1251,7 @@ class Main extends Phaser.Scene {
     e.w=e.baseSize; e.h=e.baseSize; 
     e.enemyType = texture; // Track enemy type
     e.setScale(0.1); // Start tiny at horizon
+    e.trailPoints = []; // Store trail history
     this.enemies.push(e); 
   }
   
@@ -1211,6 +1294,7 @@ class Main extends Phaser.Scene {
     o.baseSize = 30;
     o.w = o.baseSize; o.h = 8;
     o.setScale(0.1);
+    o.trailPoints = []; // Initialize trail for obstacles too
     this.obstacles.push(o);
   }
   
@@ -1238,6 +1322,7 @@ class Main extends Phaser.Scene {
     d.isDrifter = true;
     d.driftTimer = 0;
     d.setScale(0.1);
+    d.trailPoints = []; // Initialize trail points
     this.enemies.push(d); // Add to enemies array for collision
   }
   
@@ -1266,7 +1351,7 @@ class Main extends Phaser.Scene {
     
     // Safety check before clearing
     if(!this.gridGraphics || !this.gridGraphics.scene) {
-      console.warn('Grid graphics lost, recreating...');
+      // Grid graphics lost, recreating...
       this.gridGraphics = this.add.graphics();
     }
     
@@ -1340,13 +1425,13 @@ class Main extends Phaser.Scene {
       if(Math.random() < 0.3){
         try {
           const note = getGameNote(Math.floor(Math.random() * 3) + 4) + "6";
-          gameSounds.laser.triggerAttackRelease(note, "32n", "+0.01");
+          gameSounds.laser.triggerAttackRelease(note, "32n", Tone.now() + 0.01);
         } catch(e) {}
       }
     } else {
       try {
         const note = getGameNote(this.playerLane) + "5";
-        gameSounds.laser.triggerAttackRelease(note, "32n", "+0.01");
+        gameSounds.laser.triggerAttackRelease(note, "32n", Tone.now() + 0.01);
       } catch(e) {}
     }
     this.bullets.push(b); 
@@ -1356,6 +1441,12 @@ class Main extends Phaser.Scene {
   }
 
   update(_, dt){
+    // Update starfield background
+    this.updateStarfield(dt);
+    
+    // Update and draw trails
+    this.updateTrails(dt);
+    
     // Handle pulse effect - shift in different directions
     let pulseShift = 0;
     let pulseXShift = 0;
@@ -1386,9 +1477,20 @@ class Main extends Phaser.Scene {
     // Get current BPM from Tone.Transport or use default
     const currentBPM = (typeof Tone !== 'undefined' && Tone.Transport) ? Tone.Transport.bpm.value : 132;
     // Scale grid speed to BPM - higher BPM = faster scrolling
+    // Toggle grid with G key
+    if(Phaser.Input.Keyboard.JustDown(this.keys.G)){
+      this.gridVisible = !this.gridVisible;
+      this.gridText.setText('GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]');
+      if(!this.gridVisible && this.gridGraphics) {
+        this.gridGraphics.clear();
+      }
+    }
+    
     // Add pulse shift to grid movement
     this.gridOffset += (dt / 1000) * (currentBPM / 60) + pulseShift * 2; // Lines per second based on BPM
-    this._drawPerspectiveGrid();
+    if(this.gridVisible) {
+      this._drawPerspectiveGrid();
+    }
     
     // Apply horizontal shift to grid
     if(this.gridGraphics && pulseXShift !== 0){
@@ -1562,8 +1664,9 @@ class Main extends Phaser.Scene {
       
       // Jump sound effect
       try {
-        gameSounds.move.triggerAttackRelease("C6", "16n");
-        gameSounds.move.triggerAttackRelease("G6", "16n", "+0.05");
+        const now = Tone.now();
+        gameSounds.move.triggerAttackRelease("C6", "16n", now);
+        gameSounds.move.triggerAttackRelease("G6", "16n", now + 0.05);
       } catch(e) {}
     }
     
@@ -1598,6 +1701,11 @@ class Main extends Phaser.Scene {
       // Update X position along perspective lane + pulse shift
       e.x = this._laneX(e.lane, e.progress) + pulseXShift;
       
+      // Add position to trail history
+      if(!e.trailPoints) e.trailPoints = [];
+      e.trailPoints.push({x: e.x, y: e.y, alpha: 1.0});
+      if(e.trailPoints.length > 8) e.trailPoints.shift(); // Keep trail short
+      
       // Scale based on distance
       const scale = 0.1 + e.progress * 1.2; // Start tiny, grow to normal size
       e.setScale(scale);
@@ -1618,10 +1726,11 @@ class Main extends Phaser.Scene {
         this._createExplosion(e.x, e.y, 0xff3366, 12);
         try {
           // Player death sound - descending pitch
-          gameSounds.obstacleHit.triggerAttackRelease("G2", "16n");
-          gameSounds.obstacleHit.triggerAttackRelease("D2", "16n", "+0.05");
-          gameSounds.obstacleHit.triggerAttackRelease("G1", "16n", "+0.1");
-          gameSounds.explosion.triggerAttackRelease("8n", "+0.02");
+          const now = Tone.now();
+          gameSounds.obstacleHit.triggerAttackRelease("G2", "16n", now);
+          gameSounds.obstacleHit.triggerAttackRelease("D2", "16n", now + 0.05);
+          gameSounds.obstacleHit.triggerAttackRelease("G1", "16n", now + 0.1);
+          gameSounds.explosion.triggerAttackRelease("8n", now + 0.02);
         } catch(e) {}
         this.scene.restart(); 
       }
@@ -1681,9 +1790,10 @@ class Main extends Phaser.Scene {
         this.player.setTint(0x00ff00); // Green tint
         // Play quick arpeggio for power-up
         try {
-          gameSounds.powerUp.triggerAttackRelease("C5", "32n", "+0.01");
-          gameSounds.powerUp.triggerAttackRelease("E5", "32n", "+0.05");
-          gameSounds.powerUp.triggerAttackRelease("G5", "32n", "+0.09");
+          const now = Tone.now();
+          gameSounds.powerUp.triggerAttackRelease("C5", "32n", now + 0.01);
+          gameSounds.powerUp.triggerAttackRelease("E5", "32n", now + 0.05);
+          gameSounds.powerUp.triggerAttackRelease("G5", "32n", now + 0.09);
         } catch(e) {}
       } else if(p.progress > 1.1){
         p.destroy();
@@ -1723,14 +1833,17 @@ class Main extends Phaser.Scene {
         // Rotate bullet to show trajectory
         b.setRotation(Math.atan2(b.arcVelocity, -b.vy) * 0.5);
         
-        // Debug: visualize arc height
-        // console.log('Arc shot:', 'y=', y, 'arcHeight=', b.arcHeight, 'velocity=', b.arcVelocity);
       }
       
       b.y = y;
       
       // Update X position along perspective lane
       b.x = this._laneX(b.lane, b.progress);
+      
+      // Add bullet trail
+      if(!b.trailPoints) b.trailPoints = [];
+      b.trailPoints.push({x: b.x, y: b.y, alpha: 1.0});
+      if(b.trailPoints.length > 6) b.trailPoints.shift();
       
       // Scale based on distance
       const scale = 0.1 + b.progress * 1.2;
@@ -1787,23 +1900,26 @@ class Main extends Phaser.Scene {
             
             // Play destruction sound based on enemy type with pitch variation
             try {
+              const now = Tone.now();
               if(e.isDrifter){
                 // Drifter destruction - descending stab chord
-                gameSounds.powerUp.triggerAttackRelease("G4", "32n");
-                gameSounds.powerUp.triggerAttackRelease("D4", "32n", "+0.02");
-                gameSounds.powerUp.triggerAttackRelease("A3", "32n", "+0.04");
+                gameSounds.powerUp.triggerAttackRelease("G4", "32n", now);
+                gameSounds.powerUp.triggerAttackRelease("D4", "32n", now + 0.02);
+                gameSounds.powerUp.triggerAttackRelease("A3", "32n", now + 0.04);
               } else if(e.enemyType === 'fastEnemyTex'){
                 // Fast enemy - high pitched noise burst
-                gameSounds.explosion.triggerAttackRelease("32n");
-                gameSounds.enemyDestroy.triggerAttackRelease("G5", "32n", "+0.01");
+                gameSounds.explosion.triggerAttackRelease("32n", now);
+                gameSounds.enemyDestroy.triggerAttackRelease("G5", "32n", now + 0.01);
               } else {
                 // Regular enemy - distorted kick-like sound with random note from scale
                 const noteIndex = Math.floor(Math.random() * 7);
-                gameSounds.enemyDestroy.triggerAttackRelease(getGameNote(noteIndex) + "3", "16n");
-                gameSounds.explosion.triggerAttackRelease("32n", "+0.01");
+                // Add tiny random offset to each sound to prevent exact timing conflicts
+                const offset = Math.random() * 0.005;
+                gameSounds.enemyDestroy.triggerAttackRelease(getGameNote(noteIndex) + "3", "16n", now + offset);
+                gameSounds.explosion.triggerAttackRelease("32n", now + 0.015 + offset);
               }
             } catch(err) {
-              console.error("Enemy destroy sound error:", err);
+              // Timing conflict - sounds will be skipped this frame
             }
             break;
           }
@@ -1811,6 +1927,50 @@ class Main extends Phaser.Scene {
       }
     }
 
+  }
+  
+  updateTrails(dt) {
+    this.trailGraphics.clear();
+    
+    // Draw enemy trails
+    for(let enemy of this.enemies) {
+      if(enemy.trailPoints && enemy.trailPoints.length > 1) {
+        for(let i = 0; i < enemy.trailPoints.length - 1; i++) {
+          const point = enemy.trailPoints[i];
+          const nextPoint = enemy.trailPoints[i + 1];
+          
+          // Fade trail based on position in array
+          const alpha = (i / enemy.trailPoints.length) * 0.5;
+          point.alpha = alpha;
+          
+          // Choose color based on enemy type
+          let color = 0xff3366; // Default red
+          if(enemy.enemyType === 'fastEnemyTex') color = 0xffff00;
+          else if(enemy.isDrifter) color = 0xff00ff;
+          
+          this.trailGraphics.lineStyle(2, color, alpha);
+          this.trailGraphics.lineBetween(point.x, point.y, nextPoint.x, nextPoint.y);
+        }
+      }
+    }
+    
+    // Draw bullet trails
+    for(let bullet of this.bullets) {
+      if(bullet.trailPoints && bullet.trailPoints.length > 1) {
+        for(let i = 0; i < bullet.trailPoints.length - 1; i++) {
+          const point = bullet.trailPoints[i];
+          const nextPoint = bullet.trailPoints[i + 1];
+          
+          const alpha = (i / bullet.trailPoints.length) * 0.7;
+          
+          // Cyan trails for bullets, yellow if arc shot
+          const color = bullet.isArcShot ? 0xffff00 : 0x00ffff;
+          
+          this.trailGraphics.lineStyle(1, color, alpha);
+          this.trailGraphics.lineBetween(point.x, point.y, nextPoint.x, nextPoint.y);
+        }
+      }
+    }
   }
 }
 
