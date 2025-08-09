@@ -54,6 +54,22 @@
       font-size: 10px;
       color: #0a0;
     }
+    .mute-btn {
+      width: 40px;
+      height: 20px;
+      padding: 2px;
+      margin: 0 5px;
+      font-size: 10px;
+      background: #030;
+      color: #0f0;
+      border: 1px solid #0f0;
+      cursor: pointer;
+    }
+    .mute-btn.muted {
+      background: #300;
+      color: #f00;
+      border-color: #f00;
+    }
     #progression {
       margin: 20px 0;
       padding: 10px;
@@ -72,36 +88,44 @@
     <span id="bpmDisplay">132</span>
     <label>ENERGY: <input type="range" id="energySlider" min="0" max="100" value="50"></label>
     <span id="energyDisplay">50</span>
+    <label>TENSION: <input type="range" id="tensionSlider" min="0" max="100" value="30"></label>
+    <span id="tensionDisplay">30</span>
   </div>
   
   <div id="tracks">
     <div class="track-row">
       <span class="track-name">KICK:</span>
+      <button class="mute-btn" id="kickMute">ON</button>
       <span class="beat-indicator" id="kickIndicator"></span>
       <span class="pattern-display" id="kickPattern"></span>
     </div>
     <div class="track-row">
       <span class="track-name">SNARE:</span>
+      <button class="mute-btn" id="snareMute">ON</button>
       <span class="beat-indicator" id="snareIndicator"></span>
       <span class="pattern-display" id="snarePattern"></span>
     </div>
     <div class="track-row">
       <span class="track-name">HIHAT:</span>
+      <button class="mute-btn" id="hatMute">ON</button>
       <span class="beat-indicator" id="hatIndicator"></span>
       <span class="pattern-display" id="hatPattern"></span>
     </div>
     <div class="track-row">
       <span class="track-name">ACID:</span>
+      <button class="mute-btn" id="acidMute">ON</button>
       <span class="beat-indicator" id="acidIndicator"></span>
       <span class="pattern-display" id="acidPattern"></span>
     </div>
     <div class="track-row">
       <span class="track-name">STAB:</span>
+      <button class="mute-btn" id="stabMute">ON</button>
       <span class="beat-indicator" id="stabIndicator"></span>
       <span class="pattern-display" id="stabPattern"></span>
     </div>
     <div class="track-row">
       <span class="track-name">SUB:</span>
+      <button class="mute-btn" id="subMute">ON</button>
       <span class="beat-indicator" id="subIndicator"></span>
       <span class="pattern-display" id="subPattern"></span>
     </div>
@@ -119,12 +143,20 @@
 <script>
 // Master chain with sidechain compression
 const masterLimiter = new Tone.Limiter(-3).toDestination();
+
+// High-pass filter for tension building (cuts bass)
+const masterHighpass = new Tone.Filter({
+  frequency: 20,
+  type: "highpass",
+  rolloff: -24
+}).connect(masterLimiter);
+
 const sidechain = new Tone.Compressor({
   threshold: -20,
   ratio: 8,
   attack: 0.003,
   release: 0.1
-}).connect(masterLimiter);
+}).connect(masterHighpass);
 
 // Instruments
 const kick = new Tone.MembraneSynth({
@@ -137,7 +169,7 @@ const kick = new Tone.MembraneSynth({
     sustain: 0.01,
     release: 1.4
   }
-}).connect(masterLimiter);
+}).connect(masterHighpass); // Kick bypasses sidechain to keep punch
 
 const snare = new Tone.NoiseSynth({
   noise: { type: "white" },
@@ -148,44 +180,61 @@ const snare = new Tone.NoiseSynth({
   }
 }).connect(sidechain);
 
-const hihat = new Tone.MetalSynth({
-  frequency: 250,
-  envelope: {
-    attack: 0.001,
-    decay: 0.03,
-    release: 0.01
-  },
-  harmonicity: 5.1,
-  modulationIndex: 32,
-  resonance: 4000,
-  octaves: 1.5
+// Hi-hat using filtered noise for more realistic sound
+const hihatFilter = new Tone.Filter({
+  frequency: 10000,
+  type: "highpass"
 }).connect(sidechain);
 
-// Acid with automated filter
-const acidFilter = new Tone.Filter({
+const hihat = new Tone.NoiseSynth({
+  noise: {
+    type: "white"
+  },
+  envelope: {
+    attack: 0.001,
+    decay: 0.02,
+    sustain: 0,
+    release: 0.03
+  },
+  volume: -10
+}).connect(hihatFilter);
+
+// Acid with automated filter - trying to approximate 18dB slope with cascaded filters
+const acidFilter1 = new Tone.Filter({
   frequency: 800,
   type: "lowpass",
   rolloff: -12,
-  Q: 8
+  Q: 4
 }).connect(sidechain);
+
+const acidFilter2 = new Tone.Filter({
+  frequency: 800,
+  type: "lowpass", 
+  rolloff: -12,  // Can't do -6, using -12 instead
+  Q: 2
+}).connect(acidFilter1);
+
+// Add distortion for that overdriven 303 sound
+const acidDistortion = new Tone.Distortion(0.3).connect(acidFilter2);
 
 const acid = new Tone.MonoSynth({
   oscillator: { type: "sawtooth" },
   envelope: {
-    attack: 0.01,
-    decay: 0.3,
-    sustain: 0.4,
-    release: 0.2
+    attack: 0.003,  // Faster attack
+    decay: 0.2,     // Shorter decay
+    sustain: 0.1,   // Lower sustain for more plucky sound
+    release: 0.1
   },
   filterEnvelope: {
-    attack: 0.01,
-    decay: 0.3,
-    sustain: 0.5,
+    attack: 0.003,
+    decay: 0.4,     // Longer filter decay for that sweep
+    sustain: 0.2,
     release: 0.2,
-    baseFrequency: 200,
-    octaves: 3.5
-  }
-}).connect(acidFilter);
+    baseFrequency: 100,  // Start lower
+    octaves: 4      // More dramatic sweep
+  },
+  portamento: 0.05  // Add glide between notes!
+}).connect(acidDistortion);
 
 // Rave stabs
 const raveSynth = new Tone.PolySynth(Tone.Synth, {
@@ -199,17 +248,43 @@ const raveSynth = new Tone.PolySynth(Tone.Synth, {
   volume: -6
 }).connect(sidechain);
 
-// Sub bass
+// Sub bass with EQ to prevent mud
+const subEQ = new Tone.EQ3({
+  low: 3,        // Boost the deep sub frequencies
+  mid: -6,       // Cut the muddy mids (100-200Hz)
+  high: -12,     // Remove any high frequency content
+  lowFrequency: 60,
+  highFrequency: 200
+}).connect(sidechain);  // Now goes through sidechain for ducking!
+
+// Sub bass - controlled power
 const subBass = new Tone.MonoSynth({
   oscillator: { type: "sine" },
   envelope: {
-    attack: 0.02,
-    decay: 0.1,
-    sustain: 0.7,
-    release: 0.3
+    attack: 0.01,   // Faster attack for more punch
+    decay: 0.3,     // Longer decay
+    sustain: 0.6,   // Bit less sustain
+    release: 0.5
   },
-  volume: -12
-}).connect(masterLimiter);
+  volume: -6      // Compromise between -12 and 0
+}).connect(subEQ);
+
+// Noise riser for tension
+const noiseRiser = new Tone.Noise("white").connect(
+  new Tone.Filter({
+    frequency: 200,
+    type: "highpass",
+    rolloff: -24
+  }).connect(
+    new Tone.Volume(-20).connect(sidechain)
+  )
+);
+const riserEnvelope = new Tone.Envelope({
+  attack: 8,
+  decay: 0,
+  sustain: 1,
+  release: 0.5
+});
 
 // Musical structures
 const scale = {
@@ -217,38 +292,105 @@ const scale = {
   indices: { C: 0, D: 1, Eb: 2, F: 3, G: 4, Ab: 5, Bb: 6 }
 };
 
-// Chord progression with melodic movement hints
-const chordProgression = [
-  { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "Eb", "G"] },
-  { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["G", "Eb", "C"] },
-  { root: "Bb", chord: ["Bb3", "D4", "F4"], bass: "Bb0", melodicFocus: ["Bb", "F", "D"] },
-  { root: "Ab", chord: ["Ab3", "C4", "Eb4"], bass: "Ab0", melodicFocus: ["Ab", "Eb", "C"] }
-];
+// Extended chord progression with variations
+const chordProgressions = {
+  main: [
+    { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "Eb", "G"] },
+    { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["G", "Eb", "C"] },
+    { root: "Bb", chord: ["Bb3", "D4", "F4"], bass: "Bb0", melodicFocus: ["Bb", "F", "D"] },
+    { root: "Ab", chord: ["Ab3", "C4", "Eb4"], bass: "Ab0", melodicFocus: ["Ab", "Eb", "C"] }
+  ],
+  variation1: [
+    { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "G", "Eb"] },
+    { root: "F", chord: ["F3", "Ab3", "C4"], bass: "F0", melodicFocus: ["F", "Ab", "C"] },
+    { root: "G", chord: ["G3", "Bb3", "D4"], bass: "G0", melodicFocus: ["G", "D", "Bb"] },
+    { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "Eb", "G"] }
+  ],
+  variation2: [
+    { root: "C", chord: ["C4", "Eb4", "G4", "Bb4"], bass: "C1", melodicFocus: ["C", "Bb", "G"] }, // Cm7
+    { root: "Ab", chord: ["Ab3", "C4", "Eb4", "G4"], bass: "Ab0", melodicFocus: ["Ab", "Eb", "G"] }, // Abmaj7
+    { root: "F", chord: ["F3", "Ab3", "C4", "Eb4"], bass: "F0", melodicFocus: ["F", "C", "Ab"] }, // Fm7
+    { root: "G", chord: ["G3", "B3", "D4", "F4"], bass: "G0", melodicFocus: ["G", "B", "F"] } // G7
+  ],
+  breakdown: [
+    { root: "C", chord: ["C3"], bass: "C1", melodicFocus: ["C"] }, // Just root
+    { root: "C", chord: ["C3", "G3"], bass: "C1", melodicFocus: ["C", "G"] }, // Power chord
+    { root: "Ab", chord: ["Ab2"], bass: "Ab0", melodicFocus: ["Ab"] }, // Just root
+    { root: "G", chord: ["G2", "D3"], bass: "G0", melodicFocus: ["G", "D"] } // Power chord
+  ]
+};
 
-// Pattern bank for variety
+// Select progression based on section
+function getChordProgression(section) {
+  if (section === 'BREAK') return chordProgressions.breakdown;
+  if (section === 'DROP') return chordProgressions.variation2;
+  if (currentBar % 16 < 8) return chordProgressions.main;
+  return Math.random() > 0.5 ? chordProgressions.variation1 : chordProgressions.variation2;
+}
+
+// Pattern bank with classic techno/acid patterns
 const patternBank = {
   kick: {
     fourOnFloor: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
     halfTime: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
     syncopated: [1,0,0,0, 1,0,0,1, 0,0,1,0, 1,0,0,0],
     minimal: [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+    // Classic 909 kick patterns
+    detroit: [1,0,0,1, 1,0,0,0, 1,0,1,0, 1,0,0,0],  // Detroit techno style
+    berlin: [1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,0,0],   // Berlin minimal
+    chicago: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,1,0],  // Chicago acid house
     fill: [1,0,1,0, 1,0,1,1, 1,1,1,0, 1,1,1,1]
   },
   snare: {
     backbeat: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
     ghost: [0,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0],
+    detroit: [0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0],  // Off-beat snare
     fill: [0,0,0,0, 1,0,1,0, 1,0,1,1, 1,1,1,1],
     minimal: [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0]
+  },
+  // Classic acid bassline patterns (rhythm only, notes added later)
+  acid: {
+    // Phuture - Acid Tracks style
+    phuture: [1,0,1,0, 1,0,0,1, 1,0,1,0, 0,1,0,1],
+    // Josh Wink - Higher State of Consciousness style  
+    wink: [1,1,0,1, 0,1,1,0, 1,0,1,1, 0,0,1,0],
+    // Hardfloor style
+    hardfloor: [1,0,0,1, 1,0,1,0, 0,1,0,1, 1,0,0,0],
+    // DJ Pierre style
+    pierre: [1,0,1,1, 0,0,1,0, 1,1,0,1, 0,0,1,0],
+    // Minimal acid
+    minimal: [1,0,0,0, 0,0,1,0, 0,0,0,0, 1,0,0,0],
+    // Random busy pattern
+    busy: [1,1,0,1, 1,0,1,1, 0,1,1,0, 1,0,1,1]
   }
 };
 
 // State
 let currentBar = 0;
 let currentChordIndex = 0;
+let currentProgression = null;
 let acidSequence = [];
 let energyLevel = 50;
+let tensionLevel = 30;
 let lastSection = '';
 let isTransitioning = false;
+let riserActive = false;
+
+// Mute states
+const muteStates = {
+  kick: false,
+  snare: false,
+  hat: false,
+  acid: false,
+  stab: false,
+  sub: false
+};
+
+// Humanization - adds micro-timing variations
+function humanize(time, amount = 0.01) {
+  // Add random timing offset between -amount and +amount seconds
+  return time + (Math.random() - 0.5) * amount * 2;
+}
 
 // Visual feedback
 function flashIndicator(id) {
@@ -259,32 +401,48 @@ function flashIndicator(id) {
   }
 }
 
-// Generate melodic acid sequence
+// Generate melodic acid sequence using classic patterns
 function generateMelodicAcidSequence(chordInfo, section, previousSequence = []) {
   const sequence = [];
   const octave = section === 'DROP' ? 3 : 2;
-  const density = section === 'DROP' ? 0.8 : section === 'BUILD' ? 0.6 : section === 'BREAK' ? 0.3 : 0.5;
+  
+  // Select rhythm pattern based on section
+  let rhythmPattern;
+  if (section === 'DROP') {
+    // Use classic acid patterns for drops
+    const patterns = [patternBank.acid.phuture, patternBank.acid.wink, patternBank.acid.hardfloor];
+    rhythmPattern = patterns[Math.floor(Math.random() * patterns.length)];
+  } else if (section === 'BUILD') {
+    rhythmPattern = patternBank.acid.pierre;
+  } else if (section === 'BREAK') {
+    rhythmPattern = patternBank.acid.minimal;
+  } else {
+    // Main section varies
+    rhythmPattern = Math.random() > 0.5 ? patternBank.acid.hardfloor : patternBank.acid.phuture;
+  }
   
   // Use chord tones as anchors
   const chordTones = chordInfo.melodicFocus;
   let lastNote = previousSequence.length > 0 ? previousSequence[previousSequence.length - 1] : null;
   
   for (let i = 0; i < 16; i++) {
-    if (Math.random() < density) {
+    if (rhythmPattern[i]) {
       let note;
       
       // Strong beats (0, 4, 8, 12) favor chord tones
       if (i % 4 === 0) {
         note = chordTones[Math.floor(Math.random() * chordTones.length)] + octave;
       } else if (lastNote && Math.random() > 0.3) {
-        // Stepwise motion from last note
+        // Stepwise motion from last note for that 303 feel
         const lastPitch = lastNote.replace(/\d/, '');
         const lastOctave = parseInt(lastNote.replace(/\D/g, ''));
         const scaleIndex = scale.indices[lastPitch];
         
         if (scaleIndex !== undefined) {
+          // Classic 303 often moves in small steps
           const direction = Math.random() > 0.5 ? 1 : -1;
-          const newIndex = (scaleIndex + direction + 7) % 7;
+          const stepSize = Math.random() > 0.7 ? 2 : 1; // Occasionally jump a third
+          const newIndex = (scaleIndex + direction * stepSize + 7) % 7;
           note = scale.C[newIndex] + lastOctave;
         } else {
           note = chordTones[Math.floor(Math.random() * chordTones.length)] + octave;
@@ -343,12 +501,15 @@ function generatePatterns(section, bar, energy) {
     patterns.snare = fill.snare;
     patterns.hihat = fill.hihat;
   } else {
-    // Normal patterns based on section
+    // Use classic patterns based on section
     if (section === 'DROP') {
-      patterns.kick = patternBank.kick.fourOnFloor;
-      patterns.snare = energy > 70 ? patternBank.snare.ghost : patternBank.snare.backbeat;
+      // Drop uses Chicago or Detroit patterns
+      patterns.kick = Math.random() > 0.5 ? patternBank.kick.chicago : patternBank.kick.detroit;
+      patterns.snare = energy > 70 ? patternBank.snare.detroit : patternBank.snare.backbeat;
     } else if (section === 'MAIN') {
-      patterns.kick = energy > 60 ? patternBank.kick.fourOnFloor : patternBank.kick.syncopated;
+      // Main section alternates between styles
+      const kickStyles = [patternBank.kick.fourOnFloor, patternBank.kick.berlin, patternBank.kick.detroit];
+      patterns.kick = kickStyles[Math.floor((bar / 4) % kickStyles.length)];
       patterns.snare = patternBank.snare.backbeat;
     } else if (section === 'BUILD') {
       patterns.kick = patternBank.kick.halfTime;
@@ -361,11 +522,16 @@ function generatePatterns(section, bar, energy) {
       patterns.snare = patternBank.snare.minimal;
     }
     
-    // Hi-hat density based on energy
+    // Hi-hat density based on energy AND tension
     patterns.hihat = [];
-    const hihatDensity = (energy / 100) * 0.8;
+    const hihatDensity = (energy / 100) * 0.5 + (tensionLevel / 100) * 0.5;
     for (let i = 0; i < 16; i++) {
-      patterns.hihat[i] = Math.random() < hihatDensity ? 1 : 0;
+      // More rapid hits at high tension
+      if (tensionLevel > 70 && i % 2 === 1) {
+        patterns.hihat[i] = 1; // Constant 16ths at high tension
+      } else {
+        patterns.hihat[i] = Math.random() < hihatDensity ? 1 : 0;
+      }
     }
   }
   
@@ -386,7 +552,12 @@ let kickLoop, snareLoop, hihatLoop, acidLoop, chordLoop, subLoop;
 function updatePatterns() {
   const section = getSection(currentBar);
   const patterns = generatePatterns(section, currentBar, energyLevel);
-  const chordInfo = chordProgression[currentChordIndex];
+  
+  // Update progression if needed
+  if (!currentProgression || currentBar % 8 === 0) {
+    currentProgression = getChordProgression(section);
+  }
+  const chordInfo = currentProgression[currentChordIndex % currentProgression.length];
   
   // Update pattern displays
   document.getElementById('kickPattern').textContent = patterns.kick.join('');
@@ -407,57 +578,98 @@ function updatePatterns() {
   if (chordLoop) chordLoop.dispose();
   if (subLoop) subLoop.dispose();
   
-  // Kick
+  // Kick with micro-timing
   kickLoop = new Tone.Sequence((time, note) => {
-    if (note) {
-      kick.triggerAttackRelease("C1", "8n", time);
-      sidechain.ratio.setValueAtTime(20, time);
-      sidechain.ratio.linearRampToValueAtTime(8, time + 0.1);
-      Tone.Draw.schedule(() => flashIndicator('kickIndicator'), time);
+    if (note && !muteStates.kick) {
+      // Slight timing variation, but keep kick more stable
+      const humanTime = humanize(time, 0.003);
+      kick.triggerAttackRelease("C1", "8n", humanTime);
+      sidechain.ratio.setValueAtTime(20, humanTime);
+      sidechain.ratio.linearRampToValueAtTime(8, humanTime + 0.1);
+      Tone.Draw.schedule(() => flashIndicator('kickIndicator'), humanTime);
     }
   }, patterns.kick, "16n");
   
-  // Snare
+  // Snare with more looseness
   snareLoop = new Tone.Sequence((time, note) => {
-    if (note) {
-      snare.triggerAttackRelease("8n", time);
-      Tone.Draw.schedule(() => flashIndicator('snareIndicator'), time);
+    if (note && !muteStates.snare) {
+      const humanTime = humanize(time, 0.005);
+      snare.triggerAttackRelease("8n", humanTime);
+      Tone.Draw.schedule(() => flashIndicator('snareIndicator'), humanTime);
     }
   }, patterns.snare, "16n");
   
-  // Hi-hat
+  // Hi-hat with most variation
   hihatLoop = new Tone.Sequence((time, note) => {
-    if (note) {
-      hihat.triggerAttackRelease("32n", time, 0.3);
-      Tone.Draw.schedule(() => flashIndicator('hatIndicator'), time);
+    if (note && !muteStates.hat) {
+      const humanTime = humanize(time, 0.008);
+      // Vary between closed and open hi-hats
+      const velocity = 0.3 + Math.random() * 0.4;
+      const duration = Math.random() > 0.8 ? "16n" : "32n"; // Occasional longer hat
+      hihat.triggerAttackRelease(duration, humanTime);
+      hihat.volume.setValueAtTime(-15 + (velocity * 10), humanTime); // Subtle volume variation
+      Tone.Draw.schedule(() => flashIndicator('hatIndicator'), humanTime);
     }
   }, patterns.hihat, "16n");
   
-  // Acid with melodic sequence
-  acidLoop = new Tone.Sequence((time, note) => {
-    if (note) {
-      acid.triggerAttackRelease(note, "16n", time);
-      Tone.Draw.schedule(() => flashIndicator('acidIndicator'), time);
+  // Acid with melodic sequence - slight timing variations and accent
+  acidLoop = new Tone.Sequence((time, note, index) => {
+    if (note && !muteStates.acid) {
+      const humanTime = humanize(time, 0.004);
+      // Add accent to some notes (first beat of each group and random others)
+      const isAccent = index % 4 === 0 || (Math.random() > 0.85 && tensionLevel > 50);
+      
+      if (isAccent) {
+        // Accent: louder with more filter modulation
+        acid.volume.value = 3;
+        acid.filterEnvelope.octaves = 5;
+        acidDistortion.wet.value = 0.7;
+      } else {
+        acid.volume.value = 0;
+        acid.filterEnvelope.octaves = 4;
+        acidDistortion.wet.value = 0.5;
+      }
+      
+      acid.triggerAttackRelease(note, "16n", humanTime);
+      Tone.Draw.schedule(() => flashIndicator('acidIndicator'), humanTime);
     }
   }, acidSequence, "16n");
   
-  // Stabs
+  // Stabs with slight spread
   chordLoop = new Tone.Sequence((time, hit) => {
-    if (hit) {
+    if (hit && !muteStates.stab) {
+      const humanTime = humanize(time, 0.006);
       chordInfo.chord.forEach((note, i) => {
-        raveSynth.triggerAttackRelease(note, "8n", time + i * 0.01);
+        // Slight strum effect with more variation
+        const noteTime = humanTime + i * (0.008 + Math.random() * 0.004);
+        raveSynth.triggerAttackRelease(note, "8n", noteTime);
       });
-      Tone.Draw.schedule(() => flashIndicator('stabIndicator'), time);
+      Tone.Draw.schedule(() => flashIndicator('stabIndicator'), humanTime);
     }
   }, patterns.stab, "16n");
   
-  // Sub bass following chord progression
+  // Sub bass pattern - offset from kick to avoid mud
+  // Play slightly after the kick hits to avoid frequency clash
+  const subPattern = [
+    null, chordInfo.bass, null, null,  // Offset by one 16th
+    null, null, null, null,
+    null, chordInfo.bass, null, null,  // Offset by one 16th
+    null, null, null, null
+  ];
   subLoop = new Tone.Sequence((time, note) => {
-    if (note) {
-      subBass.triggerAttackRelease(note, "2n", time);
-      Tone.Draw.schedule(() => flashIndicator('subIndicator'), time);
+    if (note && !muteStates.sub) {
+      const humanTime = humanize(time, 0.002); // Very slight timing variation
+      // Play longer note that sustains
+      subBass.triggerAttackRelease(note, "2n", humanTime);
+      // Add a subtle octave above for presence (only in drops)
+      const currentSection = getSection(currentBar);
+      if (currentSection === 'DROP' || currentSection === 'MAIN') {
+        const octaveUp = note.replace(/\d/, (match) => parseInt(match) + 1);
+        subBass.triggerAttackRelease(octaveUp, "2n", humanTime + 0.01, 0.3); // Quieter octave
+      }
+      Tone.Draw.schedule(() => flashIndicator('subIndicator'), humanTime);
     }
-  }, [chordInfo.bass], "1n");
+  }, subPattern, "16n");
   
   kickLoop.start(0);
   snareLoop.start(0);
@@ -467,19 +679,66 @@ function updatePatterns() {
   subLoop.start(0);
 }
 
+// Apply tension to parameters
+function applyTension() {
+  const now = Tone.now();
+  
+  // Both acid filters open with tension
+  const baseFreq = 300 + (tensionLevel * 15);
+  const targetFreq = baseFreq + (tensionLevel * 25);
+  acidFilter1.frequency.linearRampToValueAtTime(targetFreq, now + 0.5);
+  acidFilter2.frequency.linearRampToValueAtTime(targetFreq * 0.9, now + 0.5);  // Slightly offset
+  acidFilter1.Q.value = 4 + (tensionLevel / 100) * 12;
+  acidFilter2.Q.value = 2 + (tensionLevel / 100) * 4;
+  
+  // Increase distortion with tension
+  acidDistortion.distortion = 0.3 + (tensionLevel / 100) * 0.4;
+  
+  // Master highpass rises with extreme tension
+  if (tensionLevel > 80) {
+    masterHighpass.frequency.exponentialRampToValueAtTime(100 + (tensionLevel - 80) * 10, now + 0.5);
+  } else {
+    masterHighpass.frequency.exponentialRampToValueAtTime(20, now + 0.5);
+  }
+  
+  // Sidechain gets more aggressive
+  sidechain.ratio.value = 8 + (tensionLevel / 100) * 12;
+  
+  // Start/stop noise riser
+  if (tensionLevel > 60 && !riserActive) {
+    noiseRiser.start();
+    riserEnvelope.triggerAttack();
+    riserActive = true;
+  } else if (tensionLevel <= 60 && riserActive) {
+    riserEnvelope.triggerRelease();
+    setTimeout(() => noiseRiser.stop(), 500);
+    riserActive = false;
+  }
+  
+  // Riser volume follows tension
+  if (riserActive) {
+    noiseRiser.volume.value = -40 + (tensionLevel - 60) * 0.5;
+  }
+}
+
 // Automation curves for smooth transitions
 function applyAutomation(section, prevSection) {
   const now = Tone.now();
   
-  // Filter automation
+  // Filter automation for both cascaded filters
   if (section === 'DROP' && prevSection !== 'DROP') {
-    acidFilter.frequency.exponentialRampToValueAtTime(2000, now + 2);
-    acidFilter.Q.linearRampToValueAtTime(15, now + 2);
+    acidFilter1.frequency.exponentialRampToValueAtTime(2000, now + 2);
+    acidFilter2.frequency.exponentialRampToValueAtTime(1800, now + 2);
+    acidFilter1.Q.linearRampToValueAtTime(15, now + 2);
+    acidDistortion.distortion = 0.6;
   } else if (section === 'BREAK') {
-    acidFilter.frequency.exponentialRampToValueAtTime(400, now + 1);
-    acidFilter.Q.linearRampToValueAtTime(5, now + 1);
+    acidFilter1.frequency.exponentialRampToValueAtTime(400, now + 1);
+    acidFilter2.frequency.exponentialRampToValueAtTime(400, now + 1);
+    acidFilter1.Q.linearRampToValueAtTime(5, now + 1);
+    acidDistortion.distortion = 0.2;
   } else if (section === 'BUILD') {
-    acidFilter.frequency.exponentialRampToValueAtTime(1200, now + 4);
+    acidFilter1.frequency.exponentialRampToValueAtTime(1200, now + 4);
+    acidFilter2.frequency.exponentialRampToValueAtTime(1100, now + 4);
   }
 }
 
@@ -492,7 +751,8 @@ function evolve() {
   // Update displays
   document.getElementById('section').textContent = section;
   document.getElementById('bar').textContent = currentBar;
-  document.getElementById('chord').textContent = chordProgression[currentChordIndex].root + 'm';
+  const currentChord = currentProgression ? currentProgression[currentChordIndex % currentProgression.length] : { root: 'C' };
+  document.getElementById('chord').textContent = currentChord.root + (currentChord.chord.length > 3 ? '7' : 'm');
   
   // Calculate next transition
   const barsUntilNext = nextSection !== section ? 1 : 
@@ -517,9 +777,12 @@ function evolve() {
     updatePatterns();
   }
   
+  // Apply tension continuously
+  applyTension();
+  
   // Progress chord every 4 bars
   if (currentBar % 4 === 0) {
-    currentChordIndex = (currentChordIndex + 1) % chordProgression.length;
+    currentChordIndex = (currentChordIndex + 1) % (currentProgression ? currentProgression.length : 4);
   }
   
   currentBar = (currentBar + 1) % 64;
@@ -557,8 +820,27 @@ document.getElementById('energySlider').addEventListener('input', (e) => {
   document.getElementById('energyDisplay').textContent = energyLevel;
 });
 
+document.getElementById('tensionSlider').addEventListener('input', (e) => {
+  tensionLevel = parseInt(e.target.value);
+  document.getElementById('tensionDisplay').textContent = tensionLevel;
+  // Apply tension immediately when slider moves
+  if (Tone.Transport.state === 'started') {
+    applyTension();
+  }
+});
+
 // Initial BPM
 Tone.Transport.bpm.value = 132;
+
+// Mute button handlers
+['kick', 'snare', 'hat', 'acid', 'stab', 'sub'].forEach(track => {
+  const btn = document.getElementById(track + 'Mute');
+  btn.addEventListener('click', () => {
+    muteStates[track] = !muteStates[track];
+    btn.textContent = muteStates[track] ? 'OFF' : 'ON';
+    btn.classList.toggle('muted', muteStates[track]);
+  });
+});
 </script>
 </body>
 </html>
