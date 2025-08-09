@@ -227,6 +227,71 @@
       0% { background: #0f0; box-shadow: 0 0 20px #0f0; }
       100% { background: #030; box-shadow: none; }
     }
+    
+    /* Mobile-specific styles - applied via JavaScript */
+    body.mobile {
+      font-size: 18px;
+    }
+    
+    body.mobile .music-controls {
+      padding: 15px;
+      gap: 15px;
+    }
+    
+    body.mobile .control-btn {
+      width: 60px;
+      height: 60px;
+      font-size: 30px;
+      border-width: 2px;
+    }
+    
+    body.mobile .track-square {
+      width: 45px;
+      height: 45px;
+      border-width: 3px;
+    }
+    
+    body.mobile .track-squares {
+      gap: 12px;
+      padding: 0 15px;
+    }
+    
+    body.mobile .left-panel {
+      width: 90%;
+      max-width: 500px;
+      font-size: 18px;
+    }
+    
+    body.mobile .left-panel.expanded {
+      max-height: 600px;
+      padding: 20px;
+    }
+    
+    body.mobile button {
+      padding: 15px 30px;
+      font-size: 18px;
+      border-width: 2px;
+    }
+    
+    body.mobile .slider-label {
+      min-width: 120px;
+      font-size: 18px;
+    }
+    
+    body.mobile .sound-select {
+      padding: 8px;
+      font-size: 18px;
+      border-width: 2px;
+    }
+    
+    body.mobile h1 {
+      font-size: 24px;
+    }
+    
+    body.mobile .slider-row {
+      margin: 15px 0;
+      gap: 15px;
+    }
   </style>
 </head>
 <body>
@@ -1266,6 +1331,11 @@ const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
                  ('ontouchstart' in window) || 
                  (navigator.maxTouchPoints > 0);
 
+// Apply mobile class to body for CSS styling
+if (isMobile) {
+  document.body.classList.add('mobile');
+}
+
 // Initialize Phaser game - use most of viewport
 const WIDTH = window.innerWidth;
 const HEIGHT = window.innerHeight
@@ -1656,10 +1726,15 @@ class Main extends Phaser.Scene {
     this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,A,D,W,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX');
     this.score=0; 
     this.beats=0; 
-    this.scoreText=this.add.text(10, HEIGHT-24, 'score 0', {font:'16px monospace', fill:'#0f0'});
-    this.highScoreText=this.add.text(10, HEIGHT-48, 'high ' + sessionHighScore, {font:'16px monospace', fill:'#ff0'});
+    const scoreFontSize = isMobile ? '24px' : '16px';
+    const gridFontSize = isMobile ? '18px' : '12px';
+    const scoreY = isMobile ? HEIGHT-36 : HEIGHT-24;
+    const highScoreY = isMobile ? HEIGHT-72 : HEIGHT-48;
+    
+    this.scoreText=this.add.text(10, scoreY, 'score 0', {font:`${scoreFontSize} monospace`, fill:'#0f0'});
+    this.highScoreText=this.add.text(10, highScoreY, 'high ' + sessionHighScore, {font:`${scoreFontSize} monospace`, fill:'#ff0'});
     this.gridVisible = gridEnabled; // Use persistent grid setting
-    this.gridText=this.add.text(10, 10, 'GRID: ' + (gridEnabled ? 'ON' : 'OFF') + ' [G]', {font:'12px monospace', fill:'#0f0'});
+    this.gridText=this.add.text(10, 10, 'GRID: ' + (gridEnabled ? 'ON' : 'OFF') + ' [G]', {font:`${gridFontSize} monospace`, fill:'#0f0'});
 
     // Mobile controls setup
     this.setupMobileControls();
