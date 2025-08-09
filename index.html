@@ -1465,8 +1465,15 @@ class StartupScene extends Phaser.Scene {
       });
     }
     
+    // Add debug text for iOS
+    const debugText = this.add.text(10, HEIGHT - 30, 'Touch anywhere to start', {
+      font: '14px monospace',
+      fill: '#ff0'
+    });
+    
     // Listen for space key to start
     this.input.keyboard.once('keydown-SPACE', async () => {
+      debugText.setText('Starting from keyboard...');
       // Start Tone.js from user gesture
       if (typeof Tone !== 'undefined') {
         await Tone.start();
@@ -1480,10 +1487,18 @@ class StartupScene extends Phaser.Scene {
     });
     
     // Also support click/touch to start  
-    this.input.once('pointerdown', async () => {
+    this.input.once('pointerdown', async (pointer) => {
+      debugText.setText(`Touch detected at ${Math.round(pointer.x)}, ${Math.round(pointer.y)}`);
+      
       // Start Tone.js from user gesture
       if (typeof Tone !== 'undefined') {
-        await Tone.start();
+        try {
+          await Tone.start();
+          debugText.setText('Tone started, transitioning...');
+        } catch(e) {
+          debugText.setText('Error: ' + e.message);
+          console.error('Tone.start error:', e);
+        }
       }
       
       // Transition to game
