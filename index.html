@@ -1940,12 +1940,26 @@ class Main extends Phaser.Scene {
         // Always spawn on kick
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnEnemy(lane, speed, 'enemyTex'); 
+        
+        // Pulse all existing red enemies
+        for(let enemy of this.enemies) {
+          if(enemy.enemyType === 'enemyTex') {
+            enemy.pulseTime = this.time.now;
+          }
+        }
       },
       onSnare: ()=>{ 
         // Fast yellow enemies on snare hits - always spawn
         const speed=ENEMY_SPEED_BASE * 1.5 + Math.floor(this.beats/16)*30; 
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnEnemy(lane, speed, 'fastEnemyTex'); 
+        
+        // Pulse all existing yellow enemies
+        for(let enemy of this.enemies) {
+          if(enemy.enemyType === 'fastEnemyTex') {
+            enemy.pulseTime = this.time.now;
+          }
+        }
       },
       onHihat: ()=>{
         // Spawn obstacles that block shots
@@ -1961,6 +1975,13 @@ class Main extends Phaser.Scene {
         // Spawn lane-changing enemy
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnDrifter(lane);
+        
+        // Pulse all existing purple drifting enemies
+        for(let enemy of this.enemies) {
+          if(enemy.isDrifter) {
+            enemy.pulseTime = this.time.now;
+          }
+        }
       },
       onSub: ()=>{
         // Pulse the grid
@@ -3190,7 +3211,35 @@ class Main extends Phaser.Scene {
       if(e.trailPoints.length > 8) e.trailPoints.shift(); // Keep trail short
       
       // Scale based on distance
-      const scale = 0.1 + e.progress * 1.2; // Start tiny, grow to normal size
+      let scale = 0.1 + e.progress * 1.2; // Start tiny, grow to normal size
+      
+      // Apply pulse effect for all enemy types
+      if(e.pulseTime) {
+        const timeSincePulse = this.time.now - e.pulseTime;
+        if(timeSincePulse < 300) { // Pulse lasts 300ms
+          const pulseProgress = 1 - (timeSincePulse / 300);
+          const pulseMagnitude = Math.sin(pulseProgress * Math.PI) * 0.5;
+          scale *= (1 + pulseMagnitude);
+          
+          // Different tint colors based on enemy type
+          if(e.isDrifter) {
+            // Purple enemies - flash with purple-white
+            const tintValue = Math.floor(255 * (1 - pulseProgress * 0.5));
+            e.setTint(Phaser.Display.Color.GetColor(255, tintValue, 255));
+          } else if(e.enemyType === 'fastEnemyTex') {
+            // Yellow enemies - flash with yellow-white
+            const tintValue = Math.floor(255 * (1 - pulseProgress * 0.3));
+            e.setTint(Phaser.Display.Color.GetColor(255, 255, tintValue));
+          } else if(e.enemyType === 'enemyTex') {
+            // Red enemies - flash with red-white
+            const tintValue = Math.floor(255 * (1 - pulseProgress * 0.5));
+            e.setTint(Phaser.Display.Color.GetColor(255, tintValue, tintValue));
+          }
+        } else {
+          e.setTint(0xffffff); // Reset tint
+        }
+      }
+      
       e.setScale(scale);
       
       // Update collision box
