@@ -335,6 +335,29 @@
       
       <div class="controls">
         <div class="slider-row">
+          <label class="slider-label">MOOD:</label>
+          <select id="musicPresetSelector" class="sound-select">
+            <option value="">Custom</option>
+            <option value="chill">Chill</option>
+            <option value="driving" selected>Driving</option>
+            <option value="peak">Peak Time</option>
+            <option value="acid">Acid Storm</option>
+            <option value="trance">Trance</option>
+          </select>
+          <span id="musicPresetDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Classic techno</span>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">DIFFICULTY:</label>
+          <select id="difficultySelector" class="sound-select">
+            <option value="zen">Zen Mode</option>
+            <option value="normal" selected>Normal</option>
+            <option value="intense">Intense</option>
+            <option value="chaos">Chaos</option>
+          </select>
+          <span id="difficultyDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Standard</span>
+        </div>
+        <hr style="border-color: #0f0; margin: 15px 0; opacity: 0.3;">
+        <div class="slider-row">
           <label class="slider-label">BPM:</label>
           <input type="range" id="bpmSlider" min="120" max="150" value="132" class="slider">
           <span id="bpmDisplay" class="slider-value">132</span>
@@ -1175,6 +1198,77 @@ document.getElementById('soundSelector').addEventListener('change', (e) => {
   document.getElementById('soundDisplay').textContent = e.target.options[e.target.selectedIndex].text;
 });
 
+// Music preset definitions
+const MUSIC_PRESETS = {
+  'chill': { bpm: 122, energy: 30, tension: 20, description: 'Laid back minimal' },
+  'driving': { bpm: 132, energy: 60, tension: 40, description: 'Classic techno' },
+  'peak': { bpm: 138, energy: 85, tension: 70, description: 'Peak time energy' },
+  'acid': { bpm: 135, energy: 75, tension: 90, description: '303 madness' },
+  'trance': { bpm: 140, energy: 70, tension: 50, description: 'Euphoric' }
+};
+
+// Difficulty preset definitions
+const DIFFICULTY_PRESETS = {
+  'zen': { speedMult: 0.5, fireMult: 2.0, spawnMult: 0.5, description: 'Relaxed' },
+  'normal': { speedMult: 1.0, fireMult: 1.0, spawnMult: 1.0, description: 'Standard' },
+  'intense': { speedMult: 1.5, fireMult: 0.8, spawnMult: 1.3, description: 'Challenging' },
+  'chaos': { speedMult: 2.0, fireMult: 0.5, spawnMult: 2.0, description: 'Maximum chaos' }
+};
+
+let currentDifficulty = DIFFICULTY_PRESETS.normal;
+
+// Music preset selector
+document.getElementById('musicPresetSelector')?.addEventListener('change', (e) => {
+  const presetKey = e.target.value;
+  if (presetKey && MUSIC_PRESETS[presetKey]) {
+    const preset = MUSIC_PRESETS[presetKey];
+    
+    // Apply preset values
+    Tone.Transport.bpm.value = preset.bpm;
+    energyLevel = preset.energy;
+    tensionLevel = preset.tension;
+    
+    // Update sliders
+    document.getElementById('bpmSlider').value = preset.bpm;
+    document.getElementById('bpmDisplay').textContent = preset.bpm;
+    document.getElementById('energySlider').value = preset.energy;
+    document.getElementById('energyDisplay').textContent = preset.energy;
+    document.getElementById('tensionSlider').value = preset.tension;
+    document.getElementById('tensionDisplay').textContent = preset.tension;
+    
+    // Update description
+    document.getElementById('musicPresetDisplay').textContent = preset.description;
+    
+    // Apply tension if playing
+    if (Tone.Transport.state === 'started') {
+      applyTension();
+    }
+  } else {
+    document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
+  }
+});
+
+// Difficulty selector
+document.getElementById('difficultySelector')?.addEventListener('change', (e) => {
+  const diffKey = e.target.value;
+  if (DIFFICULTY_PRESETS[diffKey]) {
+    currentDifficulty = DIFFICULTY_PRESETS[diffKey];
+    document.getElementById('difficultyDisplay').textContent = currentDifficulty.description;
+  }
+});
+
+// Update sliders to set preset to custom
+const markCustomPreset = () => {
+  document.getElementById('musicPresetSelector').value = '';
+  document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
+};
+
+// Modify existing slider handlers to mark as custom
+const originalBpmHandler = document.getElementById('bpmSlider').oninput;
+document.getElementById('bpmSlider').addEventListener('input', markCustomPreset);
+document.getElementById('energySlider').addEventListener('input', markCustomPreset);
+document.getElementById('tensionSlider').addEventListener('input', markCustomPreset);
+
 // Initial BPM
 Tone.Transport.bpm.value = 132;
 
@@ -1776,6 +1870,11 @@ class Main extends Phaser.Scene {
     this.player=this.add.image(this._laneX(this.playerLane), PLAYER_Y, 'playerTex');
     this.player.w = playerSize; // Add collision dimensions (scaled)
     this.player.h = playerSize;
+    
+    // Create charge glow effect
+    this.chargeGlow = this.add.graphics();
+    this.chargeGlow.setDepth(-1); // Behind player
+    this.chargeGlow.setVisible(false);
     this.enemies=[]; 
     this.bullets=[]; 
     this.obstacles = [];
@@ -1786,7 +1885,11 @@ class Main extends Phaser.Scene {
     this.offScreenTimer = 0; // Timer for rubber band effect
     this.isMoving = false; // Prevent shooting while transitioning
     this.isJumping = false; // Track jump state
-    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,A,D,W,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX');
+    this.isCrouching = false; // Track crouch state for super jump
+    this.crouchTimer = 0; // Timer for crouch charge
+    this.maxChargeTime = 1000; // Max charge time in ms for full power
+    this.releaseGraceTime = 150; // Grace period after releasing down to still trigger super jump
+    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX');
     this.score=0; 
     this.beats=0;
     // Combo system variables
@@ -1819,8 +1922,6 @@ class Main extends Phaser.Scene {
     this.comboMeterY = meterY;
     
     this.gridVisible = gridEnabled; // Use persistent grid setting
-    const gridTextContent = isMobile ? 'GRID: ' + (gridEnabled ? 'ON' : 'OFF') : 'GRID: ' + (gridEnabled ? 'ON' : 'OFF') + ' [G]';
-    this.gridText=this.add.text(10, 10, gridTextContent, {font:`${gridFontSize} monospace`, fill:'#0f0'});
     
     // Set initial grid button color
     const gridBtn = document.getElementById('gridToggleBtn');
@@ -1893,6 +1994,15 @@ class Main extends Phaser.Scene {
     this.swipeThreshold = 50; // Minimum distance for swipe
     this.swipeTimeLimit = 300; // Max time for swipe gesture (ms)
     
+    // Jump sensitivity settings (0.1 = strict, 1.0 = very lenient)
+    // You can adjust these values to fine-tune the feel:
+    this.jumpSensitivity = 0.7; // Regular jump: 0.5 = normal, higher = easier
+    this.superJumpSensitivity = 0.85; // Super jump: higher = more forgiving
+    
+    // Calculate thresholds based on sensitivity
+    this.verticalSwipeThreshold = this.swipeThreshold * (1.1 - this.jumpSensitivity);
+    this.superJumpDownThreshold = this.swipeThreshold * (1.1 - this.superJumpSensitivity) * 0.5; // Much more lenient
+    
     // Create touch indicator (for debugging)
     this.touchIndicator = this.add.circle(0, 0, 20, 0x00ff00, 0.3);
     this.touchIndicator.setVisible(false);
@@ -1902,14 +2012,17 @@ class Main extends Phaser.Scene {
       this.touchStartX = pointer.x;
       this.touchStartY = pointer.y;
       this.touchStartTime = this.time.now;
+      this.lastSwipeX = pointer.x; // Track last X position for continuous swipes
+      this.lastSwipeY = pointer.y; // Track last Y position for continuous swipes
+      this.swipeHistory = []; // Track swipe path for down-up detection
       
       // Show touch indicator
       this.touchIndicator.setPosition(pointer.x, pointer.y);
       this.touchIndicator.setVisible(true);
       this.touchIndicator.setAlpha(0.5);
       
-      // Start firing timer for hold-to-fire
-      this.fireHoldTimer = this.time.delayedCall(200, () => {
+      // ALWAYS start firing - this is primary action
+      this.fireHoldTimer = this.time.delayedCall(150, () => {
         this.isTouchFiring = true;
         // Visual feedback for auto-fire mode
         this.touchIndicator.setFillStyle(0xff0000, 0.5);
@@ -1925,31 +2038,93 @@ class Main extends Phaser.Scene {
         this.touchIndicator.setPosition(pointer.x, pointer.y);
       }
       
+      // Track swipe history for gesture detection
+      this.swipeHistory.push({
+        x: pointer.x,
+        y: pointer.y,
+        time: this.time.now
+      });
+      
+      // Keep only last 500ms of history (more time for super jump gesture)
+      const cutoffTime = this.time.now - 500;
+      this.swipeHistory = this.swipeHistory.filter(point => point.time > cutoffTime);
+      
       const dx = pointer.x - this.touchStartX;
       const dy = pointer.y - this.touchStartY;
       const elapsed = this.time.now - this.touchStartTime;
       
-      // Check for swipe gestures (quick movements)
-      if (elapsed < this.swipeTimeLimit) {
-        // Horizontal swipe
-        if (Math.abs(dx) > this.swipeThreshold && Math.abs(dx) > Math.abs(dy)) {
-          if (dx > 0 && !this.isMoving) {
-            // Swipe right
-            this.moveRight();
-            this.touchStartX = pointer.x; // Reset for continuous swipes
-          } else if (dx < 0 && !this.isMoving) {
-            // Swipe left
-            this.moveLeft();
-            this.touchStartX = pointer.x; // Reset for continuous swipes
+      // Horizontal swipe - track incremental movements (no time limit for continuous movement)
+      const incrementalX = pointer.x - (this.lastSwipeX || this.touchStartX);
+      
+      if (Math.abs(incrementalX) > this.swipeThreshold && !this.isMoving) {
+        if (incrementalX > 0) {
+          // Swipe right
+          this.moveRight();
+          this.lastSwipeX = pointer.x; // Track last position for next swipe
+        } else if (incrementalX < 0) {
+          // Swipe left
+          this.moveLeft();
+          this.lastSwipeX = pointer.x; // Track last position for next swipe
+        }
+      }
+      
+      // Vertical swipe detection - track incremental Y movements (no time limit)
+      const incrementalY = pointer.y - (this.lastSwipeY || this.touchStartY);
+      
+      // Check for down-then-up swipe pattern for super jump
+      if (this.swipeHistory.length >= 3) {
+        const recent = this.swipeHistory.slice(-10); // Last 10 points
+        if (recent.length >= 3) {
+          // Find the lowest point
+          let lowestPoint = recent[0];
+          let lowestIndex = 0;
+          for (let i = 1; i < recent.length; i++) {
+            if (recent[i].y > lowestPoint.y) {
+              lowestPoint = recent[i];
+              lowestIndex = i;
+            }
+          }
+          
+          // Check if we went down then up
+          const firstY = recent[0].y;
+          const currentY = pointer.y;
+          const bottomY = lowestPoint.y;
+          
+          // Down-then-up pattern detected (using lenient threshold)
+          if (lowestIndex > 0 && lowestIndex < recent.length - 1 && 
+              bottomY - firstY > this.superJumpDownThreshold && 
+              bottomY - currentY > this.superJumpDownThreshold &&
+              !this.isJumping) {
+            
+            // Calculate super jump power based on swipe distance
+            const totalSwipeDistance = (bottomY - firstY) + (bottomY - currentY);
+            const maxSwipeDistance = HEIGHT * 0.4; // 40% of screen height for max power
+            const chargePercent = Math.min(totalSwipeDistance / maxSwipeDistance, 1.0);
+            
+            // Execute super jump
+            this.superJump(chargePercent);
+            
+            // Clear history to prevent repeated triggers
+            this.swipeHistory = [];
+            this.lastSwipeY = pointer.y;
+            
+            // Visual feedback
+            this.touchIndicator.setFillStyle(0xffff00, 0.7);
           }
         }
+      }
+      
+      // Simple vertical swipe up for regular jump (using sensitivity threshold)
+      if (incrementalY < -this.verticalSwipeThreshold && Math.abs(incrementalY) > Math.abs(incrementalX) && !this.isJumping) {
+        // Check if this is just a simple up swipe (not part of down-up pattern)
+        const hasRecentDown = this.swipeHistory.some(point => 
+          point.y > pointer.y && 
+          this.time.now - point.time < 200
+        );
         
-        // Vertical swipe up for jump
-        if (dy < -this.swipeThreshold && Math.abs(dy) > Math.abs(dx)) {
-          if (!this.isJumping) {
-            this.jump();
-            this.touchStartY = pointer.y; // Reset for next swipe
-          }
+        if (!hasRecentDown) {
+          this.jump();
+          this.lastSwipeY = pointer.y; // Track last Y position
         }
       }
     });
@@ -1961,6 +2136,7 @@ class Main extends Phaser.Scene {
         this.touchIndicator.setVisible(false);
         this.touchIndicator.setFillStyle(0x00ff00, 0.3); // Reset color
       }
+      
       
       // Cancel firing timer if it hasn't triggered yet
       if (this.fireHoldTimer) {
@@ -2020,22 +2196,29 @@ class Main extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
     } else {
-      // Ground movement - original animation
+      // Ground movement - stretchy animation
       this.isMoving = true;
+      
+      // First stretch towards the left
       this.tweens.add({
         targets: this.player,
-        x: targetX,
-        duration: 150,
-        ease: 'Sine.easeInOut',
-        onStart: () => {
-          // Squash and tilt during movement
-          this.player.setScale(0.8, 1.2);
-          this.player.angle = -15; // Tilt left
-        },
+        scaleX: 1.6,  // Stretch horizontally
+        scaleY: 0.7,  // Compress vertically
+        duration: 100,  // Increased from 60ms
+        ease: 'Power2',
         onComplete: () => {
-          this.player.setScale(1, 1);
-          this.player.angle = 0;
-          this.isMoving = false;
+          // Then move and snap back
+          this.tweens.add({
+            targets: this.player,
+            x: targetX,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 120,  // Slightly longer snap back
+            ease: 'Back.easeOut',
+            onComplete: () => {
+              this.isMoving = false;
+            }
+          });
         }
       });
     }
@@ -2091,22 +2274,29 @@ class Main extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
     } else {
-      // Ground movement - original animation
+      // Ground movement - stretchy animation
       this.isMoving = true;
+      
+      // First stretch towards the right
       this.tweens.add({
         targets: this.player,
-        x: targetX,
-        duration: 150,
-        ease: 'Sine.easeInOut',
-        onStart: () => {
-          // Squash and tilt during movement
-          this.player.setScale(0.8, 1.2);
-          this.player.angle = 15; // Tilt right
-        },
+        scaleX: 1.6,  // Stretch horizontally
+        scaleY: 0.7,  // Compress vertically
+        duration: 100,  // Increased from 60ms
+        ease: 'Power2',
         onComplete: () => {
-          this.player.setScale(1, 1);
-          this.player.angle = 0;
-          this.isMoving = false;
+          // Then move and snap back
+          this.tweens.add({
+            targets: this.player,
+            x: targetX,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 120,  // Slightly longer snap back
+            ease: 'Back.easeOut',
+            onComplete: () => {
+              this.isMoving = false;
+            }
+          });
         }
       });
     }
@@ -2162,6 +2352,75 @@ class Main extends Phaser.Scene {
       const now = Tone.now();
       gameSounds.move.triggerAttackRelease("C6", "16n", now);
       gameSounds.move.triggerAttackRelease("G6", "16n", now + 0.05);
+    } catch(e) {}
+  }
+
+  superJump(chargePercent = 1.0) {
+    if(this.isJumping) return;
+    this.isJumping = true;
+    
+    // Calculate jump height: from 1x (120) to 2.5x (300) based on charge
+    const minHeight = 120;
+    const maxHeight = 300;
+    const jumpHeight = minHeight + (maxHeight - minHeight) * chargePercent;
+    
+    // Scale the stretch effect based on charge
+    const stretchX = 0.7 + (1.0 - chargePercent) * 0.2; // Less stretch for lower charge
+    const stretchY = 1.2 + chargePercent * 0.6; // More stretch for higher charge
+    
+    // First squash down as launch preparation
+    this.player.setScale(1.3, 0.5);
+    
+    // Then stretch up and launch
+    this.tweens.add({
+      targets: this.player,
+      scaleX: stretchX,
+      scaleY: stretchY,
+      duration: 200,  // Doubled from 100ms
+      ease: 'Power2',
+      onComplete: () => {
+        // Launch up with variable height
+        const jumpDuration = 250 + chargePercent * 150; // Longer air time for higher jumps
+        this.tweens.add({
+          targets: this.player,
+          y: PLAYER_Y - jumpHeight,
+          scaleX: 1,
+          scaleY: 1,
+          duration: jumpDuration,
+          ease: 'Quad.easeOut',
+          yoyo: true,
+          onComplete: () => {
+            this.isJumping = false;
+            this.player.y = PLAYER_Y;
+            this.player.setScale(1, 1);
+            // Reset rotation
+            if(Math.abs(this.player.angle % 360) < 10) {
+              this.player.angle = 0;
+            }
+          }
+        });
+        
+        // Spin based on charge (360 to 720 degrees)
+        const spinAngle = 360 + chargePercent * 360;
+        this.tweens.add({
+          targets: this.player,
+          angle: spinAngle,
+          duration: jumpDuration * 2,
+          ease: 'Linear'
+        });
+      }
+    });
+    
+    // Play enhanced jump sound with pitch based on charge
+    try {
+      const now = Tone.now();
+      gameSounds.move.triggerAttackRelease("C6", "16n", now);
+      if(chargePercent > 0.3) {
+        gameSounds.move.triggerAttackRelease("G5", "16n", now + 0.05);
+      }
+      if(chargePercent > 0.7) {
+        gameSounds.move.triggerAttackRelease("C7", "32n", now + 0.1);
+      }
     } catch(e) {}
   }
 
@@ -2710,8 +2969,6 @@ class Main extends Phaser.Scene {
     if(Phaser.Input.Keyboard.JustDown(this.keys.G)){
       this.gridVisible = !this.gridVisible;
       gridEnabled = this.gridVisible; // Save to persistent setting
-      const gridTextContent = isMobile ? 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') : 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]';
-      this.gridText.setText(gridTextContent);
       if(!this.gridVisible && this.gridGraphics) {
         this.gridGraphics.clear();
       }
@@ -2845,8 +3102,53 @@ class Main extends Phaser.Scene {
       this.cameras.main.resetPostPipeline();
     }
     
-    // Jump mechanic - UP or W key
-    if(Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)){
+    // Crouch/charge mechanic for super jump - hold DOWN to charge, release to jump
+    if((this.keys.DOWN.isDown || this.keys.S.isDown) && !this.isJumping){
+      if(!this.isCrouching) {
+        this.isCrouching = true;
+        this.crouchTimer = 0;
+        this.chargeGlow.setVisible(true);
+        // Squash animation when crouching
+        this.tweens.add({
+          targets: this.player,
+          scaleX: 1.4,
+          scaleY: 0.6,
+          duration: 100,
+          ease: 'Power2'
+        });
+      }
+      this.crouchTimer += dt;
+      
+      // Update charge glow
+      const chargePercent = Math.min(this.crouchTimer / this.maxChargeTime, 1.0);
+      this.chargeGlow.clear();
+      this.chargeGlow.x = this.player.x;
+      this.chargeGlow.y = this.player.y;
+      
+      // Draw growing glow circle
+      const glowRadius = 20 + chargePercent * 30;
+      const glowAlpha = 0.3 + chargePercent * 0.4;
+      const glowColor = Phaser.Display.Color.Interpolate.ColorWithColor(
+        {r: 0, g: 255, b: 204}, // Start cyan
+        {r: 255, g: 255, b: 0}, // End yellow
+        1,
+        chargePercent
+      );
+      const hexColor = Phaser.Display.Color.GetColor(glowColor.r, glowColor.g, glowColor.b);
+      
+      this.chargeGlow.fillStyle(hexColor, glowAlpha);
+      this.chargeGlow.fillCircle(0, 0, glowRadius);
+    } else if(this.isCrouching) {
+      // Released DOWN - execute super jump immediately
+      const chargePercent = Math.min(this.crouchTimer / this.maxChargeTime, 1.0);
+      this.superJump(chargePercent);
+      this.isCrouching = false;
+      this.crouchTimer = 0;
+      this.chargeGlow.setVisible(false);
+    }
+    
+    // Regular jump mechanic - UP or W key (only if not crouching)
+    if((Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)) && !this.isCrouching){
       this.jump();
     }
     
@@ -2977,6 +3279,7 @@ class Main extends Phaser.Scene {
       if(p.progress > 0.9 && p.lane === this.playerLane){
         p.destroy();
         this.powerUps.splice(i,1);
+        this.score += 10; // Award 10 points for power-up collection
         this.rapidFire = true;
         this.rapidFireTimer = 5000; // 5 seconds
         this.player.setTint(0x00ff00); // Green tint
