@@ -3656,6 +3656,34 @@ if ('serviceWorker' in navigator) {
       });
   });
 }
+
+// Handle orientation changes and window resizing
+function handleResize() {
+  // Reload the game to adjust to new dimensions
+  if (game && game.scene && game.scene.scenes[0]) {
+    // Store current game state before reload
+    const currentScene = game.scene.getScene('Main');
+    if (currentScene && currentScene.score !== undefined) {
+      sessionStorage.setItem('beatrider_temp_score', currentScene.score);
+      sessionStorage.setItem('beatrider_temp_combo', currentScene.combo || 1);
+    }
+  }
+  
+  // Reload page to reinitialize with new dimensions
+  location.reload();
+}
+
+// Debounce resize events to avoid too many reloads
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(handleResize, 500);
+});
+
+// Also listen for orientation changes specifically
+window.addEventListener('orientationchange', () => {
+  setTimeout(handleResize, 100); // Small delay to let orientation settle
+});
 </script>
 </body>
 </html>
