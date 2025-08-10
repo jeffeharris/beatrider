@@ -2,7 +2,18 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Beat Rider - Melodic Techno</title>
+  
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#000000">
+  <meta name="description" content="A retro lane-based rhythm shooter game">
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="BeatRider">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  
   <script src="https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   <style>
@@ -1486,7 +1497,7 @@ const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
                  (navigator.maxTouchPoints > 0);
 
 // Initialize grid setting early to avoid reference errors
-let gridEnabled = true;
+let gridEnabled = true; // Will be updated after savedData is loaded
 
 // Apply mobile class to body for CSS styling
 if (isMobile) {
@@ -1498,8 +1509,39 @@ const WIDTH = window.innerWidth;
 const HEIGHT = window.innerHeight
 const LANES=5, LANE_W=WIDTH/LANES;
 
-// Session highscore tracking
-let sessionHighScore = 0;
+// Storage management
+const STORAGE_KEY = 'beatrider_data';
+
+function loadGameData() {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.warn('Failed to load game data:', e);
+  }
+  return {
+    highScore: 0,
+    gridEnabled: true,
+    masterVolume: 0.7
+  };
+}
+
+function saveGameData(data) {
+  try {
+    const current = loadGameData();
+    const updated = { ...current, ...data };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.warn('Failed to save game data:', e);
+  }
+}
+
+// Load saved data
+const savedData = loadGameData();
+let sessionHighScore = savedData.highScore;
+gridEnabled = savedData.gridEnabled;
 // Game dimensions initialized based on viewport - adjust for mobile
 const PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobile
 const ENEMY_SPEED_BASE = isMobile ? 150 : 200; // Slower on mobile for easier play
@@ -1991,6 +2033,7 @@ class Main extends Phaser.Scene {
         // Toggle grid from external button
         this.gridVisible = !this.gridVisible;
         gridEnabled = this.gridVisible;
+        saveGameData({ gridEnabled: gridEnabled });
         const gridTextContent = isMobile ? 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') : 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]';
         this.gridText.setText(gridTextContent);
         if(!this.gridVisible && this.gridGraphics) {
@@ -2527,6 +2570,7 @@ class Main extends Phaser.Scene {
     const beatHighScore = this.score > sessionHighScore;
     if(beatHighScore) {
       sessionHighScore = this.score;
+      saveGameData({ highScore: sessionHighScore });
     }
     
     // Calculate text sizes based on mobile or desktop
@@ -2996,6 +3040,7 @@ class Main extends Phaser.Scene {
     if(Phaser.Input.Keyboard.JustDown(this.keys.G)){
       this.gridVisible = !this.gridVisible;
       gridEnabled = this.gridVisible; // Save to persistent setting
+      saveGameData({ gridEnabled: gridEnabled });
       if(!this.gridVisible && this.gridGraphics) {
         this.gridGraphics.clear();
       }
@@ -3509,6 +3554,7 @@ class Main extends Phaser.Scene {
             // Update highscore if beaten
             if(this.score > sessionHighScore) {
               sessionHighScore = this.score;
+              saveGameData({ highScore: sessionHighScore });
               this.highScoreText.setText('high ' + sessionHighScore);
               this.highScoreText.setColor('#0ff'); // Cyan when beating high score
             }
@@ -3597,6 +3643,19 @@ const game = new Phaser.Game({
   parent: 'gameContainer',
   scene: [StartupScene, Main]
 });
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(registration => {
+        console.log('ServiceWorker registered:', registration);
+      })
+      .catch(error => {
+        console.log('ServiceWorker registration failed:', error);
+      });
+  });
+}
 </script>
 </body>
 </html>
