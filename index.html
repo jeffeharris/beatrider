@@ -2850,10 +2850,16 @@ class Main extends Phaser.Scene {
     const cooldown = this.rapidFire ? FIRE_COOLDOWN/3 : FIRE_COOLDOWN;
     if(now-this.lastShotAt<cooldown) return; 
     this.lastShotAt=now; 
-    // Shoot from current position (higher if jumping)
-    const b=this.add.image(this.player.x, this.player.y-20, 'bulletTex'); 
+    // Shoot from player's current position (accounts for jumping)
+    const b=this.add.image(this.player.x, this.player.y, 'bulletTex'); 
     b.lane = this.playerLane;
-    b.progress = 0.95; // Start near player
+    
+    // Calculate progress based on player's current Y position
+    // When jumping, player.y is higher (smaller), so we need to adjust progress
+    const vanishY = HEIGHT * 0.15;
+    const normalizedY = (this.player.y - vanishY) / (HEIGHT - vanishY);
+    // Inverse the exponential curve formula to get progress from Y position
+    b.progress = Math.pow(normalizedY, 1/2.5);
     b.vy=-BULLET_SPEED; 
     b.w = Math.floor(6 * MOBILE_SCALE); 
     b.h = Math.floor(12 * MOBILE_SCALE);
