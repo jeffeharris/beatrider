@@ -224,6 +224,7 @@
       padding: 0 10px;
       border-left: 1px solid #0f0;
       border-right: 1px solid #0f0;
+      flex-wrap: nowrap;
     }
     
     .track-square {
@@ -275,7 +276,44 @@
     }
     
     /* Small screen adjustments */
-    @media (max-width: 480px) {
+    @media (max-width: 480px) and (orientation: portrait) {
+      .music-controls {
+        padding: 2px;
+        gap: 2px;
+        flex-wrap: nowrap;
+        max-height: 40px;
+      }
+      
+      .control-btn {
+        width: 26px;
+        height: 26px;
+        font-size: 14px;
+      }
+      
+      .track-squares {
+        flex-wrap: nowrap;
+        gap: 1px;
+        padding: 0 3px;
+      }
+      
+      .track-square {
+        width: 18px;
+        height: 18px;
+      }
+      
+      body.mobile .control-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 16px;
+      }
+      
+      body.mobile .track-squares {
+        gap: 1px;
+        padding: 0 3px;
+      }
+    }
+    
+    @media (max-width: 480px) and (orientation: landscape) {
       .music-controls {
         padding: 5px;
         gap: 5px;
@@ -290,12 +328,6 @@
       .track-square {
         width: 25px;
         height: 25px;
-      }
-      
-      body.mobile .control-btn {
-        width: 40px;
-        height: 40px;
-        font-size: 20px;
       }
     }
     
