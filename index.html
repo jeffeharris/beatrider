@@ -2767,32 +2767,24 @@ class Main extends Phaser.Scene {
   }
   
   checkDashCollision() {
-    // Check collision with obstacles and enemies during dash
+    // Check collision with obstacles during dash - same as regular collision
     for(let o of this.obstacles) {
       if(o.progress > 0.9 && o.progress < 1.1 && o.lane === this.playerLane && !this.isJumping) {
-        // Hit obstacle during dash - take damage
-        this.lives--;
-        this.updateHUD();
-        
-        // Visual feedback
-        this.cameras.main.shake(300, 0.02);
+        // Hit obstacle during dash - game over
+        this.cameras.main.shake(500, 0.03);
         this.player.setTint(0xff0000);
-        this.time.delayedCall(200, () => {
-          if(!this.rapidFire) this.player.clearTint();
-        });
         
-        // Sound
+        // Player death sound - same as regular collision
         try {
-          gameSounds.obstacleHit.triggerAttackRelease("C2", "8n");
+          const now = Tone.now();
+          gameSounds.obstacleHit.triggerAttackRelease("G2", "16n", now);
+          gameSounds.obstacleHit.triggerAttackRelease("D2", "16n", now + 0.05);
+          gameSounds.obstacleHit.triggerAttackRelease("G1", "16n", now + 0.1);
+          gameSounds.explosion.triggerAttackRelease("8n", now + 0.02);
         } catch(e) {}
         
-        if(this.lives <= 0) {
-          this.gameOver();
-        }
-        
-        // Destroy the obstacle
-        o.destroy();
-        this.obstacles = this.obstacles.filter(ob => ob !== o);
+        // Show game over screen
+        this.showGameOverScreen();
         break;
       }
     }
