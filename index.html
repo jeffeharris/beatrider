@@ -1565,11 +1565,11 @@ if (isMobile) {
   document.body.classList.add('mobile');
 }
 
-// Initialize game dimensions - will be updated on resize
-let WIDTH = window.innerWidth;
-let HEIGHT = window.innerHeight;
+// Initialize game dimensions
+const WIDTH = window.innerWidth;
+const HEIGHT = window.innerHeight;
 const LANES = 5;
-let LANE_W = WIDTH/LANES;
+const LANE_W = WIDTH/LANES;
 
 // Storage management
 const STORAGE_KEY = 'beatrider_data';
@@ -1605,7 +1605,7 @@ const savedData = loadGameData();
 let sessionHighScore = savedData.highScore;
 gridEnabled = savedData.gridEnabled;
 // Game dimensions initialized based on viewport - adjust for mobile
-let PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobile - will update on resize
+const PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobile
 const ENEMY_SPEED_BASE = isMobile ? 150 : 200; // Slower on mobile for easier play
 const BULLET_SPEED = 520;
 const FIRE_COOLDOWN = 110;
@@ -1842,37 +1842,6 @@ class StartupScene extends Phaser.Scene {
 class Main extends Phaser.Scene {
   constructor() {
     super({ key: 'Main' });
-  }
-  
-  resize(gameSize, baseSize, displaySize, resolution) {
-    // Update global dimensions
-    WIDTH = this.cameras.main.width;
-    HEIGHT = this.cameras.main.height;
-    LANE_W = WIDTH / LANES;
-    
-    // Update player Y position
-    PLAYER_Y = HEIGHT - (isMobile ? 90 : 60);
-    if (this.player) {
-      this.player.y = PLAYER_Y;
-      // Update player X position for new lane width
-      this.player.x = this._laneX(this.playerLane);
-    }
-    
-    // Reposition UI elements
-    if (this.scoreText) {
-      const scoreY = isMobile ? HEIGHT-36 : HEIGHT-24;
-      const highScoreY = isMobile ? HEIGHT-72 : HEIGHT-48;
-      const comboY = isMobile ? HEIGHT-108 : HEIGHT-72;
-      
-      this.scoreText.y = scoreY;
-      this.highScoreText.y = highScoreY;
-      this.comboText.y = comboY;
-    }
-    
-    // Clear and redraw grid
-    if (this.gridGraphics) {
-      this.gridGraphics.clear();
-    }
   }
   updateSoundDisplay() {
     const soundNames = ['Triangle', 'Acid', 'Chord', 'Sub', 'Pluck', 'Pew Pew'];
@@ -3728,15 +3697,12 @@ class Main extends Phaser.Scene {
   }
 }
 
-// Initialize Phaser game with responsive scaling
+// Initialize Phaser game
 const game = new Phaser.Game({
   type: Phaser.AUTO,
-  scale: {
-    mode: Phaser.Scale.RESIZE,
-    parent: 'gameContainer',
-    width: '100%',
-    height: '100%'
-  },
+  width: WIDTH,
+  height: HEIGHT,
+  parent: 'gameContainer',
   scene: [StartupScene, Main]
 });
 
@@ -3753,16 +3719,11 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Phaser's scale manager handles resize automatically with FIT mode
-// No need for manual reload - just ensure UI elements stay visible
-
-// Update music controls visibility on orientation change
+// Simple reload on orientation change for consistent experience
 window.addEventListener('orientationchange', () => {
-  const controls = document.querySelector('.music-controls');
-  if (controls) {
-    // Ensure controls stay on screen after rotation
-    controls.style.maxWidth = `calc(100vw - 20px)`;
-  }
+  setTimeout(() => {
+    location.reload();
+  }, 100);
 });
 </script>
 </body>
