@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Beatrider</title>
   
   <!-- PWA Meta Tags -->
@@ -32,6 +32,8 @@
       padding: 0;
       height: 100%;
       overflow: hidden;
+      /* Handle iPhone safe areas */
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
     .container {
       position: relative;
@@ -4786,8 +4788,7 @@ const game = new Phaser.Game({
   scale: {
     mode: Phaser.Scale.RESIZE,
     parent: 'gameContainer',
-    width: WIDTH,
-    height: HEIGHT
+    autoCenter: Phaser.Scale.CENTER_BOTH
   }
 });
 

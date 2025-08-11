@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beatrider Sound Designer</title>
+  <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Courier New', monospace;
+      background: #000;
+      color: #00ff00;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    #sound-list {
+      width: 250px;
+      background: #0a0a0a;
+      border-right: 2px solid #00ff00;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      text-align: center;
+      color: #00ff00;
+      text-shadow: 0 0 10px #00ff00;
+    }
+    
+    .sound-item {
+      padding: 8px 12px;
+      margin: 5px 0;
+      background: #003300;
+      border: 1px solid #00ff00;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+    
+    .sound-item:hover {
+      background: #005500;
+      box-shadow: 0 0 5px #00ff00;
+    }
+    
+    .sound-item.active {
+      background: #00ff00;
+      color: #000;
+    }
+    
+    #editor-panel {
+      flex: 1;
+      background: #0a0a0a;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      gap: 20px;
+    }
+    
+    #controls {
+      width: 400px;
+    }
+    
+    #output {
+      flex: 1;
+    }
+    
+    .param-group {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #001100;
+      border: 1px solid #00ff00;
+    }
+    
+    .param-group h3 {
+      color: #00ff00;
+      margin-bottom: 15px;
+      font-size: 14px;
+      text-transform: uppercase;
+    }
+    
+    .param {
+      margin-bottom: 10px;
+    }
+    
+    .param label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+      color: #00ff00;
+    }
+    
+    .param-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 4px;
+      background: #003300;
+      outline: none;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      background: #00ff00;
+      cursor: pointer;
+      border-radius: 50%;
+    }
+    
+    input[type="range"]::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      background: #00ff00;
+      cursor: pointer;
+      border-radius: 50%;
+      border: none;
+    }
+    
+    .param-value {
+      width: 60px;
+      color: #00ff00;
+      font-size: 12px;
+      text-align: right;
+    }
+    
+    select {
+      width: 100%;
+      padding: 5px;
+      background: #003300;
+      color: #00ff00;
+      border: 1px solid #00ff00;
+      font-family: inherit;
+      font-size: 12px;
+    }
+    
+    button {
+      padding: 10px 20px;
+      background: #003300;
+      color: #00ff00;
+      border: 1px solid #00ff00;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    
+    button:hover {
+      background: #00ff00;
+      color: #000;
+    }
+    
+    .test-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    #code-output {
+      background: #001100;
+      border: 1px solid #00ff00;
+      padding: 15px;
+      font-size: 12px;
+      white-space: pre;
+      overflow-x: auto;
+      font-family: 'Courier New', monospace;
+    }
+    
+    .copy-btn {
+      margin-top: 10px;
+      width: 100%;
+    }
+    
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="sound-list">
+    <h1>SOUND DESIGNER</h1>
+    
+    <div class="sound-item" data-sound="move">Move</div>
+    <div class="sound-item" data-sound="offScreenWomp">Off-Screen Womp</div>
+    <div class="sound-item" data-sound="dashLeft">Dash Left</div>
+    <div class="sound-item" data-sound="dashRight">Dash Right</div>
+    <div class="sound-item" data-sound="jump">Jump</div>
+    <div class="sound-item" data-sound="superJump">Super Jump</div>
+    <div class="sound-item" data-sound="enemyHit">Enemy Hit</div>
+    <div class="sound-item" data-sound="obstacleHit">Obstacle Hit</div>
+    <div class="sound-item" data-sound="powerUp">Power Up</div>
+    <div class="sound-item" data-sound="laser1">Laser 1</div>
+    <div class="sound-item" data-sound="laser2">Laser 2</div>
+    <div class="sound-item" data-sound="laser3">Laser 3</div>
+    <div class="sound-item" data-sound="laser4">Laser 4</div>
+    <div class="sound-item" data-sound="laser5">Laser 5</div>
+    <div class="sound-item" data-sound="laser6">Laser 6</div>
+  </div>
+  
+  <div id="editor-panel">
+    <div id="controls">
+      <h2 style="color: #00ff00; margin-bottom: 20px;">Sound Parameters</h2>
+      
+      <div class="test-buttons">
+        <button onclick="playSound()">Play Sound</button>
+        <button onclick="stopSound()">Stop</button>
+      </div>
+      
+      <!-- Oscillator -->
+      <div class="param-group">
+        <h3>Oscillator</h3>
+        <div class="param">
+          <label>Type</label>
+          <select id="osc-type">
+            <option value="sine">Sine</option>
+            <option value="square">Square</option>
+            <option value="sawtooth">Sawtooth</option>
+            <option value="triangle">Triangle</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Envelope -->
+      <div class="param-group">
+        <h3>Envelope</h3>
+        <div class="param">
+          <label>Attack</label>
+          <div class="param-row">
+            <input type="range" id="env-attack" min="0.001" max="1" step="0.001" value="0.001">
+            <span class="param-value" id="env-attack-val">0.001</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Decay</label>
+          <div class="param-row">
+            <input type="range" id="env-decay" min="0.001" max="2" step="0.001" value="0.1">
+            <span class="param-value" id="env-decay-val">0.1</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Sustain</label>
+          <div class="param-row">
+            <input type="range" id="env-sustain" min="0" max="1" step="0.01" value="0">
+            <span class="param-value" id="env-sustain-val">0</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Release</label>
+          <div class="param-row">
+            <input type="range" id="env-release" min="0.001" max="2" step="0.001" value="0.1">
+            <span class="param-value" id="env-release-val">0.1</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Filter -->
+      <div class="param-group">
+        <h3>Filter</h3>
+        <div class="param">
+          <label>Frequency</label>
+          <div class="param-row">
+            <input type="range" id="filter-freq" min="50" max="8000" step="10" value="2000">
+            <span class="param-value" id="filter-freq-val">2000</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Q</label>
+          <div class="param-row">
+            <input type="range" id="filter-q" min="0.1" max="20" step="0.1" value="1">
+            <span class="param-value" id="filter-q-val">1</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Rolloff</label>
+          <select id="filter-rolloff">
+            <option value="-12">-12 dB</option>
+            <option value="-24">-24 dB</option>
+            <option value="-48">-48 dB</option>
+            <option value="-96">-96 dB</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Filter Envelope -->
+      <div class="param-group">
+        <h3>Filter Envelope</h3>
+        <div class="param">
+          <label>Attack</label>
+          <div class="param-row">
+            <input type="range" id="fenv-attack" min="0.001" max="1" step="0.001" value="0.001">
+            <span class="param-value" id="fenv-attack-val">0.001</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Decay</label>
+          <div class="param-row">
+            <input type="range" id="fenv-decay" min="0.001" max="2" step="0.001" value="0.1">
+            <span class="param-value" id="fenv-decay-val">0.1</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Sustain</label>
+          <div class="param-row">
+            <input type="range" id="fenv-sustain" min="0" max="1" step="0.01" value="0">
+            <span class="param-value" id="fenv-sustain-val">0</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Release</label>
+          <div class="param-row">
+            <input type="range" id="fenv-release" min="0.001" max="2" step="0.001" value="0.1">
+            <span class="param-value" id="fenv-release-val">0.1</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Base Frequency</label>
+          <div class="param-row">
+            <input type="range" id="fenv-base" min="50" max="8000" step="10" value="1000">
+            <span class="param-value" id="fenv-base-val">1000</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Octaves</label>
+          <div class="param-row">
+            <input type="range" id="fenv-octaves" min="-4" max="4" step="0.1" value="2">
+            <span class="param-value" id="fenv-octaves-val">2</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Volume -->
+      <div class="param-group">
+        <h3>Volume</h3>
+        <div class="param">
+          <label>Level (dB)</label>
+          <div class="param-row">
+            <input type="range" id="volume" min="-30" max="0" step="1" value="-12">
+            <span class="param-value" id="volume-val">-12</span>
+          </div>
+        </div>
+        <div class="param">
+          <label>Pan (L/R)</label>
+          <div class="param-row">
+            <input type="range" id="pan" min="-1" max="1" step="0.1" value="0">
+            <span class="param-value" id="pan-val">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="output">
+      <h2 style="color: #00ff00; margin-bottom: 20px;">Generated Code</h2>
+      <div id="code-output">Select a sound to begin editing</div>
+      <button class="copy-btn" onclick="copyCode()">Copy Code</button>
+    </div>
+  </div>
+  
+  <script>
+    // Sound definitions with their default parameters
+    const soundDefaults = {
+      move: {
+        oscillator: 'sine',
+        envelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01 },
+        filter: { frequency: 2000, rolloff: -12, Q: 5 },
+        filterEnvelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01, baseFrequency: 800, octaves: 1 },
+        volume: -18,
+        note: 'C5',
+        duration: '32n'
+      },
+      offScreenWomp: {
+        oscillator: 'sawtooth',
+        envelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.5 },
+        filter: { frequency: 100, rolloff: -24, Q: 10 },
+        filterEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.5, baseFrequency: 100, octaves: 4 },
+        volume: -8,
+        note: 'C2',
+        duration: '4n'
+      },
+      dashLeft: {
+        // Currently uses move + offScreenWomp sounds
+        oscillator: 'sawtooth',
+        envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.15 },
+        filter: { frequency: 800, rolloff: -24, Q: 3 },
+        filterEnvelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.15, baseFrequency: 200, octaves: 3 },
+        volume: -15,
+        pan: -0.3,
+        note: 'C3',
+        duration: '32n'
+      },
+      dashRight: {
+        // Currently uses move + offScreenWomp sounds  
+        oscillator: 'triangle',
+        envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.1 },
+        filter: { frequency: 2500, rolloff: -12, Q: 2 },
+        filterEnvelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.1, baseFrequency: 1000, octaves: 2 },
+        volume: -15,
+        pan: 0.3,
+        note: 'G4',
+        duration: '32n'
+      },
+      jump: {
+        oscillator: 'sine',
+        envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.1 },
+        filter: { frequency: 3000, rolloff: -12, Q: 2 },
+        filterEnvelope: null,
+        volume: -15,
+        note: 'G5',
+        duration: '32n'
+      },
+      superJump: {
+        oscillator: 'sawtooth',
+        envelope: { attack: 0.001, decay: 0.1, sustain: 0.05, release: 0.2 },
+        filter: { frequency: 4000, rolloff: -12, Q: 3 },
+        filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 0.5, release: 0.2, baseFrequency: 2000, octaves: 2 },
+        volume: -12,
+        note: 'C6',
+        duration: '16n'
+      },
+      enemyHit: {
+        oscillator: 'sawtooth',
+        envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.1 },
+        filter: { frequency: 800, rolloff: -12, Q: 3 },
+        filterEnvelope: null,
+        volume: -10,
+        note: 'C4',
+        duration: '32n'
+      },
+      obstacleHit: {
+        oscillator: 'square',
+        envelope: { attack: 0.001, decay: 0.2, sustain: 0.05, release: 0.3 },
+        filter: { frequency: 150, rolloff: -24, Q: 5 },
+        filterEnvelope: null,
+        volume: -5,
+        note: 'G2',
+        duration: '16n'
+      },
+      powerUp: {
+        oscillator: 'sine',
+        envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.2 },
+        filter: { frequency: 2500, rolloff: -12, Q: 2 },
+        filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.2, baseFrequency: 1000, octaves: 3 },
+        volume: -12,
+        note: 'C5',
+        duration: '32n'
+      },
+      laser1: {
+        // Triangle wave with filter sweep
+        oscillator: 'triangle',
+        envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.01 },
+        filter: { frequency: 3000, rolloff: -12, Q: 1 },
+        filterEnvelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01, baseFrequency: 1500, octaves: -1 },
+        volume: -12,
+        note: 'C5',
+        duration: '32n'
+      },
+      laser2: {
+        // Acid stab - mimics the 303 acid line
+        oscillator: 'sawtooth',
+        envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.02 },
+        filter: { frequency: 2000, rolloff: -24, Q: 8 },
+        filterEnvelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.02, baseFrequency: 800, octaves: 2 },
+        volume: -10,
+        note: 'C5',
+        duration: '32n'
+      },
+      laser3: {
+        // Chord stab - harmonizes with the techno stabs
+        oscillator: 'square4',
+        envelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01 },
+        filter: { frequency: 1500, rolloff: -12, Q: 2 },
+        filterEnvelope: null,
+        volume: -14,
+        note: 'C5,E5,G5',
+        duration: '32n'
+      },
+      laser4: {
+        // Echo Pulse - metallic sound
+        oscillator: 'pulse',
+        envelope: { attack: 0.001, decay: 0.04, sustain: 0.2, release: 0.05 },
+        filter: { frequency: 4000, rolloff: -12, Q: 3 },
+        filterEnvelope: { attack: 0.001, decay: 0.02, sustain: 0.5, release: 0.02, baseFrequency: 2000, octaves: 2 },
+        volume: -8,
+        note: 'C5',
+        duration: '32n'
+      },
+      laser5: {
+        // PluckSynth - organic melodic sound
+        oscillator: 'sine',
+        envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 },
+        filter: { frequency: 2000, rolloff: -12, Q: 1 },
+        filterEnvelope: null,
+        volume: -10,
+        note: 'C5',
+        duration: '32n'
+      },
+      laser6: {
+        // Pew Pew - classic laser with pitch sweep
+        oscillator: 'sine',
+        envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.05 },
+        filter: { frequency: 4000, rolloff: -24, Q: 5 },
+        filterEnvelope: null,
+        portamento: 0.08,
+        volume: -6,
+        note: 'C6',
+        duration: '16n'
+      }
+    };
+    
+    let currentSound = null;
+    let currentSynth = null;
+    let currentParams = {};
+    
+    // Initialize Tone.js
+    document.addEventListener('click', async () => {
+      if (Tone.context.state !== 'running') {
+        await Tone.start();
+      }
+    }, { once: true });
+    
+    // Sound item click handler
+    document.querySelectorAll('.sound-item').forEach(item => {
+      item.addEventListener('click', () => {
+        // Update active state
+        document.querySelectorAll('.sound-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        
+        // Load sound
+        loadSound(item.dataset.sound);
+      });
+    });
+    
+    function loadSound(soundName) {
+      currentSound = soundName;
+      
+      // Dispose of old synth
+      if (currentSynth) {
+        currentSynth.dispose();
+      }
+      
+      // Copy default parameters
+      currentParams = JSON.parse(JSON.stringify(soundDefaults[soundName]));
+      
+      // Update UI with default values
+      updateUI();
+      
+      // Create new synth
+      createSynth();
+      
+      // Generate code
+      generateCode();
+    }
+    
+    function updateUI() {
+      // Oscillator
+      document.getElementById('osc-type').value = currentParams.oscillator;
+      
+      // Envelope
+      document.getElementById('env-attack').value = currentParams.envelope.attack;
+      document.getElementById('env-attack-val').textContent = currentParams.envelope.attack;
+      document.getElementById('env-decay').value = currentParams.envelope.decay;
+      document.getElementById('env-decay-val').textContent = currentParams.envelope.decay;
+      document.getElementById('env-sustain').value = currentParams.envelope.sustain;
+      document.getElementById('env-sustain-val').textContent = currentParams.envelope.sustain;
+      document.getElementById('env-release').value = currentParams.envelope.release;
+      document.getElementById('env-release-val').textContent = currentParams.envelope.release;
+      
+      // Filter
+      document.getElementById('filter-freq').value = currentParams.filter.frequency;
+      document.getElementById('filter-freq-val').textContent = currentParams.filter.frequency;
+      document.getElementById('filter-q').value = currentParams.filter.Q;
+      document.getElementById('filter-q-val').textContent = currentParams.filter.Q;
+      document.getElementById('filter-rolloff').value = currentParams.filter.rolloff;
+      
+      // Filter Envelope
+      if (currentParams.filterEnvelope) {
+        document.getElementById('fenv-attack').value = currentParams.filterEnvelope.attack;
+        document.getElementById('fenv-attack-val').textContent = currentParams.filterEnvelope.attack;
+        document.getElementById('fenv-decay').value = currentParams.filterEnvelope.decay;
+        document.getElementById('fenv-decay-val').textContent = currentParams.filterEnvelope.decay;
+        document.getElementById('fenv-sustain').value = currentParams.filterEnvelope.sustain;
+        document.getElementById('fenv-sustain-val').textContent = currentParams.filterEnvelope.sustain;
+        document.getElementById('fenv-release').value = currentParams.filterEnvelope.release;
+        document.getElementById('fenv-release-val').textContent = currentParams.filterEnvelope.release;
+        document.getElementById('fenv-base').value = currentParams.filterEnvelope.baseFrequency;
+        document.getElementById('fenv-base-val').textContent = currentParams.filterEnvelope.baseFrequency;
+        document.getElementById('fenv-octaves').value = currentParams.filterEnvelope.octaves;
+        document.getElementById('fenv-octaves-val').textContent = currentParams.filterEnvelope.octaves;
+      }
+      
+      // Volume
+      document.getElementById('volume').value = currentParams.volume;
+      document.getElementById('volume-val').textContent = currentParams.volume;
+      
+      // Pan
+      document.getElementById('pan').value = currentParams.pan || 0;
+      document.getElementById('pan-val').textContent = currentParams.pan || 0;
+    }
+    
+    function createSynth() {
+      // Create panner for stereo positioning
+      const panner = new Tone.Panner(currentParams.pan || 0).toDestination();
+      
+      if (currentSound === 'laser5') {
+        // Special case for PluckSynth
+        currentSynth = new Tone.PluckSynth({
+          attackNoise: 2,
+          dampening: 4000,
+          resonance: 0.9,
+          volume: currentParams.volume
+        }).connect(panner);
+      } else if (currentSound === 'laser3') {
+        // PolySynth for chord
+        currentSynth = new Tone.PolySynth(Tone.MonoSynth, {
+          oscillator: { type: currentParams.oscillator },
+          envelope: currentParams.envelope,
+          filter: currentParams.filter,
+          volume: currentParams.volume
+        }).connect(panner);
+      } else {
+        // Regular MonoSynth
+        const synthConfig = {
+          oscillator: { type: currentParams.oscillator },
+          envelope: currentParams.envelope,
+          filter: currentParams.filter,
+          volume: currentParams.volume
+        };
+        
+        if (currentParams.filterEnvelope) {
+          synthConfig.filterEnvelope = currentParams.filterEnvelope;
+        }
+        
+        currentSynth = new Tone.MonoSynth(synthConfig).connect(panner);
+      }
+    }
+    
+    function playSound() {
+      if (!currentSynth || !currentSound) return;
+      
+      const note = currentParams.note;
+      const duration = currentParams.duration;
+      
+      if (currentSound === 'laser5') {
+        currentSynth.triggerAttack(note);
+      } else if (note.includes(',')) {
+        currentSynth.triggerAttackRelease(note.split(','), duration);
+      } else {
+        currentSynth.triggerAttackRelease(note, duration);
+      }
+    }
+    
+    function stopSound() {
+      if (currentSynth) {
+        currentSynth.triggerRelease();
+      }
+    }
+    
+    function generateCode() {
+      if (!currentSound) return;
+      
+      let code = '';
+      
+      if (currentSound === 'laser5') {
+        code = `new Tone.PluckSynth({
+  attackNoise: 2,
+  dampening: 4000,
+  resonance: 0.9,
+  volume: ${currentParams.volume}
+}).toDestination()`;
+      } else if (currentSound === 'laser3') {
+        code = `new Tone.PolySynth(Tone.MonoSynth, {
+  oscillator: { type: "${currentParams.oscillator}" },
+  envelope: { attack: ${currentParams.envelope.attack}, decay: ${currentParams.envelope.decay}, sustain: ${currentParams.envelope.sustain}, release: ${currentParams.envelope.release} },
+  filter: { frequency: ${currentParams.filter.frequency}, rolloff: ${currentParams.filter.rolloff}, Q: ${currentParams.filter.Q} },
+  volume: ${currentParams.volume}
+}).toDestination()`;
+      } else {
+        code = `new Tone.MonoSynth({
+  oscillator: { type: "${currentParams.oscillator}" },
+  envelope: { attack: ${currentParams.envelope.attack}, decay: ${currentParams.envelope.decay}, sustain: ${currentParams.envelope.sustain}, release: ${currentParams.envelope.release} },
+  filter: { frequency: ${currentParams.filter.frequency}, rolloff: ${currentParams.filter.rolloff}, Q: ${currentParams.filter.Q} },`;
+        
+        if (currentParams.filterEnvelope) {
+          code += `
+  filterEnvelope: { 
+    attack: ${currentParams.filterEnvelope.attack}, 
+    decay: ${currentParams.filterEnvelope.decay}, 
+    sustain: ${currentParams.filterEnvelope.sustain}, 
+    release: ${currentParams.filterEnvelope.release}, 
+    baseFrequency: ${currentParams.filterEnvelope.baseFrequency}, 
+    octaves: ${currentParams.filterEnvelope.octaves} 
+  },`;
+        }
+        
+        code += `
+  volume: ${currentParams.volume}
+}).toDestination()`;
+      }
+      
+      // Add the variable assignment part
+      if (currentSound.startsWith('laser')) {
+        const laserNum = currentSound.replace('laser', '');
+        code = `// Laser ${laserNum}\nlaserSounds[${laserNum - 1}] = ${code};`;
+      } else {
+        code = `${currentSound}: ${code},`;
+      }
+      
+      document.getElementById('code-output').textContent = code;
+    }
+    
+    function copyCode() {
+      const code = document.getElementById('code-output').textContent;
+      navigator.clipboard.writeText(code);
+    }
+    
+    // Parameter change handlers
+    document.getElementById('osc-type').addEventListener('change', (e) => {
+      if (!currentParams) return;
+      currentParams.oscillator = e.target.value;
+      createSynth();
+      generateCode();
+    });
+    
+    // Envelope parameters
+    ['attack', 'decay', 'sustain', 'release'].forEach(param => {
+      const slider = document.getElementById(`env-${param}`);
+      const display = document.getElementById(`env-${param}-val`);
+      
+      slider.addEventListener('input', (e) => {
+        if (!currentParams) return;
+        const value = parseFloat(e.target.value);
+        currentParams.envelope[param] = value;
+        display.textContent = value;
+        createSynth();
+        generateCode();
+      });
+    });
+    
+    // Filter parameters
+    document.getElementById('filter-freq').addEventListener('input', (e) => {
+      if (!currentParams) return;
+      const value = parseInt(e.target.value);
+      currentParams.filter.frequency = value;
+      document.getElementById('filter-freq-val').textContent = value;
+      createSynth();
+      generateCode();
+    });
+    
+    document.getElementById('filter-q').addEventListener('input', (e) => {
+      if (!currentParams) return;
+      const value = parseFloat(e.target.value);
+      currentParams.filter.Q = value;
+      document.getElementById('filter-q-val').textContent = value;
+      createSynth();
+      generateCode();
+    });
+    
+    document.getElementById('filter-rolloff').addEventListener('change', (e) => {
+      if (!currentParams) return;
+      currentParams.filter.rolloff = parseInt(e.target.value);
+      createSynth();
+      generateCode();
+    });
+    
+    // Filter Envelope parameters
+    ['attack', 'decay', 'sustain', 'release'].forEach(param => {
+      const slider = document.getElementById(`fenv-${param}`);
+      const display = document.getElementById(`fenv-${param}-val`);
+      
+      slider.addEventListener('input', (e) => {
+        if (!currentParams || !currentParams.filterEnvelope) return;
+        const value = parseFloat(e.target.value);
+        currentParams.filterEnvelope[param] = value;
+        display.textContent = value;
+        createSynth();
+        generateCode();
+      });
+    });
+    
+    document.getElementById('fenv-base').addEventListener('input', (e) => {
+      if (!currentParams || !currentParams.filterEnvelope) return;
+      const value = parseInt(e.target.value);
+      currentParams.filterEnvelope.baseFrequency = value;
+      document.getElementById('fenv-base-val').textContent = value;
+      createSynth();
+      generateCode();
+    });
+    
+    document.getElementById('fenv-octaves').addEventListener('input', (e) => {
+      if (!currentParams || !currentParams.filterEnvelope) return;
+      const value = parseFloat(e.target.value);
+      currentParams.filterEnvelope.octaves = value;
+      document.getElementById('fenv-octaves-val').textContent = value;
+      createSynth();
+      generateCode();
+    });
+    
+    // Volume
+    document.getElementById('volume').addEventListener('input', (e) => {
+      if (!currentParams) return;
+      const value = parseInt(e.target.value);
+      currentParams.volume = value;
+      document.getElementById('volume-val').textContent = value;
+      createSynth();
+      generateCode();
+    });
+    
+    // Pan
+    document.getElementById('pan').addEventListener('input', (e) => {
+      if (!currentParams) return;
+      const value = parseFloat(e.target.value);
+      currentParams.pan = value;
+      document.getElementById('pan-val').textContent = value;
+      createSynth();
+      generateCode();
+    });
+  </script>
+</body>
+</html>
