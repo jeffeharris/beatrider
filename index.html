@@ -46,12 +46,12 @@
       max-height: 0;
       overflow: hidden;
       background: rgba(0, 0, 0, 0.95);
-      border: 1px solid #0f0;
+      border: 0px solid #0f0;
       border-radius: 0 0 8px 8px;
       border-top: none;
       z-index: 9;
       backdrop-filter: blur(5px);
-      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s, opacity 0.3s ease;
+      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s, opacity 0.3s ease, border-width 0.4s;
       padding: 0 10px;
       opacity: 0.15; /* Very transparent by default */
     }
@@ -64,6 +64,7 @@
     .left-panel.expanded {
       max-height: 400px;
       padding: 10px;
+      border-width: 1px;
       overflow-y: auto;
       opacity: 1 !important; /* Always fully visible when expanded */
     }
@@ -386,9 +387,17 @@
     
     <!-- Minimized music controls -->
     <div id="musicControls" class="music-controls">
-      <button id="playBtn" class="control-btn" title="Play">▶</button>
-      <button id="stopBtn" class="control-btn" title="Stop">■</button>
-      <div class="track-squares">
+      <button id="playPauseBtn" class="control-btn" title="Play/Pause">▶</button>
+      <button id="expandBtn" class="control-btn" title="Settings">⚙</button>
+      <button id="gridToggleBtn" class="control-btn" title="Toggle Grid">⊞</button>
+    </div>
+    
+    <!-- Expanded panel (hidden by default) -->
+    <div class="left-panel" id="expandedPanel">
+      <h1>MELODIC TECHNO ENGINE</h1>
+      
+      <!-- Track indicators -->
+      <div class="track-squares" style="margin: 10px 0; display: flex; gap: 5px; justify-content: center;">
         <div class="track-square" id="kickSquare" data-track="kick" title="Kick"></div>
         <div class="track-square" id="snareSquare" data-track="snare" title="Snare"></div>
         <div class="track-square" id="hatSquare" data-track="hat" title="Hi-hat"></div>
@@ -396,14 +405,6 @@
         <div class="track-square" id="stabSquare" data-track="stab" title="Stab"></div>
         <div class="track-square" id="subSquare" data-track="sub" title="Sub"></div>
       </div>
-      <button id="gridToggleBtn" class="control-btn" title="Toggle Grid">⊞</button>
-      <button id="expandBtn" class="control-btn" title="Settings">⚙</button>
-    </div>
-    
-    <!-- Expanded panel (hidden by default) -->
-    <div class="left-panel" id="expandedPanel">
-      <h1>MELODIC TECHNO ENGINE</h1>
-      <button id="minimizeBtn" style="float: right; margin-top: -30px;">×</button>
       
       <div class="controls">
         <div class="slider-row">
@@ -1227,22 +1228,29 @@ function evolve() {
 Tone.Transport.scheduleRepeat(() => evolve(), "1m");
 
 // Controls
-document.getElementById('playBtn').addEventListener('click', async () => {
-  await Tone.start();
-  currentBar = 0;
-  currentChordIndex = 0;
-  lastSection = '';
-  updatePatterns();
-  Tone.Transport.start();
-  document.getElementById('status').textContent = 'PLAYING';
-});
-
-document.getElementById('stopBtn').addEventListener('click', () => {
-  Tone.Transport.stop();
-  Tone.Transport.cancel();
-  currentBar = 0;
-  document.getElementById('status').textContent = 'STOPPED';
-});
+const playPauseBtn = document.getElementById('playPauseBtn');
+if (playPauseBtn) {
+  playPauseBtn.addEventListener('click', async () => {
+    await Tone.start();
+    if (Tone.Transport.state !== 'started') {
+      // Play
+      currentBar = 0;
+      currentChordIndex = 0;
+      lastSection = '';
+      updatePatterns();
+      Tone.Transport.start();
+      document.getElementById('status').textContent = 'PLAYING';
+      playPauseBtn.innerHTML = '⏸';
+      playPauseBtn.title = 'Pause';
+    } else {
+      // Pause
+      Tone.Transport.pause();
+      document.getElementById('status').textContent = 'PAUSED';
+      playPauseBtn.innerHTML = '▶';
+      playPauseBtn.title = 'Play';
+    }
+  });
+}
 
 document.getElementById('bpmSlider').addEventListener('input', (e) => {
   const bpm = parseInt(e.target.value);
@@ -1366,7 +1374,6 @@ Tone.Transport.bpm.value = 132;
 
 // Expand/minimize panel with smooth animation
 const expandBtn = document.getElementById('expandBtn');
-const minimizeBtn = document.getElementById('minimizeBtn');
 const expandedPanel = document.getElementById('expandedPanel');
 const musicControls = document.getElementById('musicControls');
 
@@ -1428,12 +1435,6 @@ if (expandBtn) {
   });
 }
 
-if (minimizeBtn) {
-  minimizeBtn.addEventListener('click', () => {
-    expandedPanel.classList.remove('expanded');
-    expandBtn.innerHTML = '⚙';
-  });
-}
 
 // Game sounds that blend with the music - route through sidechain for cohesion
 const gameReverb = new Tone.Reverb({
@@ -2128,12 +2129,15 @@ class Main extends Phaser.Scene {
         this._pulseGrid();
       },
       toggleGrid: ()=>{ 
-        // Toggle grid from external button
+        // Toggle grid from external button - match G key behavior
         this.gridVisible = !this.gridVisible;
         gridEnabled = this.gridVisible;
         saveGameData({ gridEnabled: gridEnabled });
-        const gridTextContent = isMobile ? 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') : 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]';
-        this.gridText.setText(gridTextContent);
+        if (this.gridText) {
+          const gridTextContent = isMobile ? 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') : 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]';
+          this.gridText.setText(gridTextContent);
+        }
+        // Immediately clear graphics when hiding, just like G key does
         if(!this.gridVisible && this.gridGraphics) {
           this.gridGraphics.clear();
         }
