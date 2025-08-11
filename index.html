@@ -1249,12 +1249,12 @@ function updatePlayPauseButton() {
   const btn = document.getElementById('playPauseBtn');
   if (!btn) return;
   
-  // Use text symbols for now
+  // Use simple text that won't render as emojis
   if (uiState.isPlaying) {
-    btn.textContent = '⏸';
+    btn.textContent = '||';
     btn.title = 'Pause';
   } else {
-    btn.textContent = '▶';
+    btn.textContent = '▸';
     btn.title = 'Play';
   }
 }
@@ -1264,10 +1264,10 @@ function updateSettingsButton() {
   if (!btn) return;
   
   if (uiState.settingsOpen) {
-    btn.textContent = '✕';
+    btn.textContent = 'X';
     btn.title = 'Close Settings';
   } else {
-    btn.textContent = '⚙';
+    btn.textContent = '☰';
     btn.title = 'Settings';
   }
 }
