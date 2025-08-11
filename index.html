@@ -2483,6 +2483,9 @@ class Main extends Phaser.Scene {
       this.lastSwipeX = pointer.x; // Track last X position for continuous swipes
       this.lastSwipeY = pointer.y; // Track last Y position for continuous swipes
       this.swipeHistory = []; // Track swipe path for down-up detection
+      this.swipeStartTime = null; // Reset swipe timing
+      this.swipeStartX = null;
+      this.actionCooldown = false; // Clear any lingering cooldown
       
       // Show touch indicator
       this.touchIndicator.setPosition(pointer.x, pointer.y);
@@ -2521,41 +2524,187 @@ class Main extends Phaser.Scene {
       const dy = pointer.y - this.touchStartY;
       const elapsed = this.time.now - this.touchStartTime;
       
-      // Horizontal swipe - track incremental movements (no time limit for continuous movement)
+      // Horizontal swipe - track incremental movements
       const incrementalX = pointer.x - (this.lastSwipeX || this.touchStartX);
       
-      if (Math.abs(incrementalX) > this.swipeThreshold && !this.isMoving) {
-        const now = this.time.now;
+      // Log EVERY movement, even tiny ones
+      if (Math.abs(incrementalX) > 0) {
+        const willTriggerMove = Math.abs(incrementalX) > this.swipeThreshold && !this.isMoving && !this.actionCooldown;
+        const willCheckSpeed = Math.abs(incrementalX) > 20 && !this.actionCooldown;
+        console.log('MOVEMENT:', {
+          incrementalX: incrementalX.toFixed(1),
+          totalFromStart: (pointer.x - this.touchStartX).toFixed(1),
+          actionCooldown: this.actionCooldown,
+          isMoving: this.isMoving,
+          willCheckSpeed: willCheckSpeed,
+          willTriggerMove: willTriggerMove,
+          thresholds: `speed:20px move:${this.swipeThreshold}px`
+        });
+      }
+      
+      // DON'T update lastSwipeX here - wait until after processing!
+      
+      // If we executed an action and user is still moving significantly, stay in cooldown
+      if (this.actionCooldown && Math.abs(incrementalX) > 5) {
+        console.log('COOLDOWN: Still swiping after action, waiting for stop');
+        // Don't return - still allow vertical swipes for jumping
+      } else if (this.actionCooldown && Math.abs(incrementalX) <= 5) {
+        // Movement has stopped, exit cooldown
+        console.log('COOLDOWN END: Movement stopped');
+        this.actionCooldown = false;
+        this.touchStartX = pointer.x; // Reset reference point
+        this.lastSwipeX = pointer.x; // Also reset lastSwipeX for next swipe
+        this.swipeStartTime = null; // Reset swipe motion tracking
+        this.swipeStartX = null;
+      }
+      
+      // Check for any significant movement (but skip if in cooldown)
+      if (Math.abs(incrementalX) > 30 && !this.actionCooldown) {
         const swipeDirection = incrementalX > 0 ? 'right' : 'left';
         
-        // Check for double-swipe
-        if (this.lastSwipeDirection === swipeDirection && 
-            now - this.lastSwipeTime < this.doubleSwipeWindow) {
-          // Double-swipe detected - dash!
-          if (swipeDirection === 'right') {
-            this.dashRight();
-          } else {
-            this.dashLeft();
+        // Calculate Y movement to detect diagonal
+        const incrementalY = pointer.y - (this.lastSwipeY || this.touchStartY);
+        const isDiagonal = Math.abs(incrementalY) > 25; // Significant Y movement = diagonal
+        
+        // 1. RAW SWIPE DATA
+        console.log('SWIPE DETECTED:', {
+          incrementalX: incrementalX.toFixed(1),
+          incrementalY: incrementalY.toFixed(1),
+          isDiagonal: isDiagonal,
+          direction: swipeDirection
+        });
+        
+        // Diagonal swipe = DASH (2 lanes)
+        if (isDiagonal && !this.isDashing) {
+          // 2. DETECTED INPUT
+          console.log('DETECTED: DIAGONAL SWIPE for DASH', {
+            x: Math.abs(incrementalX).toFixed(0) + 'px',
+            y: Math.abs(incrementalY).toFixed(0) + 'px',
+            direction: swipeDirection
+          });
+          
+          // Fast swipe detected - dash 2 lanes!
+          // First, cancel any in-progress movement
+          if (this.isMoving && !this.isJumping) {
+            console.log('CANCELLING in-progress movement');
+            this.tweens.killTweensOf(this.player);
+            this.isMoving = false;
           }
-          // Reset to prevent triple-swipe
-          this.lastSwipeDirection = null;
-          this.lastSwipeTime = 0;
-          // Visual feedback
-          this.touchIndicator.setFillStyle(0x00ffff, 0.8);
-        } else {
-          // Single swipe - regular move
-          if (incrementalX > 0) {
+          
+          // Now dash 2 lanes from current position
+          const targetLane = swipeDirection === 'right'
+            ? Math.min(LANES, this.playerLane + 2)
+            : Math.max(-1, this.playerLane - 2);
+          
+          if (targetLane !== this.playerLane) {
+            // 3. EXECUTED COMMAND
+            console.log('EXECUTING: DASH', {
+              from: this.playerLane,
+              to: targetLane,
+              direction: swipeDirection
+            });
+            
+            this.isDashing = true;
+            this.isMoving = true;
+            
+            // Enter cooldown to prevent multiple actions from one swipe
+            this.actionCooldown = true;
+            this.swipeStartTime = null;  // Reset swipe motion tracking
+            this.swipeStartX = null;
+            
+            // Snap to current lane position before dashing
+            if (!this.isJumping) {
+              this.player.x = this._laneX(this.playerLane);
+            }
+            
+            // Create dash trail effect
+            const trail1 = this.add.image(this.player.x, this.player.y, 'playerTex');
+            trail1.setAlpha(0.5);
+            trail1.setTint(0x00ffff);
+            const trail2 = this.add.image(this.player.x, this.player.y, 'playerTex');
+            trail2.setAlpha(0.3);
+            trail2.setTint(0x00ffff);
+            
+            // Update to target lane
+            this.playerLane = targetLane;
+            
+            // Play dash sound
+            try {
+              gameSounds.dash.triggerAttackRelease("C7", "32n");
+            } catch(e) {}
+            
+            // Dash animation
+            const targetX = this._laneX(targetLane);
+            this.tweens.add({
+              targets: this.player,
+              x: targetX,
+              duration: PLAYER_CONFIG.dash.duration,
+              ease: 'Power2',
+              onComplete: () => {
+                this.isDashing = false;
+                this.isMoving = false;
+              }
+            });
+            
+            // Trail animation
+            this.tweens.add({
+              targets: [trail1, trail2],
+              x: targetX,
+              duration: PLAYER_CONFIG.dash.duration,
+              ease: 'Power2',
+              onComplete: () => {
+                trail1.destroy();
+                trail2.destroy();
+              }
+            });
+            
+            // Visual feedback
+            this.touchIndicator.setFillStyle(0x00ffff, 0.8);
+          }
+          
+          // Update tracking
+          this.lastSwipeX = pointer.x;
+          
+        } else if (Math.abs(incrementalX) > 35 && !this.isMoving && !isDiagonal) { // Straight horizontal swipe for move
+          // 2. DETECTED INPUT
+          console.log('DETECTED: STRAIGHT SWIPE for MOVE', {
+            incrementalX: incrementalX.toFixed(1),
+            incrementalY: incrementalY.toFixed(1),
+            direction: swipeDirection
+          });
+          
+          // 3. EXECUTED COMMAND
+          console.log('EXECUTING: MOVE', {
+            from: this.playerLane,
+            to: this.playerLane + (swipeDirection === 'right' ? 1 : -1),
+            direction: swipeDirection
+          });
+          
+          // Normal speed swipe - move 1 lane
+          if (swipeDirection === 'right') {
             this.moveRight();
           } else {
             this.moveLeft();
           }
-          // Track for potential double-swipe
-          this.lastSwipeDirection = swipeDirection;
-          this.lastSwipeTime = now;
+          
+          // Update reference point after action executes
+          this.lastSwipeX = pointer.x;
+          
+          // Enter cooldown to prevent multiple actions from one swipe
+          this.actionCooldown = true;
+          this.swipeStartTime = null;  // Reset swipe motion tracking
+          this.swipeStartX = null;
+        } else if (Math.abs(incrementalX) > 20) {
+          // Movement detected but blocked
+          console.log('BLOCKED:', {
+            reason: this.isMoving ? 'isMoving=true' : 'below threshold',
+            incrementalX: incrementalX,
+            threshold: this.swipeThreshold
+          });
         }
-        
-        this.lastSwipeX = pointer.x; // Track last position for next swipe
       }
+      
+      // DON'T update lastSwipeX here - only update when action executes!
       
       // Vertical swipe detection - track incremental Y movements (no time limit)
       const incrementalY = pointer.y - (this.lastSwipeY || this.touchStartY);
@@ -2603,17 +2752,33 @@ class Main extends Phaser.Scene {
         }
       }
       
-      // Simple vertical swipe up for regular jump (using sensitivity threshold)
-      else if (incrementalY < -this.verticalSwipeThreshold && Math.abs(incrementalY) > Math.abs(incrementalX) && !this.isJumping) {
+      // Simple vertical swipe up for regular jump
+      const upSwipe = pointer.y - (this.lastSwipeY || this.touchStartY);
+      if (upSwipe < -30 && !this.isJumping && !this.actionCooldown) {
+        // Check if this is primarily vertical (not part of diagonal dash)
+        const horizontalMove = Math.abs(pointer.x - (this.lastSwipeX || this.touchStartX));
+        const isMainlyVertical = Math.abs(upSwipe) > horizontalMove * 1.5; // Y must be 1.5x larger than X
+        
         // Check if this is just a simple up swipe (not part of down-up pattern)
         const hasRecentDown = this.swipeHistory.some(point => 
           point.y > pointer.y && 
           this.time.now - point.time < 200
         );
         
-        if (!hasRecentDown) {
+        if (isMainlyVertical && !hasRecentDown) {
+          console.log('DETECTED: UP SWIPE for JUMP', {
+            upSwipe: upSwipe.toFixed(1),
+            horizontalMove: horizontalMove.toFixed(1),
+            isMainlyVertical: isMainlyVertical
+          });
           this.jump();
           this.lastSwipeY = pointer.y; // Track last Y position
+          this.actionCooldown = true; // Prevent multiple jumps
+          
+          // Clear cooldown after a short delay
+          this.time.delayedCall(200, () => {
+            this.actionCooldown = false;
+          });
         }
       }
     });
