@@ -2,18 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Beat Rider - Melodic Techno</title>
-  
-  <!-- PWA Meta Tags -->
-  <meta name="theme-color" content="#000000">
-  <meta name="description" content="A retro lane-based rhythm shooter game">
-  <link rel="manifest" href="manifest.json">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="BeatRider">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  
   <script src="https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   <style>
@@ -46,12 +35,12 @@
       max-height: 0;
       overflow: hidden;
       background: rgba(0, 0, 0, 0.95);
-      border: 0px solid #0f0;
+      border: 1px solid #0f0;
       border-radius: 0 0 8px 8px;
       border-top: none;
       z-index: 9;
       backdrop-filter: blur(5px);
-      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s, opacity 0.3s ease, border-width 0.4s;
+      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s, opacity 0.3s ease;
       padding: 0 10px;
       opacity: 0.15; /* Very transparent by default */
     }
@@ -64,7 +53,6 @@
     .left-panel.expanded {
       max-height: 400px;
       padding: 10px;
-      border-width: 1px;
       overflow-y: auto;
       opacity: 1 !important; /* Always fully visible when expanded */
     }
@@ -175,7 +163,7 @@
     
     /* Minimized music controls */
     .music-controls {
-      position: fixed;
+      position: absolute;
       top: 10px;
       left: 10px;
       display: flex;
@@ -189,9 +177,6 @@
       backdrop-filter: blur(5px);
       opacity: 0.15; /* Very transparent by default */
       transition: opacity 0.3s ease;
-      max-width: calc(100vw - 20px);
-      overflow-x: auto;
-      flex-wrap: wrap;
     }
     
     .music-controls:hover,
@@ -225,7 +210,6 @@
       padding: 0 10px;
       border-left: 1px solid #0f0;
       border-right: 1px solid #0f0;
-      flex-wrap: nowrap;
     }
     
     .track-square {
@@ -264,72 +248,15 @@
     }
     
     body.mobile .music-controls {
-      padding: 8px;
-      gap: 8px;
-      max-width: calc(100vw - 16px);
+      padding: 15px;
+      gap: 15px;
     }
     
     body.mobile .control-btn {
-      width: 45px;
-      height: 45px;
-      font-size: 24px;
+      width: 60px;
+      height: 60px;
+      font-size: 30px;
       border-width: 2px;
-    }
-    
-    /* Small screen adjustments */
-    @media (max-width: 480px) and (orientation: portrait) {
-      .music-controls {
-        padding: 2px;
-        gap: 2px;
-        flex-wrap: nowrap;
-        max-height: 40px;
-      }
-      
-      .control-btn {
-        width: 26px;
-        height: 26px;
-        font-size: 14px;
-      }
-      
-      .track-squares {
-        flex-wrap: nowrap;
-        gap: 1px;
-        padding: 0 3px;
-      }
-      
-      .track-square {
-        width: 18px;
-        height: 18px;
-      }
-      
-      body.mobile .control-btn {
-        width: 28px;
-        height: 28px;
-        font-size: 16px;
-      }
-      
-      body.mobile .track-squares {
-        gap: 1px;
-        padding: 0 3px;
-      }
-    }
-    
-    @media (max-width: 480px) and (orientation: landscape) {
-      .music-controls {
-        padding: 5px;
-        gap: 5px;
-      }
-      
-      .control-btn {
-        width: 35px;
-        height: 35px;
-        font-size: 18px;
-      }
-      
-      .track-square {
-        width: 25px;
-        height: 25px;
-      }
     }
     
     body.mobile .track-square {
@@ -387,17 +314,9 @@
     
     <!-- Minimized music controls -->
     <div id="musicControls" class="music-controls">
-      <button id="playPauseBtn" class="control-btn" title="Play/Pause">▶</button>
-      <button id="expandBtn" class="control-btn" title="Settings">⚙</button>
-      <button id="gridToggleBtn" class="control-btn" title="Toggle Grid">⊞</button>
-    </div>
-    
-    <!-- Expanded panel (hidden by default) -->
-    <div class="left-panel" id="expandedPanel">
-      <h1>MELODIC TECHNO ENGINE</h1>
-      
-      <!-- Track indicators -->
-      <div class="track-squares" style="margin: 10px 0; display: flex; gap: 5px; justify-content: center;">
+      <button id="playBtn" class="control-btn" title="Play">▶</button>
+      <button id="stopBtn" class="control-btn" title="Stop">■</button>
+      <div class="track-squares">
         <div class="track-square" id="kickSquare" data-track="kick" title="Kick"></div>
         <div class="track-square" id="snareSquare" data-track="snare" title="Snare"></div>
         <div class="track-square" id="hatSquare" data-track="hat" title="Hi-hat"></div>
@@ -405,31 +324,16 @@
         <div class="track-square" id="stabSquare" data-track="stab" title="Stab"></div>
         <div class="track-square" id="subSquare" data-track="sub" title="Sub"></div>
       </div>
+      <button id="gridToggleBtn" class="control-btn" title="Toggle Grid">⊞</button>
+      <button id="expandBtn" class="control-btn" title="Settings">⚙</button>
+    </div>
+    
+    <!-- Expanded panel (hidden by default) -->
+    <div class="left-panel" id="expandedPanel">
+      <h1>MELODIC TECHNO ENGINE</h1>
+      <button id="minimizeBtn" style="float: right; margin-top: -30px;">×</button>
       
       <div class="controls">
-        <div class="slider-row">
-          <label class="slider-label">MOOD:</label>
-          <select id="musicPresetSelector" class="sound-select">
-            <option value="">Custom</option>
-            <option value="chill">Chill</option>
-            <option value="driving" selected>Driving</option>
-            <option value="peak">Peak Time</option>
-            <option value="acid">Acid Storm</option>
-            <option value="trance">Trance</option>
-          </select>
-          <span id="musicPresetDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Classic techno</span>
-        </div>
-        <div class="slider-row">
-          <label class="slider-label">DIFFICULTY:</label>
-          <select id="difficultySelector" class="sound-select">
-            <option value="zen">Zen Mode</option>
-            <option value="normal" selected>Normal</option>
-            <option value="intense">Intense</option>
-            <option value="chaos">Chaos</option>
-          </select>
-          <span id="difficultyDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Standard</span>
-        </div>
-        <hr style="border-color: #0f0; margin: 15px 0; opacity: 0.3;">
         <div class="slider-row">
           <label class="slider-label">BPM:</label>
           <input type="range" id="bpmSlider" min="120" max="150" value="132" class="slider">
@@ -1228,29 +1132,22 @@ function evolve() {
 Tone.Transport.scheduleRepeat(() => evolve(), "1m");
 
 // Controls
-const playPauseBtn = document.getElementById('playPauseBtn');
-if (playPauseBtn) {
-  playPauseBtn.addEventListener('click', async () => {
-    await Tone.start();
-    if (Tone.Transport.state !== 'started') {
-      // Play
-      currentBar = 0;
-      currentChordIndex = 0;
-      lastSection = '';
-      updatePatterns();
-      Tone.Transport.start();
-      document.getElementById('status').textContent = 'PLAYING';
-      playPauseBtn.innerHTML = '⏸';
-      playPauseBtn.title = 'Pause';
-    } else {
-      // Pause
-      Tone.Transport.pause();
-      document.getElementById('status').textContent = 'PAUSED';
-      playPauseBtn.innerHTML = '▶';
-      playPauseBtn.title = 'Play';
-    }
-  });
-}
+document.getElementById('playBtn').addEventListener('click', async () => {
+  await Tone.start();
+  currentBar = 0;
+  currentChordIndex = 0;
+  lastSection = '';
+  updatePatterns();
+  Tone.Transport.start();
+  document.getElementById('status').textContent = 'PLAYING';
+});
+
+document.getElementById('stopBtn').addEventListener('click', () => {
+  Tone.Transport.stop();
+  Tone.Transport.cancel();
+  currentBar = 0;
+  document.getElementById('status').textContent = 'STOPPED';
+});
 
 document.getElementById('bpmSlider').addEventListener('input', (e) => {
   const bpm = parseInt(e.target.value);
@@ -1278,77 +1175,6 @@ document.getElementById('soundSelector').addEventListener('change', (e) => {
   document.getElementById('soundDisplay').textContent = e.target.options[e.target.selectedIndex].text;
 });
 
-// Music preset definitions
-const MUSIC_PRESETS = {
-  'chill': { bpm: 122, energy: 30, tension: 20, description: 'Laid back minimal' },
-  'driving': { bpm: 132, energy: 60, tension: 40, description: 'Classic techno' },
-  'peak': { bpm: 138, energy: 85, tension: 70, description: 'Peak time energy' },
-  'acid': { bpm: 135, energy: 75, tension: 90, description: '303 madness' },
-  'trance': { bpm: 140, energy: 70, tension: 50, description: 'Euphoric' }
-};
-
-// Difficulty preset definitions
-const DIFFICULTY_PRESETS = {
-  'zen': { speedMult: 0.5, fireMult: 2.0, spawnMult: 0.5, description: 'Relaxed' },
-  'normal': { speedMult: 1.0, fireMult: 1.0, spawnMult: 1.0, description: 'Standard' },
-  'intense': { speedMult: 1.5, fireMult: 0.8, spawnMult: 1.3, description: 'Challenging' },
-  'chaos': { speedMult: 2.0, fireMult: 0.5, spawnMult: 2.0, description: 'Maximum chaos' }
-};
-
-let currentDifficulty = DIFFICULTY_PRESETS.normal;
-
-// Music preset selector
-document.getElementById('musicPresetSelector')?.addEventListener('change', (e) => {
-  const presetKey = e.target.value;
-  if (presetKey && MUSIC_PRESETS[presetKey]) {
-    const preset = MUSIC_PRESETS[presetKey];
-    
-    // Apply preset values
-    Tone.Transport.bpm.value = preset.bpm;
-    energyLevel = preset.energy;
-    tensionLevel = preset.tension;
-    
-    // Update sliders
-    document.getElementById('bpmSlider').value = preset.bpm;
-    document.getElementById('bpmDisplay').textContent = preset.bpm;
-    document.getElementById('energySlider').value = preset.energy;
-    document.getElementById('energyDisplay').textContent = preset.energy;
-    document.getElementById('tensionSlider').value = preset.tension;
-    document.getElementById('tensionDisplay').textContent = preset.tension;
-    
-    // Update description
-    document.getElementById('musicPresetDisplay').textContent = preset.description;
-    
-    // Apply tension if playing
-    if (Tone.Transport.state === 'started') {
-      applyTension();
-    }
-  } else {
-    document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
-  }
-});
-
-// Difficulty selector
-document.getElementById('difficultySelector')?.addEventListener('change', (e) => {
-  const diffKey = e.target.value;
-  if (DIFFICULTY_PRESETS[diffKey]) {
-    currentDifficulty = DIFFICULTY_PRESETS[diffKey];
-    document.getElementById('difficultyDisplay').textContent = currentDifficulty.description;
-  }
-});
-
-// Update sliders to set preset to custom
-const markCustomPreset = () => {
-  document.getElementById('musicPresetSelector').value = '';
-  document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
-};
-
-// Modify existing slider handlers to mark as custom
-const originalBpmHandler = document.getElementById('bpmSlider').oninput;
-document.getElementById('bpmSlider').addEventListener('input', markCustomPreset);
-document.getElementById('energySlider').addEventListener('input', markCustomPreset);
-document.getElementById('tensionSlider').addEventListener('input', markCustomPreset);
-
 // Initial BPM
 Tone.Transport.bpm.value = 132;
 
@@ -1374,6 +1200,7 @@ Tone.Transport.bpm.value = 132;
 
 // Expand/minimize panel with smooth animation
 const expandBtn = document.getElementById('expandBtn');
+const minimizeBtn = document.getElementById('minimizeBtn');
 const expandedPanel = document.getElementById('expandedPanel');
 const musicControls = document.getElementById('musicControls');
 
@@ -1435,6 +1262,12 @@ if (expandBtn) {
   });
 }
 
+if (minimizeBtn) {
+  minimizeBtn.addEventListener('click', () => {
+    expandedPanel.classList.remove('expanded');
+    expandBtn.innerHTML = '⚙';
+  });
+}
 
 // Game sounds that blend with the music - route through sidechain for cohesion
 const gameReverb = new Tone.Reverb({
@@ -1443,16 +1276,6 @@ const gameReverb = new Tone.Reverb({
 }).connect(sidechain);
 
 // Game sound effects - musical and in-key
-// Create off-screen distortion effect chain
-const offScreenDistortion = new Tone.Distortion(0.8).connect(sidechain);
-const offScreenFilter = new Tone.AutoFilter({
-  frequency: "8n",
-  baseFrequency: 200,
-  octaves: 3,
-  depth: 0.8
-}).connect(offScreenDistortion);
-offScreenFilter.start();
-
 const gameSounds = {
   // Movement - subtle filter sweep in key
   move: new Tone.MonoSynth({
@@ -1461,31 +1284,6 @@ const gameSounds = {
     filter: { frequency: 2000, rolloff: -12, Q: 5 },
     filterEnvelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01, baseFrequency: 800, octaves: 1 },
     volume: -18
-  }).connect(gameReverb),
-  
-  // Off-screen womp effect
-  offScreenWomp: new Tone.MonoSynth({
-    oscillator: { type: "sawtooth" },
-    envelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.5 },
-    filter: { frequency: 100, rolloff: -24, Q: 10 },
-    filterEnvelope: { 
-      attack: 0.01, 
-      decay: 0.3, 
-      sustain: 0.2, 
-      release: 0.5, 
-      baseFrequency: 100, 
-      octaves: 4 
-    },
-    volume: -8
-  }).connect(offScreenFilter),
-  
-  // Jump charge sound - rising pitch
-  jumpCharge: new Tone.MonoSynth({
-    oscillator: { type: "sawtooth" },
-    envelope: { attack: 0.5, decay: 0, sustain: 1, release: 0.1 },
-    filter: { frequency: 200, rolloff: -24, Q: 8 },
-    filterEnvelope: { attack: 0, decay: 0, sustain: 1, release: 0.1 },
-    volume: -12
   }).connect(gameReverb),
   
   // Multiple laser sounds that complement the music
@@ -1594,60 +1392,28 @@ const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
                  (navigator.maxTouchPoints > 0);
 
 // Initialize grid setting early to avoid reference errors
-let gridEnabled = true; // Will be updated after savedData is loaded
+let gridEnabled = true;
 
 // Apply mobile class to body for CSS styling
 if (isMobile) {
   document.body.classList.add('mobile');
 }
 
-// Initialize game dimensions - now dynamic for resize support
-let WIDTH = window.innerWidth;
-let HEIGHT = window.innerHeight;
-const LANES = 5;
-let LANE_W = WIDTH/LANES;
+// Initialize Phaser game - use most of viewport
+const WIDTH = window.innerWidth;
+const HEIGHT = window.innerHeight
+const LANES=5, LANE_W=WIDTH/LANES;
 
-// Storage management
-const STORAGE_KEY = 'beatrider_data';
-
-function loadGameData() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) {
-      return JSON.parse(data);
-    }
-  } catch (e) {
-    console.warn('Failed to load game data:', e);
-  }
-  return {
-    highScore: 0,
-    gridEnabled: true,
-    masterVolume: 0.7
-  };
-}
-
-function saveGameData(data) {
-  try {
-    const current = loadGameData();
-    const updated = { ...current, ...data };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  } catch (e) {
-    console.warn('Failed to save game data:', e);
-  }
-}
-
-// Load saved data
-const savedData = loadGameData();
-let sessionHighScore = savedData.highScore;
-gridEnabled = savedData.gridEnabled;
+// Session highscore tracking
+let sessionHighScore = 0;
 // Game dimensions initialized based on viewport - adjust for mobile
-let PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobile
+const PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobile
 const ENEMY_SPEED_BASE = isMobile ? 150 : 200; // Slower on mobile for easier play
 const BULLET_SPEED = 520;
 const FIRE_COOLDOWN = 110;
 // Smart scaling based on device and orientation
-let isLandscape = window.innerWidth > window.innerHeight;
-let MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1; // Smaller scale in landscape
+const isLandscape = window.innerWidth > window.innerHeight;
+const MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1; // Smaller scale in landscape
 
 // Startup screen scene
 class StartupScene extends Phaser.Scene {
@@ -1656,13 +1422,8 @@ class StartupScene extends Phaser.Scene {
   }
   
   create() {
-    // Use global WIDTH and HEIGHT which are updated on resize
-    // Ensure they're current
-    WIDTH = this.cameras.main.width;
-    HEIGHT = this.cameras.main.height;
-    
-    // Register resize handler with proper binding
-    this.scale.on('resize', this.resize, this);
+    const WIDTH = this.cameras.main.width;
+    const HEIGHT = this.cameras.main.height;
     
     // Black background
     this.cameras.main.setBackgroundColor('#000');
@@ -1878,31 +1639,6 @@ class StartupScene extends Phaser.Scene {
     invisibleButton.setInteractive();
     invisibleButton.once('pointerdown', startGame);
   }
-  
-  resize(gameSize, baseSize, displaySize, resolution) {
-    // Update global dimensions from gameSize
-    if (!gameSize) return;
-    
-    WIDTH = gameSize.width;
-    HEIGHT = gameSize.height;
-    
-    // Only update if we're the active scene
-    if (this.scene.isActive()) {
-      // Update text positions without calling create() again
-      if (this.titleText) {
-        this.titleText.x = WIDTH / 2;
-        this.titleText.y = HEIGHT * 0.3;
-      }
-      if (this.startText) {
-        this.startText.x = WIDTH / 2;
-        this.startText.y = HEIGHT * 0.6;
-      }
-      if (this.instructionText) {
-        this.instructionText.x = WIDTH / 2;
-        this.instructionText.y = HEIGHT * 0.75;
-      }
-    }
-  }
 }
 
 class Main extends Phaser.Scene {
@@ -1992,12 +1728,6 @@ class Main extends Phaser.Scene {
   }
   
   create(){
-    // Initialize vanishing point
-    this.vanishX = WIDTH / 2;
-    this.vanishY = HEIGHT * 0.15;
-    
-    // Scene is already created, no need to wait for ready event
-    
     this.cameras.main.setBackgroundColor('#000');
     
     // Create starfield background FIRST
@@ -2065,12 +1795,6 @@ class Main extends Phaser.Scene {
     this.crouchTimer = 0; // Timer for crouch charge
     this.maxChargeTime = 1000; // Max charge time in ms for full power
     this.releaseGraceTime = 150; // Grace period after releasing down to still trigger super jump
-    
-    // Dash mechanics
-    this.isDashing = false;
-    this.lastLeftPress = 0;
-    this.lastRightPress = 0;
-    this.doubleTapWindow = 250; // ms window for double-tap
     this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX');
     this.score=0; 
     this.beats=0;
@@ -2104,6 +1828,8 @@ class Main extends Phaser.Scene {
     this.comboMeterY = meterY;
     
     this.gridVisible = gridEnabled; // Use persistent grid setting
+    const gridTextContent = isMobile ? 'GRID: ' + (gridEnabled ? 'ON' : 'OFF') : 'GRID: ' + (gridEnabled ? 'ON' : 'OFF') + ' [G]';
+    this.gridText=this.add.text(10, 10, gridTextContent, {font:`${gridFontSize} monospace`, fill:'#0f0'});
     
     // Set initial grid button color
     const gridBtn = document.getElementById('gridToggleBtn');
@@ -2122,26 +1848,12 @@ class Main extends Phaser.Scene {
         // Always spawn on kick
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnEnemy(lane, speed, 'enemyTex'); 
-        
-        // Pulse all existing red enemies
-        for(let enemy of this.enemies) {
-          if(enemy.enemyType === 'enemyTex') {
-            enemy.pulseTime = this.time.now;
-          }
-        }
       },
       onSnare: ()=>{ 
         // Fast yellow enemies on snare hits - always spawn
         const speed=ENEMY_SPEED_BASE * 1.5 + Math.floor(this.beats/16)*30; 
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnEnemy(lane, speed, 'fastEnemyTex'); 
-        
-        // Pulse all existing yellow enemies
-        for(let enemy of this.enemies) {
-          if(enemy.enemyType === 'fastEnemyTex') {
-            enemy.pulseTime = this.time.now;
-          }
-        }
       },
       onHihat: ()=>{
         // Spawn obstacles that block shots
@@ -2157,28 +1869,17 @@ class Main extends Phaser.Scene {
         // Spawn lane-changing enemy
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnDrifter(lane);
-        
-        // Pulse all existing purple drifting enemies
-        for(let enemy of this.enemies) {
-          if(enemy.isDrifter) {
-            enemy.pulseTime = this.time.now;
-          }
-        }
       },
       onSub: ()=>{
         // Pulse the grid
         this._pulseGrid();
       },
       toggleGrid: ()=>{ 
-        // Toggle grid from external button - match G key behavior
+        // Toggle grid from external button
         this.gridVisible = !this.gridVisible;
         gridEnabled = this.gridVisible;
-        saveGameData({ gridEnabled: gridEnabled });
-        if (this.gridText) {
-          const gridTextContent = isMobile ? 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') : 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]';
-          this.gridText.setText(gridTextContent);
-        }
-        // Immediately clear graphics when hiding, just like G key does
+        const gridTextContent = isMobile ? 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') : 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]';
+        this.gridText.setText(gridTextContent);
         if(!this.gridVisible && this.gridGraphics) {
           this.gridGraphics.clear();
         }
@@ -2201,20 +1902,6 @@ class Main extends Phaser.Scene {
     this.swipeThreshold = 50; // Minimum distance for swipe
     this.swipeTimeLimit = 300; // Max time for swipe gesture (ms)
     
-    // Jump sensitivity settings (0.1 = strict, 1.0 = very lenient)
-    // You can adjust these values to fine-tune the feel:
-    this.jumpSensitivity = 0.7; // Regular jump: 0.5 = normal, higher = easier
-    this.superJumpSensitivity = 0.85; // Super jump: higher = more forgiving
-    
-    // Double-swipe tracking for dash
-    this.lastSwipeDirection = null;
-    this.lastSwipeTime = 0;
-    this.doubleSwipeWindow = 300; // ms window for double-swipe
-    
-    // Calculate thresholds based on sensitivity
-    this.verticalSwipeThreshold = this.swipeThreshold * (1.1 - this.jumpSensitivity);
-    this.superJumpDownThreshold = this.swipeThreshold * (1.1 - this.superJumpSensitivity) * 0.5; // Much more lenient
-    
     // Create touch indicator (for debugging)
     this.touchIndicator = this.add.circle(0, 0, 20, 0x00ff00, 0.3);
     this.touchIndicator.setVisible(false);
@@ -2224,17 +1911,14 @@ class Main extends Phaser.Scene {
       this.touchStartX = pointer.x;
       this.touchStartY = pointer.y;
       this.touchStartTime = this.time.now;
-      this.lastSwipeX = pointer.x; // Track last X position for continuous swipes
-      this.lastSwipeY = pointer.y; // Track last Y position for continuous swipes
-      this.swipeHistory = []; // Track swipe path for down-up detection
       
       // Show touch indicator
       this.touchIndicator.setPosition(pointer.x, pointer.y);
       this.touchIndicator.setVisible(true);
       this.touchIndicator.setAlpha(0.5);
       
-      // ALWAYS start firing - this is primary action
-      this.fireHoldTimer = this.time.delayedCall(150, () => {
+      // Start firing timer for hold-to-fire
+      this.fireHoldTimer = this.time.delayedCall(200, () => {
         this.isTouchFiring = true;
         // Visual feedback for auto-fire mode
         this.touchIndicator.setFillStyle(0xff0000, 0.5);
@@ -2250,136 +1934,54 @@ class Main extends Phaser.Scene {
         this.touchIndicator.setPosition(pointer.x, pointer.y);
       }
       
-      // Track swipe history for gesture detection
-      this.swipeHistory.push({
-        x: pointer.x,
-        y: pointer.y,
-        time: this.time.now
-      });
-      
-      // Keep only last 500ms of history (more time for super jump gesture)
-      const cutoffTime = this.time.now - 500;
-      this.swipeHistory = this.swipeHistory.filter(point => point.time > cutoffTime);
-      
       const dx = pointer.x - this.touchStartX;
       const dy = pointer.y - this.touchStartY;
       const elapsed = this.time.now - this.touchStartTime;
       
-      // Horizontal swipe - track incremental movements (no time limit for continuous movement)
-      const incrementalX = pointer.x - (this.lastSwipeX || this.touchStartX);
-      
-      if (Math.abs(incrementalX) > this.swipeThreshold && !this.isMoving) {
-        const now = this.time.now;
-        const swipeDirection = incrementalX > 0 ? 'right' : 'left';
-        
-        // Check for double-swipe
-        if (this.lastSwipeDirection === swipeDirection && 
-            now - this.lastSwipeTime < this.doubleSwipeWindow) {
-          // Double-swipe detected - dash!
-          if (swipeDirection === 'right') {
-            this.dashRight();
-          } else {
-            this.dashLeft();
-          }
-          // Reset to prevent triple-swipe
-          this.lastSwipeDirection = null;
-          this.lastSwipeTime = 0;
-          // Visual feedback
-          this.touchIndicator.setFillStyle(0x00ffff, 0.8);
-        } else {
-          // Single swipe - regular move
-          if (incrementalX > 0) {
+      // Check for swipe gestures (quick movements)
+      if (elapsed < this.swipeTimeLimit) {
+        // Horizontal swipe
+        if (Math.abs(dx) > this.swipeThreshold && Math.abs(dx) > Math.abs(dy)) {
+          if (dx > 0 && !this.isMoving) {
+            // Swipe right
             this.moveRight();
-          } else {
+            this.touchStartX = pointer.x; // Reset for continuous swipes
+          } else if (dx < 0 && !this.isMoving) {
+            // Swipe left
             this.moveLeft();
+            this.touchStartX = pointer.x; // Reset for continuous swipes
           }
-          // Track for potential double-swipe
-          this.lastSwipeDirection = swipeDirection;
-          this.lastSwipeTime = now;
         }
         
-        this.lastSwipeX = pointer.x; // Track last position for next swipe
-      }
-      
-      // Vertical swipe detection - track incremental Y movements (no time limit)
-      const incrementalY = pointer.y - (this.lastSwipeY || this.touchStartY);
-      
-      // Check for down-then-up swipe pattern for super jump
-      if (this.swipeHistory.length >= 3) {
-        const recent = this.swipeHistory.slice(-10); // Last 10 points
-        if (recent.length >= 3) {
-          // Find the lowest point
-          let lowestPoint = recent[0];
-          let lowestIndex = 0;
-          for (let i = 1; i < recent.length; i++) {
-            if (recent[i].y > lowestPoint.y) {
-              lowestPoint = recent[i];
-              lowestIndex = i;
-            }
-          }
-          
-          // Check if we went down then up
-          const firstY = recent[0].y;
-          const currentY = pointer.y;
-          const bottomY = lowestPoint.y;
-          
-          // Down-then-up pattern detected (using lenient threshold)
-          if (lowestIndex > 0 && lowestIndex < recent.length - 1 && 
-              bottomY - firstY > this.superJumpDownThreshold && 
-              bottomY - currentY > this.superJumpDownThreshold &&
-              !this.isJumping) {
-            
-            // Calculate super jump power based on swipe distance
-            const totalSwipeDistance = (bottomY - firstY) + (bottomY - currentY);
-            const maxSwipeDistance = HEIGHT * 0.4; // 40% of screen height for max power
-            const chargePercent = Math.min(totalSwipeDistance / maxSwipeDistance, 1.0);
-            
-            // Execute super jump
-            this.superJump(chargePercent);
-            
-            // Clear history to prevent repeated triggers
-            this.swipeHistory = [];
-            this.lastSwipeY = pointer.y;
-            
-            // Visual feedback
-            this.touchIndicator.setFillStyle(0xffff00, 0.7);
+        // Vertical swipe down for crouch
+        if (dy > this.swipeThreshold && Math.abs(dy) > Math.abs(dx) && !this.isJumping) {
+          if (!this.isCrouching) {
+            this.isCrouching = true;
+            this.crouchTimer = 0;
+            this.touchCrouchStartTime = this.time.now;
+            // Squash animation when crouching
+            this.tweens.add({
+              targets: this.player,
+              scaleX: 1.4,
+              scaleY: 0.6,
+              duration: 100,
+              ease: 'Power2'
+            });
           }
         }
-      }
-      
-      // Check for diagonal swipe for dash (before checking regular moves)
-      const diagonalThreshold = this.swipeThreshold * 0.7; // Slightly lower threshold for diagonal
-      if (Math.abs(incrementalX) > diagonalThreshold && Math.abs(incrementalY) > diagonalThreshold) {
-        // Diagonal swipe detected
-        if (incrementalY < 0) { // Upward diagonal
-          if (incrementalX > 0 && !this.isDashing) {
-            // Up-right diagonal = dash right
-            this.dashRight();
-            this.lastSwipeX = pointer.x;
-            this.lastSwipeY = pointer.y;
-            // Visual feedback
-            this.touchIndicator.setFillStyle(0x00ffff, 0.8);
-          } else if (incrementalX < 0 && !this.isDashing) {
-            // Up-left diagonal = dash left
-            this.dashLeft();
-            this.lastSwipeX = pointer.x;
-            this.lastSwipeY = pointer.y;
-            // Visual feedback
-            this.touchIndicator.setFillStyle(0x00ffff, 0.8);
-          }
-        }
-      }
-      // Simple vertical swipe up for regular jump (using sensitivity threshold)
-      else if (incrementalY < -this.verticalSwipeThreshold && Math.abs(incrementalY) > Math.abs(incrementalX) && !this.isJumping) {
-        // Check if this is just a simple up swipe (not part of down-up pattern)
-        const hasRecentDown = this.swipeHistory.some(point => 
-          point.y > pointer.y && 
-          this.time.now - point.time < 200
-        );
         
-        if (!hasRecentDown) {
-          this.jump();
-          this.lastSwipeY = pointer.y; // Track last Y position
+        // Vertical swipe up for jump or super jump
+        if (dy < -this.swipeThreshold && Math.abs(dy) > Math.abs(dx)) {
+          if (this.isCrouching && this.time.now - this.touchCrouchStartTime > 100) {
+            // Super jump if was crouching
+            this.isCrouching = false;
+            this.superJump();
+            this.touchStartY = pointer.y;
+          } else if (!this.isJumping && !this.isCrouching) {
+            // Regular jump
+            this.jump();
+            this.touchStartY = pointer.y;
+          }
         }
       }
     });
@@ -2392,6 +1994,19 @@ class Main extends Phaser.Scene {
         this.touchIndicator.setFillStyle(0x00ff00, 0.3); // Reset color
       }
       
+      // Release crouch if we were crouching
+      if (this.isCrouching) {
+        this.isCrouching = false;
+        this.crouchTimer = 0;
+        // Return to normal size
+        this.tweens.add({
+          targets: this.player,
+          scaleX: 1,
+          scaleY: 1,
+          duration: 50,
+          ease: 'Power2'
+        });
+      }
       
       // Cancel firing timer if it hasn't triggered yet
       if (this.fireHoldTimer) {
@@ -2416,16 +2031,8 @@ class Main extends Phaser.Scene {
 
   moveLeft() {
     if(this.isMoving) return;
-    const previousLane = this.playerLane;
     this.playerLane=Math.max(-1,this.playerLane-1); // Can go to -1 (off-screen left)
     const targetX = this._laneX(this.playerLane);
-    
-    // Play womp sound when entering off-screen
-    if(this.playerLane === -1 && previousLane === 0) {
-      try {
-        gameSounds.offScreenWomp.triggerAttackRelease("C2", "4n");
-      } catch(e) {}
-    }
     
     // Check if we're jumping for special animation
     if(this.isJumping) {
@@ -2467,7 +2074,7 @@ class Main extends Phaser.Scene {
         targets: this.player,
         scaleX: 1.6,  // Stretch horizontally
         scaleY: 0.7,  // Compress vertically
-        duration: 100,  // Increased from 60ms
+        duration: 60,
         ease: 'Power2',
         onComplete: () => {
           // Then move and snap back
@@ -2476,7 +2083,7 @@ class Main extends Phaser.Scene {
             x: targetX,
             scaleX: 1,
             scaleY: 1,
-            duration: 120,  // Slightly longer snap back
+            duration: 100,
             ease: 'Back.easeOut',
             onComplete: () => {
               this.isMoving = false;
@@ -2502,16 +2109,8 @@ class Main extends Phaser.Scene {
 
   moveRight() {
     if(this.isMoving) return;
-    const previousLane = this.playerLane;
     this.playerLane=Math.min(LANES,this.playerLane+1); // Can go to 5 (off-screen right)
     const targetX = this._laneX(this.playerLane);
-    
-    // Play womp sound when entering off-screen
-    if(this.playerLane === LANES && previousLane === LANES - 1) {
-      try {
-        gameSounds.offScreenWomp.triggerAttackRelease("C2", "4n");
-      } catch(e) {}
-    }
     
     // Check if we're jumping for special animation
     if(this.isJumping) {
@@ -2553,7 +2152,7 @@ class Main extends Phaser.Scene {
         targets: this.player,
         scaleX: 1.6,  // Stretch horizontally
         scaleY: 0.7,  // Compress vertically
-        duration: 100,  // Increased from 60ms
+        duration: 60,
         ease: 'Power2',
         onComplete: () => {
           // Then move and snap back
@@ -2562,7 +2161,7 @@ class Main extends Phaser.Scene {
             x: targetX,
             scaleX: 1,
             scaleY: 1,
-            duration: 120,  // Slightly longer snap back
+            duration: 100,
             ease: 'Back.easeOut',
             onComplete: () => {
               this.isMoving = false;
@@ -2626,240 +2225,32 @@ class Main extends Phaser.Scene {
     } catch(e) {}
   }
 
-  dashLeft() {
-    if(this.isDashing) return;  // Only check isDashing, not isMoving
-    
-    const startLane = this.playerLane;
-    const targetLane = Math.max(-1, this.playerLane - 1);  // Only dash 1 more lane since first tap already moved 1
-    
-    // Can't dash if already at leftmost position
-    if(startLane <= 0) return;  // Changed from -1 to 0
-    
-    this.isDashing = true;
-    this.isMoving = true;
-    
-    // Create dash trail effect
-    const trail1 = this.add.image(this.player.x, this.player.y, 'playerTex');
-    trail1.setAlpha(0.5);
-    trail1.setTint(0x00ffff);
-    
-    const trail2 = this.add.image(this.player.x, this.player.y, 'playerTex');
-    trail2.setAlpha(0.3);
-    trail2.setTint(0x00ffff);
-    
-    // Dash sound effect
-    try {
-      const now = Tone.now();
-      gameSounds.move.triggerAttackRelease("C4", "32n", now);
-      gameSounds.move.triggerAttackRelease("G3", "32n", now + 0.02);
-      // Whoosh effect using filter sweep
-      gameSounds.offScreenWomp.triggerAttackRelease("C3", "32n", now);
-    } catch(e) {}
-    
-    // Since we're only moving 1 lane (first tap already moved 1), just dash directly
-    const targetX = this._laneX(targetLane);
-    
-    // Check collision in the starting lane (we're passing through it during dash)
-    // The first tap moved us here, but we're dashing through it quickly
-    this.checkDashCollision();
-    
-    // Fast dash animation to the target
-    this.playerLane = targetLane;
-    this.tweens.add({
-      targets: [this.player, trail1, trail2],
-      x: targetX,
-      duration: 100,  // Faster than normal 150ms move
-      ease: 'Power2',
-      onComplete: () => {
-        this.isMoving = false;
-        this.isDashing = false;
-        // Check collision at endpoint
-        this.checkDashCollision();
-      }
-    });
-    
-    // Fade out trails
-    this.tweens.add({
-      targets: trail1,
-      alpha: 0,
-      duration: 200,
-      delay: 50,
-      onComplete: () => trail1.destroy()
-    });
-    
-    this.tweens.add({
-      targets: trail2,
-      alpha: 0,
-      duration: 200,
-      delay: 100,
-      onComplete: () => trail2.destroy()
-    });
-  }
-  
-  dashRight() {
-    if(this.isDashing) return;  // Only check isDashing, not isMoving
-    
-    const startLane = this.playerLane;
-    const targetLane = Math.min(LANES, this.playerLane + 1);  // Only dash 1 more lane since first tap already moved 1
-    
-    // Can't dash if already at rightmost position
-    if(startLane >= LANES - 1) return;  // Changed from LANES to LANES - 1
-    
-    this.isDashing = true;
-    this.isMoving = true;
-    
-    // Create dash trail effect
-    const trail1 = this.add.image(this.player.x, this.player.y, 'playerTex');
-    trail1.setAlpha(0.5);
-    trail1.setTint(0x00ffff);
-    
-    const trail2 = this.add.image(this.player.x, this.player.y, 'playerTex');
-    trail2.setAlpha(0.3);
-    trail2.setTint(0x00ffff);
-    
-    // Dash sound effect
-    try {
-      const now = Tone.now();
-      gameSounds.move.triggerAttackRelease("C4", "32n", now);
-      gameSounds.move.triggerAttackRelease("G3", "32n", now + 0.02);
-      // Whoosh effect using filter sweep
-      gameSounds.offScreenWomp.triggerAttackRelease("C3", "32n", now);
-    } catch(e) {}
-    
-    // Since we're only moving 1 lane (first tap already moved 1), just dash directly
-    const targetX = this._laneX(targetLane);
-    
-    // Check collision in the starting lane (we're passing through it during dash)
-    // The first tap moved us here, but we're dashing through it quickly
-    this.checkDashCollision();
-    
-    // Fast dash animation to the target
-    this.playerLane = targetLane;
-    this.tweens.add({
-      targets: [this.player, trail1, trail2],
-      x: targetX,
-      duration: 100,  // Faster than normal 150ms move
-      ease: 'Power2',
-      onComplete: () => {
-        this.isMoving = false;
-        this.isDashing = false;
-        // Check collision at endpoint
-        this.checkDashCollision();
-      }
-    });
-    
-    // Fade out trails
-    this.tweens.add({
-      targets: trail1,
-      alpha: 0,
-      duration: 200,
-      delay: 50,
-      onComplete: () => trail1.destroy()
-    });
-    
-    this.tweens.add({
-      targets: trail2,
-      alpha: 0,
-      duration: 200,
-      delay: 100,
-      onComplete: () => trail2.destroy()
-    });
-  }
-  
-  checkDashCollision() {
-    // Check collision with obstacles and enemies during dash
-    for(let o of this.obstacles) {
-      if(o.progress > 0.9 && o.progress < 1.1 && o.lane === this.playerLane && !this.isJumping) {
-        // Hit obstacle during dash - take damage
-        this.lives--;
-        this.updateHUD();
-        
-        // Visual feedback
-        this.cameras.main.shake(300, 0.02);
-        this.player.setTint(0xff0000);
-        this.time.delayedCall(200, () => {
-          if(!this.rapidFire) this.player.clearTint();
-        });
-        
-        // Sound
-        try {
-          gameSounds.obstacleHit.triggerAttackRelease("C2", "8n");
-        } catch(e) {}
-        
-        if(this.lives <= 0) {
-          this.gameOver();
-        }
-        
-        // Destroy the obstacle
-        o.destroy();
-        this.obstacles = this.obstacles.filter(ob => ob !== o);
-        break;
-      }
-    }
-  }
-  
   superJump(chargePercent = 1.0) {
     if(this.isJumping) return;
     this.isJumping = true;
     
-    // Calculate jump height: from 1x (120) to 3x (360) based on charge for more distinction
+    // Calculate jump height: from 1x (120) to 2.5x (300) based on charge
     const minHeight = 120;
-    const maxHeight = 360;
+    const maxHeight = 300;
     const jumpHeight = minHeight + (maxHeight - minHeight) * chargePercent;
     
     // Scale the stretch effect based on charge
-    const stretchX = 0.6 + (1.0 - chargePercent) * 0.3; // More dramatic stretch
-    const stretchY = 1.3 + chargePercent * 0.8; // More stretch for higher charge
-    
-    // Create launch particles effect for charged jumps
-    if(chargePercent > 0.3) {
-      // Create burst effect at player position
-      const particleCount = Math.floor(5 + chargePercent * 15);
-      for(let i = 0; i < particleCount; i++) {
-        const angle = (Math.PI * 2 * i) / particleCount;
-        const speed = 100 + chargePercent * 250;
-        const particle = this.add.graphics();
-        particle.x = this.player.x;
-        particle.y = this.player.y;
-        
-        // Draw small glowing particle
-        const particleColor = chargePercent > 0.7 ? 0xff00ff : 0x00ffcc;
-        particle.fillStyle(particleColor, 1);
-        particle.fillCircle(0, 0, 4);
-        
-        // Animate particle outward and fade
-        this.tweens.add({
-          targets: particle,
-          x: particle.x + Math.cos(angle) * speed,
-          y: particle.y + Math.sin(angle) * speed / 2,
-          alpha: 0,
-          duration: 600,
-          ease: 'Power2',
-          onComplete: () => {
-            particle.destroy();
-          }
-        });
-      }
-      
-      // Screen shake for powerful jumps
-      if(chargePercent > 0.7) {
-        this.cameras.main.shake(200, 0.008 + chargePercent * 0.01);
-      }
-    }
+    const stretchX = 0.7 + (1.0 - chargePercent) * 0.2; // Less stretch for lower charge
+    const stretchY = 1.2 + chargePercent * 0.6; // More stretch for higher charge
     
     // First squash down as launch preparation
-    this.player.setScale(1.4, 0.4);
+    this.player.setScale(1.3, 0.5);
     
     // Then stretch up and launch
     this.tweens.add({
       targets: this.player,
       scaleX: stretchX,
       scaleY: stretchY,
-      duration: 200,  // Doubled from 100ms
+      duration: 100,
       ease: 'Power2',
       onComplete: () => {
         // Launch up with variable height
-        const jumpDuration = 300 + chargePercent * 200; // Longer air time for higher jumps
+        const jumpDuration = 250 + chargePercent * 150; // Longer air time for higher jumps
         this.tweens.add({
           targets: this.player,
           y: PLAYER_Y - jumpHeight,
@@ -2890,37 +2281,22 @@ class Main extends Phaser.Scene {
       }
     });
     
-    // Enhanced super jump sound that scales with charge
+    // Play enhanced jump sound with pitch based on charge
     try {
       const now = Tone.now();
-      
-      // Base launch sound - deeper and more powerful than regular jump
-      gameSounds.powerUp.triggerAttackRelease("C3", "8n", now);
-      
+      gameSounds.move.triggerAttackRelease("C6", "16n", now);
       if(chargePercent > 0.3) {
-        // Add harmonic layer
-        gameSounds.powerUp.triggerAttackRelease("G3", "8n", now + 0.02);
-        gameSounds.move.triggerAttackRelease("C6", "16n", now);
-      }
-      if(chargePercent > 0.5) {
-        // Add rising arpeggio
-        gameSounds.powerUp.triggerAttackRelease("E4", "16n", now + 0.05);
-        gameSounds.move.triggerAttackRelease("G6", "16n", now + 0.08);
+        gameSounds.move.triggerAttackRelease("G5", "16n", now + 0.05);
       }
       if(chargePercent > 0.7) {
-        // Add high sparkle for max charge
-        gameSounds.powerUp.triggerAttackRelease("C5", "32n", now + 0.1);
-        gameSounds.move.triggerAttackRelease("E7", "32n", now + 0.12);
-        // Extra bass thump for maximum power
-        gameSounds.offScreenWomp.triggerAttackRelease("C1", "16n", now);
+        gameSounds.move.triggerAttackRelease("C7", "32n", now + 0.1);
       }
     } catch(e) {}
   }
 
   _laneX(lane, progress = 1){ 
     // Interpolate X position between vanishing point and lane position based on progress
-    // Use the same vanishing point as the grid
-    const vanishX = this.vanishX || WIDTH / 2;
+    const vanishX = WIDTH / 2;
     // Clamp off-screen lanes to be partially visible
     let clampedLane = lane;
     if(lane < 0) {
@@ -3000,7 +2376,6 @@ class Main extends Phaser.Scene {
     const beatHighScore = this.score > sessionHighScore;
     if(beatHighScore) {
       sessionHighScore = this.score;
-      saveGameData({ highScore: sessionHighScore });
     }
     
     // Calculate text sizes based on mobile or desktop
@@ -3259,11 +2634,9 @@ class Main extends Phaser.Scene {
     if(!this.gridGraphics){
       this.gridGraphics = this.add.graphics();
       this.gridOffset = 0;
+      this.vanishX = WIDTH / 2;
+      this.vanishY = HEIGHT * 0.15;  // Move horizon much higher
     }
-    
-    // Always update vanishing point based on current dimensions
-    this.vanishX = WIDTH / 2;
-    this.vanishY = HEIGHT * 0.15;  // Move horizon much higher
     
     // Safety check - recreate if destroyed
     if(!this.gridGraphics.scene) {
@@ -3326,16 +2699,10 @@ class Main extends Phaser.Scene {
     const cooldown = this.rapidFire ? FIRE_COOLDOWN/3 : FIRE_COOLDOWN;
     if(now-this.lastShotAt<cooldown) return; 
     this.lastShotAt=now; 
-    // Shoot from player's current position (accounts for jumping)
-    const b=this.add.image(this.player.x, this.player.y, 'bulletTex'); 
+    // Shoot from current position (higher if jumping)
+    const b=this.add.image(this.player.x, this.player.y-20, 'bulletTex'); 
     b.lane = this.playerLane;
-    
-    // Calculate progress based on player's current Y position
-    // When jumping, player.y is higher (smaller), so we need to adjust progress
-    const vanishY = HEIGHT * 0.15;
-    const normalizedY = (this.player.y - vanishY) / (HEIGHT - vanishY);
-    // Inverse the exponential curve formula to get progress from Y position
-    b.progress = Math.pow(normalizedY, 1/2.5);
+    b.progress = 0.95; // Start near player
     b.vy=-BULLET_SPEED; 
     b.w = Math.floor(6 * MOBILE_SCALE); 
     b.h = Math.floor(12 * MOBILE_SCALE);
@@ -3472,7 +2839,8 @@ class Main extends Phaser.Scene {
     if(Phaser.Input.Keyboard.JustDown(this.keys.G)){
       this.gridVisible = !this.gridVisible;
       gridEnabled = this.gridVisible; // Save to persistent setting
-      saveGameData({ gridEnabled: gridEnabled });
+      const gridTextContent = isMobile ? 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') : 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]';
+      this.gridText.setText(gridTextContent);
       if(!this.gridVisible && this.gridGraphics) {
         this.gridGraphics.clear();
       }
@@ -3519,26 +2887,10 @@ class Main extends Phaser.Scene {
     
     // Movement with rubber band effect and smooth transitions
     if(Phaser.Input.Keyboard.JustDown(this.keys.LEFT)||Phaser.Input.Keyboard.JustDown(this.keys.A)){ 
-      const now = this.time.now;
-      // Check for double-tap dash
-      if(now - this.lastLeftPress < this.doubleTapWindow) {
-        this.dashLeft();
-        this.lastLeftPress = 0; // Reset to prevent triple-tap
-      } else {
-        this.moveLeft();
-        this.lastLeftPress = now;
-      }
+      this.moveLeft();
     }
     if(Phaser.Input.Keyboard.JustDown(this.keys.RIGHT)||Phaser.Input.Keyboard.JustDown(this.keys.D)){ 
-      const now = this.time.now;
-      // Check for double-tap dash
-      if(now - this.lastRightPress < this.doubleTapWindow) {
-        this.dashRight();
-        this.lastRightPress = 0; // Reset to prevent triple-tap
-      } else {
-        this.moveRight();
-        this.lastRightPress = now;
-      }
+      this.moveRight();
     }
     
     // Rubber band effect - pull player back if off-screen too long
@@ -3549,23 +2901,6 @@ class Main extends Phaser.Scene {
       // Screen shake intensity based on how long off-screen
       const shakeIntensity = Math.max(0, 1 - (this.offScreenTimer / 800)) * 4;
       this.cameras.main.shake(100, shakeIntensity * 0.01);
-      
-      // Continuous audio distortion pulse while off-screen
-      if(!this.offScreenPulse) {
-        this.offScreenPulse = 0; // Initialize as timer
-      }
-      this.offScreenPulse += dt;
-      
-      // Pulse every 200ms with increasing intensity
-      if(this.offScreenPulse > 200) {
-        this.offScreenPulse = 0;
-        try {
-          // Low frequency pulse that gets more intense over time
-          const intensity = Math.max(0, 1 - (this.offScreenTimer / 800));
-          const freq = 50 + intensity * 30; // Lower frequency as timer runs out
-          gameSounds.offScreenWomp.triggerAttackRelease(freq, "16n", Tone.now(), 0.2 + intensity * 0.3);
-        } catch(e) {}
-      }
       
       // Add chromatic aberration effect via camera tint
       if(this.playerLane < 0) {
@@ -3627,7 +2962,6 @@ class Main extends Phaser.Scene {
         
         this.player.clearTint();
         this.player.setAlpha(1); // Restore full opacity
-        this.offScreenPulse = false; // Reset audio pulse flag
         // Rubber band snap sound
         try {
           gameSounds.move.triggerAttackRelease("C3", "16n");
@@ -3636,25 +2970,16 @@ class Main extends Phaser.Scene {
     } else {
       // Clear any warning tint and effects when back in bounds
       if(!this.rapidFire) this.player.clearTint();
-      this.offScreenPulse = false; // Reset audio pulse flag
       // Reset camera effects
       this.cameras.main.resetPostPipeline();
     }
     
-    // Crouch/charge mechanic for super jump - hold DOWN to charge, release to jump
+    // Crouch/charge mechanic for super jump
     if((this.keys.DOWN.isDown || this.keys.S.isDown) && !this.isJumping){
       if(!this.isCrouching) {
         this.isCrouching = true;
         this.crouchTimer = 0;
         this.chargeGlow.setVisible(true);
-        
-        // Start charge sound with rising pitch
-        try {
-          gameSounds.jumpCharge.triggerAttack("C2");
-          // Create a rising pitch ramp
-          gameSounds.jumpCharge.frequency.rampTo(440, this.maxChargeTime / 1000);
-        } catch(e) {}
-        
         // Squash animation when crouching
         this.tweens.add({
           targets: this.player,
@@ -3685,23 +3010,63 @@ class Main extends Phaser.Scene {
       
       this.chargeGlow.fillStyle(hexColor, glowAlpha);
       this.chargeGlow.fillCircle(0, 0, glowRadius);
+      
+      // Check if UP is pressed while crouching
+      if(Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)) {
+        // Trigger super jump with current charge
+        const jumpCharge = Math.min(this.crouchTimer / this.maxChargeTime, 1.0);
+        this.superJump(jumpCharge);
+        this.isCrouching = false;
+        this.crouchTimer = 0;
+        this.chargeGlow.setVisible(false);
+      }
     } else if(this.isCrouching) {
-      // Released DOWN - execute super jump immediately
+      // Released crouch - store charge time for grace period
       const chargePercent = Math.min(this.crouchTimer / this.maxChargeTime, 1.0);
-      
-      // Stop the charge sound
-      try {
-        gameSounds.jumpCharge.triggerRelease();
-      } catch(e) {}
-      
-      this.superJump(chargePercent);
       this.isCrouching = false;
+      this.lastCrouchCharge = chargePercent;
+      this.timeSinceCrouchRelease = 0;
+      
+      // Return to normal size
+      this.tweens.add({
+        targets: this.player,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 50,
+        ease: 'Power2'
+      });
+      
+      // Keep glow visible briefly during grace period
+      this.tweens.add({
+        targets: this.chargeGlow,
+        alpha: 0,
+        duration: this.releaseGraceTime,
+        onComplete: () => {
+          this.chargeGlow.setVisible(false);
+          this.chargeGlow.alpha = 1;
+        }
+      });
+      
       this.crouchTimer = 0;
-      this.chargeGlow.setVisible(false);
     }
     
-    // Regular jump mechanic - UP or W key (only if not crouching)
-    if((Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)) && !this.isCrouching){
+    // Track time since crouch release for grace period
+    if(this.timeSinceCrouchRelease !== undefined && this.timeSinceCrouchRelease < this.releaseGraceTime) {
+      this.timeSinceCrouchRelease += dt;
+      
+      // Check if UP is pressed during grace period
+      if((Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)) && this.lastCrouchCharge > 0) {
+        this.superJump(this.lastCrouchCharge);
+        this.lastCrouchCharge = 0;
+        this.timeSinceCrouchRelease = this.releaseGraceTime;
+        this.chargeGlow.setVisible(false);
+      }
+    }
+    
+    // Regular jump mechanic - UP or W key (only if not crouching and no recent crouch)
+    if((Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)) && 
+       !this.isCrouching && 
+       (this.timeSinceCrouchRelease === undefined || this.timeSinceCrouchRelease >= this.releaseGraceTime || this.lastCrouchCharge === 0)){
       this.jump();
     }
     
@@ -3743,35 +3108,7 @@ class Main extends Phaser.Scene {
       if(e.trailPoints.length > 8) e.trailPoints.shift(); // Keep trail short
       
       // Scale based on distance
-      let scale = 0.1 + e.progress * 1.2; // Start tiny, grow to normal size
-      
-      // Apply pulse effect for all enemy types
-      if(e.pulseTime) {
-        const timeSincePulse = this.time.now - e.pulseTime;
-        if(timeSincePulse < 300) { // Pulse lasts 300ms
-          const pulseProgress = 1 - (timeSincePulse / 300);
-          const pulseMagnitude = Math.sin(pulseProgress * Math.PI) * 0.5;
-          scale *= (1 + pulseMagnitude);
-          
-          // Different tint colors based on enemy type
-          if(e.isDrifter) {
-            // Purple enemies - flash with purple-white
-            const tintValue = Math.floor(255 * (1 - pulseProgress * 0.5));
-            e.setTint(Phaser.Display.Color.GetColor(255, tintValue, 255));
-          } else if(e.enemyType === 'fastEnemyTex') {
-            // Yellow enemies - flash with yellow-white
-            const tintValue = Math.floor(255 * (1 - pulseProgress * 0.3));
-            e.setTint(Phaser.Display.Color.GetColor(255, 255, tintValue));
-          } else if(e.enemyType === 'enemyTex') {
-            // Red enemies - flash with red-white
-            const tintValue = Math.floor(255 * (1 - pulseProgress * 0.5));
-            e.setTint(Phaser.Display.Color.GetColor(255, tintValue, tintValue));
-          }
-        } else {
-          e.setTint(0xffffff); // Reset tint
-        }
-      }
-      
+      const scale = 0.1 + e.progress * 1.2; // Start tiny, grow to normal size
       e.setScale(scale);
       
       // Update collision box
@@ -3860,7 +3197,6 @@ class Main extends Phaser.Scene {
       if(p.progress > 0.9 && p.lane === this.playerLane){
         p.destroy();
         this.powerUps.splice(i,1);
-        this.score += 10; // Award 10 points for power-up collection
         this.rapidFire = true;
         this.rapidFireTimer = 5000; // 5 seconds
         this.player.setTint(0x00ff00); // Green tint
@@ -4035,7 +3371,6 @@ class Main extends Phaser.Scene {
             // Update highscore if beaten
             if(this.score > sessionHighScore) {
               sessionHighScore = this.score;
-              saveGameData({ highScore: sessionHighScore });
               this.highScoreText.setText('high ' + sessionHighScore);
               this.highScoreText.setColor('#0ff'); // Cyan when beating high score
             }
@@ -4069,65 +3404,6 @@ class Main extends Phaser.Scene {
       }
     }
 
-  }
-  
-  resize(gameSize, baseSize, displaySize, resolution) {
-    // Update global dimensions using the actual camera dimensions
-    WIDTH = this.cameras.main.width;
-    HEIGHT = this.cameras.main.height;
-    LANE_W = WIDTH / LANES;
-    PLAYER_Y = HEIGHT - (isMobile ? 90 : 60);
-    isLandscape = WIDTH > HEIGHT;
-    MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1;
-    
-    // Update vanishing point for consistent perspective
-    this.vanishX = WIDTH / 2;
-    this.vanishY = HEIGHT * 0.15;
-    
-    // Update player position
-    if (this.player) {
-      this.player.x = this._laneX(this.playerLane);
-      this.player.y = PLAYER_Y;
-    }
-    
-    // Update UI text positions
-    const scoreY = isMobile ? HEIGHT-36 : HEIGHT-24;
-    const highScoreY = isMobile ? HEIGHT-72 : HEIGHT-48;
-    const comboY = isMobile ? HEIGHT-108 : HEIGHT-72;
-    
-    if (this.scoreText) {
-      this.scoreText.y = scoreY;
-    }
-    if (this.highScoreText) {
-      this.highScoreText.y = highScoreY;
-    }
-    if (this.comboText) {
-      this.comboText.y = comboY;
-    }
-    
-    // Update combo meter position
-    if (this.comboMeterBg) {
-      const meterY = comboY + 30;
-      this.comboMeterY = meterY;
-      this.comboMeterBg.clear();
-      this.comboMeterBg.fillStyle(0x333333, 0.5);
-      this.comboMeterBg.fillRect(10, meterY, 200, 8);
-    }
-    
-    // Recreate starfield with new dimensions
-    if (this.stars) {
-      this.createStarfield();
-    }
-    
-    // Update grid if visible
-    if (this.gridVisible && this.gridGraphics) {
-      this._drawPerspectiveGrid();
-    }
-    
-    // Update mobile controls positions if they exist
-    if (this.mobileControls) {
-      this.setupMobileControls();
-    }
   }
   
   updateTrails(dt) {
@@ -4175,63 +3451,14 @@ class Main extends Phaser.Scene {
   }
 }
 
-// Initialize Phaser game with proper scale configuration
+// Initialize Phaser game
 const game = new Phaser.Game({
   type: Phaser.AUTO,
+  width: WIDTH,
+  height: HEIGHT,
   parent: 'gameContainer',
-  scene: [StartupScene, Main],
-  scale: {
-    mode: Phaser.Scale.RESIZE,
-    parent: 'gameContainer',
-    width: WIDTH,
-    height: HEIGHT
-  }
+  scene: [StartupScene, Main]
 });
-
-// Wait for game to be fully initialized before setting up resize handlers
-setTimeout(() => {
-  // Register the resize handler on the scale manager
-  if (game && game.scale) {
-    // This is the proper way to listen for Phaser resize events
-    game.scale.on('resize', (gameSize) => {
-      const mainScene = game.scene.getScene('Main');
-      if (mainScene && mainScene.resize) {
-        mainScene.resize(gameSize);
-      }
-    });
-    
-    // Also add a window resize listener as backup
-    window.addEventListener('resize', () => {
-      if (game && game.scale) {
-        game.scale.refresh();
-      }
-    });
-    
-    // Check orientation changes
-    window.addEventListener('orientationchange', () => {
-      setTimeout(() => {
-        if (game && game.scale) {
-          game.scale.refresh();
-        }
-      }, 100);
-    });
-  }
-}, 500); // Give more time for initialization
-
-// Register service worker for PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js')
-      .then(registration => {
-        console.log('ServiceWorker registered:', registration);
-      })
-      .catch(error => {
-        console.log('ServiceWorker registration failed:', error);
-      });
-  });
-}
-
-// Removed - now handled by Phaser's scale manager
 </script>
 </body>
 </html>

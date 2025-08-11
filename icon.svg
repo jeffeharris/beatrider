@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#000"/>
+  <!-- Grid lines -->
+  <line x1="102" y1="512" x2="256" y2="100" stroke="#00ffcc" stroke-width="3" opacity="0.5"/>
+  <line x1="204" y1="512" x2="256" y2="100" stroke="#00ffcc" stroke-width="3" opacity="0.5"/>
+  <line x1="256" y1="512" x2="256" y2="100" stroke="#00ffcc" stroke-width="3" opacity="0.7"/>
+  <line x1="308" y1="512" x2="256" y2="100" stroke="#00ffcc" stroke-width="3" opacity="0.5"/>
+  <line x1="410" y1="512" x2="256" y2="100" stroke="#00ffcc" stroke-width="3" opacity="0.5"/>
+  
+  <!-- Player -->
+  <rect x="230" y="430" width="52" height="52" fill="#00ffcc"/>
+  
+  <!-- Enemies -->
+  <rect x="150" y="250" width="30" height="30" fill="#ff3366"/>
+  <rect x="320" y="180" width="30" height="30" fill="#ff3366"/>
+  <polygon points="256,280 240,310 272,310" fill="#ffff00"/>
+  
+  <!-- Bullets -->
+  <rect x="254" y="380" width="4" height="20" fill="#ffffff"/>
+  <rect x="254" y="340" width="4" height="20" fill="#ffffff"/>
+  
+  <!-- Title -->
+  <text x="256" y="460" font-family="monospace" font-size="48" fill="#00ffcc" text-anchor="middle" font-weight="bold">BR</text>
+</svg>

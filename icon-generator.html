@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Icon Generator</title>
+</head>
+<body>
+  <canvas id="canvas192" width="192" height="192"></canvas>
+  <canvas id="canvas512" width="512" height="512"></canvas>
+  <br>
+  <a id="download192" download="icon-192.png">Download 192x192</a>
+  <a id="download512" download="icon-512.png">Download 512x512</a>
+  
+  <script>
+    function drawIcon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const size = canvas.width;
+      const scale = size / 512;
+      
+      // Black background
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, size, size);
+      
+      // Grid lines (perspective)
+      ctx.strokeStyle = '#00ffcc';
+      ctx.globalAlpha = 0.3;
+      ctx.lineWidth = 2 * scale;
+      
+      // Draw perspective grid
+      const vanishX = size / 2;
+      const vanishY = size * 0.2;
+      
+      for(let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo((size / 5) * i, size);
+        ctx.lineTo(vanishX, vanishY);
+        ctx.stroke();
+      }
+      
+      ctx.globalAlpha = 1;
+      
+      // Player square (cyan)
+      ctx.fillStyle = '#00ffcc';
+      ctx.fillRect(size * 0.45, size * 0.85, size * 0.1, size * 0.1);
+      
+      // Enemy squares (red)
+      ctx.fillStyle = '#ff3366';
+      ctx.fillRect(size * 0.3, size * 0.5, size * 0.06, size * 0.06);
+      ctx.fillRect(size * 0.64, size * 0.4, size * 0.06, size * 0.06);
+      
+      // Yellow triangle enemy
+      ctx.fillStyle = '#ffff00';
+      ctx.beginPath();
+      ctx.moveTo(size * 0.5, size * 0.55);
+      ctx.lineTo(size * 0.47, size * 0.61);
+      ctx.lineTo(size * 0.53, size * 0.61);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Bullets (white)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(size * 0.495, size * 0.75, size * 0.01, size * 0.04);
+      ctx.fillRect(size * 0.495, size * 0.68, size * 0.01, size * 0.04);
+      
+      // BR text
+      ctx.fillStyle = '#00ffcc';
+      ctx.font = `bold ${48 * scale}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('BR', size / 2, size * 0.9);
+      
+      // Convert to data URL and set download link
+      const link = document.getElementById(`download${size}`);
+      link.href = canvas.toDataURL('image/png');
+    }
+    
+    // Generate both icons
+    drawIcon(document.getElementById('canvas192'));
+    drawIcon(document.getElementById('canvas512'));
+  </script>
+</body>
+</html>
