@@ -1625,6 +1625,9 @@ class StartupScene extends Phaser.Scene {
     WIDTH = this.cameras.main.width;
     HEIGHT = this.cameras.main.height;
     
+    // Register resize handler with proper binding
+    this.scale.on('resize', this.resize, this);
+    
     // Black background
     this.cameras.main.setBackgroundColor('#000');
     
@@ -1841,13 +1844,28 @@ class StartupScene extends Phaser.Scene {
   }
   
   resize(gameSize, baseSize, displaySize, resolution) {
-    // Update global dimensions
+    // Update global dimensions from gameSize
+    if (!gameSize) return;
+    
     WIDTH = gameSize.width;
     HEIGHT = gameSize.height;
     
-    // Clear and recreate all elements with new positions
-    this.children.removeAll();
-    this.create();
+    // Only update if we're the active scene
+    if (this.scene.isActive()) {
+      // Update text positions without calling create() again
+      if (this.titleText) {
+        this.titleText.x = WIDTH / 2;
+        this.titleText.y = HEIGHT * 0.3;
+      }
+      if (this.startText) {
+        this.startText.x = WIDTH / 2;
+        this.startText.y = HEIGHT * 0.6;
+      }
+      if (this.instructionText) {
+        this.instructionText.x = WIDTH / 2;
+        this.instructionText.y = HEIGHT * 0.75;
+      }
+    }
   }
 }
 
@@ -1938,6 +1956,12 @@ class Main extends Phaser.Scene {
   }
   
   create(){
+    // Initialize vanishing point
+    this.vanishX = WIDTH / 2;
+    this.vanishY = HEIGHT * 0.15;
+    
+    // Scene is already created, no need to wait for ready event
+    
     this.cameras.main.setBackgroundColor('#000');
     
     // Create starfield background FIRST
@@ -2564,7 +2588,8 @@ class Main extends Phaser.Scene {
 
   _laneX(lane, progress = 1){ 
     // Interpolate X position between vanishing point and lane position based on progress
-    const vanishX = WIDTH / 2;
+    // Use the same vanishing point as the grid
+    const vanishX = this.vanishX || WIDTH / 2;
     // Clamp off-screen lanes to be partially visible
     let clampedLane = lane;
     if(lane < 0) {
@@ -2903,9 +2928,11 @@ class Main extends Phaser.Scene {
     if(!this.gridGraphics){
       this.gridGraphics = this.add.graphics();
       this.gridOffset = 0;
-      this.vanishX = WIDTH / 2;
-      this.vanishY = HEIGHT * 0.15;  // Move horizon much higher
     }
+    
+    // Always update vanishing point based on current dimensions
+    this.vanishX = WIDTH / 2;
+    this.vanishY = HEIGHT * 0.15;  // Move horizon much higher
     
     // Safety check - recreate if destroyed
     if(!this.gridGraphics.scene) {
@@ -3665,13 +3692,17 @@ class Main extends Phaser.Scene {
   }
   
   resize(gameSize, baseSize, displaySize, resolution) {
-    // Update global dimensions
-    WIDTH = gameSize.width;
-    HEIGHT = gameSize.height;
+    // Update global dimensions using the actual camera dimensions
+    WIDTH = this.cameras.main.width;
+    HEIGHT = this.cameras.main.height;
     LANE_W = WIDTH / LANES;
     PLAYER_Y = HEIGHT - (isMobile ? 90 : 60);
     isLandscape = WIDTH > HEIGHT;
     MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1;
+    
+    // Update vanishing point for consistent perspective
+    this.vanishX = WIDTH / 2;
+    this.vanishY = HEIGHT * 0.15;
     
     // Update player position
     if (this.player) {
@@ -3767,17 +3798,45 @@ class Main extends Phaser.Scene {
 // Initialize Phaser game with proper scale configuration
 const game = new Phaser.Game({
   type: Phaser.AUTO,
-  width: WIDTH,
-  height: HEIGHT,
   parent: 'gameContainer',
   scene: [StartupScene, Main],
   scale: {
     mode: Phaser.Scale.RESIZE,
     parent: 'gameContainer',
-    width: '100%',
-    height: '100%'
+    width: WIDTH,
+    height: HEIGHT
   }
 });
+
+// Wait for game to be fully initialized before setting up resize handlers
+setTimeout(() => {
+  // Register the resize handler on the scale manager
+  if (game && game.scale) {
+    // This is the proper way to listen for Phaser resize events
+    game.scale.on('resize', (gameSize) => {
+      const mainScene = game.scene.getScene('Main');
+      if (mainScene && mainScene.resize) {
+        mainScene.resize(gameSize);
+      }
+    });
+    
+    // Also add a window resize listener as backup
+    window.addEventListener('resize', () => {
+      if (game && game.scale) {
+        game.scale.refresh();
+      }
+    });
+    
+    // Check orientation changes
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => {
+        if (game && game.scale) {
+          game.scale.refresh();
+        }
+      }, 100);
+    });
+  }
+}, 500); // Give more time for initialization
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
