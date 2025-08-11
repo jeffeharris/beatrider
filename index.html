@@ -2129,6 +2129,11 @@ class Main extends Phaser.Scene {
     this.maxChargeTime = 1000; // Max charge time in ms for full power
     this.releaseGraceTime = 150; // Grace period after releasing down to still trigger super jump
     
+    // Jello physics for idle animation
+    this.idleWobblePhase = 0; // For idle breathing animation
+    this.wobbleVelocity = { x: 0, y: 0 }; // For reactive wobble
+    this.wobbleDamping = 0.92; // How quickly wobble settles
+    
     // Dash mechanics
     this.isDashing = false;
     this.lastLeftPress = 0;
@@ -2518,27 +2523,53 @@ class Main extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
     } else {
-      // Ground movement - stretchy animation
+      // Ground movement - jello stretchy animation
       this.isMoving = true;
       
-      // First stretch towards the left
+      // Add reactive wobble force
+      this.wobbleVelocity.x = -12; // Push wobble opposite to movement
+      
+      // First stretch towards the left with anticipation
       this.tweens.add({
         targets: this.player,
-        scaleX: 1.6,  // Stretch horizontally
-        scaleY: 0.7,  // Compress vertically
-        duration: 100,  // Increased from 60ms
-        ease: 'Power2',
+        scaleX: 1.8,  // More extreme stretch
+        scaleY: 0.5,  // More compression
+        duration: 60,
+        ease: 'Cubic.easeOut',
         onComplete: () => {
-          // Then move and snap back
+          // Slingshot to position with overshoot
           this.tweens.add({
             targets: this.player,
-            x: targetX,
-            scaleX: 1,
-            scaleY: 1,
-            duration: 120,  // Slightly longer snap back
-            ease: 'Back.easeOut',
+            x: targetX - 15, // Overshoot past target
+            scaleX: 0.6,  // Squash on arrival
+            scaleY: 1.5,  // Stretch vertically
+            duration: 80,
+            ease: 'Power2',
             onComplete: () => {
-              this.isMoving = false;
+              // Bounce back with secondary wobble
+              this.tweens.add({
+                targets: this.player,
+                x: targetX + 8, // Bounce back
+                scaleX: 1.2,
+                scaleY: 0.85,
+                duration: 80,
+                ease: 'Sine.easeInOut',
+                onComplete: () => {
+                  // Final settle with jello wobbles
+                  this.tweens.add({
+                    targets: this.player,
+                    x: targetX,
+                    scaleX: 1,
+                    scaleY: 1,
+                    duration: 200,
+                    ease: 'Elastic.easeOut',
+                    easeParams: [0.4, 0.3], // More wobbles
+                    onComplete: () => {
+                      this.isMoving = false;
+                    }
+                  });
+                }
+              });
             }
           });
         }
@@ -2604,27 +2635,53 @@ class Main extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
     } else {
-      // Ground movement - stretchy animation
+      // Ground movement - jello stretchy animation
       this.isMoving = true;
       
-      // First stretch towards the right
+      // Add reactive wobble force
+      this.wobbleVelocity.x = 12; // Push wobble opposite to movement
+      
+      // First stretch towards the right with anticipation
       this.tweens.add({
         targets: this.player,
-        scaleX: 1.6,  // Stretch horizontally
-        scaleY: 0.7,  // Compress vertically
-        duration: 100,  // Increased from 60ms
-        ease: 'Power2',
+        scaleX: 1.8,  // More extreme stretch
+        scaleY: 0.5,  // More compression
+        duration: 60,
+        ease: 'Cubic.easeOut',
         onComplete: () => {
-          // Then move and snap back
+          // Slingshot to position with overshoot
           this.tweens.add({
             targets: this.player,
-            x: targetX,
-            scaleX: 1,
-            scaleY: 1,
-            duration: 120,  // Slightly longer snap back
-            ease: 'Back.easeOut',
+            x: targetX + 15, // Overshoot past target
+            scaleX: 0.6,  // Squash on arrival
+            scaleY: 1.5,  // Stretch vertically
+            duration: 80,
+            ease: 'Power2',
             onComplete: () => {
-              this.isMoving = false;
+              // Bounce back with secondary wobble
+              this.tweens.add({
+                targets: this.player,
+                x: targetX - 8, // Bounce back
+                scaleX: 1.2,
+                scaleY: 0.85,
+                duration: 80,
+                ease: 'Sine.easeInOut',
+                onComplete: () => {
+                  // Final settle with jello wobbles
+                  this.tweens.add({
+                    targets: this.player,
+                    x: targetX,
+                    scaleX: 1,
+                    scaleY: 1,
+                    duration: 200,
+                    ease: 'Elastic.easeOut',
+                    easeParams: [0.4, 0.3], // More wobbles
+                    onComplete: () => {
+                      this.isMoving = false;
+                    }
+                  });
+                }
+              });
             }
           });
         }
@@ -2898,45 +2955,101 @@ class Main extends Phaser.Scene {
       }
     }
     
-    // First squash down as launch preparation
-    this.player.setScale(1.4, 0.4);
+    // First squash down as launch preparation with jello wobble
+    this.player.setScale(1.6, 0.3);
     
-    // Then stretch up and launch
+    // Pre-launch wobble build-up
+    this.wobbleVelocity.y = -20 * (1 + chargePercent);
+    
+    // Then stretch up and launch with elastic
     this.tweens.add({
       targets: this.player,
-      scaleX: stretchX,
-      scaleY: stretchY,
-      duration: 200,  // Doubled from 100ms
-      ease: 'Power2',
+      scaleX: stretchX * 0.7,
+      scaleY: stretchY * 1.3,
+      duration: 150,
+      ease: 'Back.easeOut',
       onComplete: () => {
         // Launch up with variable height
-        const jumpDuration = 300 + chargePercent * 200; // Longer air time for higher jumps
+        const jumpDuration = 300 + chargePercent * 200;
+        
+        // Main jump tween with wobble
         this.tweens.add({
           targets: this.player,
           y: PLAYER_Y - jumpHeight,
-          scaleX: 1,
-          scaleY: 1,
           duration: jumpDuration,
-          ease: 'Quad.easeOut',
+          ease: 'Cubic.easeOut',
+          onUpdate: (tween) => {
+            // Add wobble during flight
+            const progress = tween.progress;
+            const wobbleAmount = (1 - progress) * 0.15; // Less wobble as we reach apex
+            this.player.scaleX = 1 + Math.sin(progress * Math.PI * 4) * wobbleAmount;
+            this.player.scaleY = 1 + Math.cos(progress * Math.PI * 4) * wobbleAmount;
+          },
           yoyo: true,
+          onYoyo: () => {
+            // At apex, add a little squish
+            this.player.setScale(1.2, 0.8);
+            this.tweens.add({
+              targets: this.player,
+              scaleX: 1,
+              scaleY: 1,
+              duration: 100,
+              ease: 'Sine.easeInOut'
+            });
+          },
           onComplete: () => {
-            this.isJumping = false;
-            this.player.y = PLAYER_Y;
-            this.player.setScale(1, 1);
-            // Reset rotation
-            if(Math.abs(this.player.angle % 360) < 10) {
-              this.player.angle = 0;
-            }
+            // Landing with multiple bounces
+            this.player.setScale(2, 0.3); // Extreme squash on landing
+            this.wobbleVelocity.y = 15;
+            
+            // First bounce up
+            this.tweens.add({
+              targets: this.player,
+              scaleX: 0.7,
+              scaleY: 1.5,
+              y: PLAYER_Y - 20,
+              duration: 100,
+              ease: 'Quad.easeOut',
+              onComplete: () => {
+                // Mini landing
+                this.tweens.add({
+                  targets: this.player,
+                  scaleX: 1.3,
+                  scaleY: 0.7,
+                  y: PLAYER_Y,
+                  duration: 80,
+                  ease: 'Quad.easeIn',
+                  onComplete: () => {
+                    // Final jello settle
+                    this.tweens.add({
+                      targets: this.player,
+                      scaleX: 1,
+                      scaleY: 1,
+                      duration: 400,
+                      ease: 'Elastic.easeOut',
+                      easeParams: [0.2, 0.15],
+                      onComplete: () => {
+                        this.isJumping = false;
+                        this.player.y = PLAYER_Y;
+                        if(Math.abs(this.player.angle % 360) < 10) {
+                          this.player.angle = 0;
+                        }
+                      }
+                    });
+                  }
+                });
+              }
+            });
           }
         });
         
-        // Spin based on charge (360 to 720 degrees)
+        // Spin based on charge with wobble
         const spinAngle = 360 + chargePercent * 360;
         this.tweens.add({
           targets: this.player,
           angle: spinAngle,
           duration: jumpDuration * 2,
-          ease: 'Linear'
+          ease: 'Cubic.easeInOut'
         });
       }
     });
@@ -3376,7 +3489,21 @@ class Main extends Phaser.Scene {
     const now=this.time.now; 
     const cooldown = this.rapidFire ? FIRE_COOLDOWN/3 : FIRE_COOLDOWN;
     if(now-this.lastShotAt<cooldown) return; 
-    this.lastShotAt=now; 
+    this.lastShotAt=now;
+    
+    // Add recoil wobble when shooting
+    this.wobbleVelocity.y = 3; // Small upward push
+    if(!this.isJumping) {
+      // Quick recoil animation for ground shots
+      this.tweens.add({
+        targets: this.player,
+        scaleX: 0.9,
+        scaleY: 1.1,
+        duration: 50,
+        ease: 'Power1',
+        yoyo: true
+      });
+    } 
     // Shoot from player's current position (accounts for jumping)
     const b=this.add.image(this.player.x, this.player.y, 'bulletTex'); 
     b.lane = this.playerLane;
@@ -3451,6 +3578,32 @@ class Main extends Phaser.Scene {
   }
 
   update(_, dt){
+    // Update idle wobble animation when not moving
+    if(!this.isMoving && !this.isJumping && !this.isDashing && this.player) {
+      // Breathing/idle animation
+      this.idleWobblePhase += dt * 0.003;
+      const breathScale = 1 + Math.sin(this.idleWobblePhase) * 0.03;
+      const squishScale = 1 - Math.cos(this.idleWobblePhase * 2) * 0.02;
+      
+      // Apply idle animation only if not already being animated
+      if(!this.tweens.isTweening(this.player)) {
+        this.player.setScale(
+          breathScale * (1 + this.wobbleVelocity.x * 0.01),
+          squishScale * (1 + this.wobbleVelocity.y * 0.01)
+        );
+      }
+      
+      // Update wobble physics
+      this.wobbleVelocity.x *= this.wobbleDamping;
+      this.wobbleVelocity.y *= this.wobbleDamping;
+      
+      // Add subtle random wobble impulses
+      if(Math.random() < 0.02) {
+        this.wobbleVelocity.x += (Math.random() - 0.5) * 2;
+        this.wobbleVelocity.y += (Math.random() - 0.5) * 2;
+      }
+    }
+    
     // Update combo timer display
     if(this.combo > 1) {
       const timeSinceKill = this.time.now - this.lastKillTime;
@@ -3918,6 +4071,31 @@ class Main extends Phaser.Scene {
         this.rapidFire = true;
         this.rapidFireTimer = 5000; // 5 seconds
         this.player.setTint(0x00ff00); // Green tint
+        
+        // Add jello wobble reaction for power-up
+        this.wobbleVelocity.x = (Math.random() - 0.5) * 20;
+        this.wobbleVelocity.y = -15;
+        
+        // Excited jello bounce animation
+        this.tweens.add({
+          targets: this.player,
+          scaleX: 1.4,
+          scaleY: 0.7,
+          duration: 100,
+          ease: 'Power2',
+          yoyo: true,
+          repeat: 2,
+          onComplete: () => {
+            this.tweens.add({
+              targets: this.player,
+              scaleX: 1,
+              scaleY: 1,
+              duration: 200,
+              ease: 'Elastic.easeOut',
+              easeParams: [0.5, 0.3]
+            });
+          }
+        })
         // Play quick arpeggio for power-up
         try {
           const now = Tone.now();
