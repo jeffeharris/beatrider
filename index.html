@@ -1565,11 +1565,11 @@ if (isMobile) {
   document.body.classList.add('mobile');
 }
 
-// Initialize game dimensions
-const WIDTH = window.innerWidth;
-const HEIGHT = window.innerHeight;
+// Initialize game dimensions - now dynamic for resize support
+let WIDTH = window.innerWidth;
+let HEIGHT = window.innerHeight;
 const LANES = 5;
-const LANE_W = WIDTH/LANES;
+let LANE_W = WIDTH/LANES;
 
 // Storage management
 const STORAGE_KEY = 'beatrider_data';
@@ -1605,13 +1605,13 @@ const savedData = loadGameData();
 let sessionHighScore = savedData.highScore;
 gridEnabled = savedData.gridEnabled;
 // Game dimensions initialized based on viewport - adjust for mobile
-const PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobile
+let PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobile
 const ENEMY_SPEED_BASE = isMobile ? 150 : 200; // Slower on mobile for easier play
 const BULLET_SPEED = 520;
 const FIRE_COOLDOWN = 110;
 // Smart scaling based on device and orientation
-const isLandscape = window.innerWidth > window.innerHeight;
-const MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1; // Smaller scale in landscape
+let isLandscape = window.innerWidth > window.innerHeight;
+let MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1; // Smaller scale in landscape
 
 // Startup screen scene
 class StartupScene extends Phaser.Scene {
@@ -1620,8 +1620,10 @@ class StartupScene extends Phaser.Scene {
   }
   
   create() {
-    const WIDTH = this.cameras.main.width;
-    const HEIGHT = this.cameras.main.height;
+    // Use global WIDTH and HEIGHT which are updated on resize
+    // Ensure they're current
+    WIDTH = this.cameras.main.width;
+    HEIGHT = this.cameras.main.height;
     
     // Black background
     this.cameras.main.setBackgroundColor('#000');
@@ -1836,6 +1838,16 @@ class StartupScene extends Phaser.Scene {
     const invisibleButton = this.add.rectangle(WIDTH/2, HEIGHT/2, WIDTH, HEIGHT, 0x000000, 0);
     invisibleButton.setInteractive();
     invisibleButton.once('pointerdown', startGame);
+  }
+  
+  resize(gameSize, baseSize, displaySize, resolution) {
+    // Update global dimensions
+    WIDTH = gameSize.width;
+    HEIGHT = gameSize.height;
+    
+    // Clear and recreate all elements with new positions
+    this.children.removeAll();
+    this.create();
   }
 }
 
@@ -3652,6 +3664,61 @@ class Main extends Phaser.Scene {
 
   }
   
+  resize(gameSize, baseSize, displaySize, resolution) {
+    // Update global dimensions
+    WIDTH = gameSize.width;
+    HEIGHT = gameSize.height;
+    LANE_W = WIDTH / LANES;
+    PLAYER_Y = HEIGHT - (isMobile ? 90 : 60);
+    isLandscape = WIDTH > HEIGHT;
+    MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1;
+    
+    // Update player position
+    if (this.player) {
+      this.player.x = this._laneX(this.playerLane);
+      this.player.y = PLAYER_Y;
+    }
+    
+    // Update UI text positions
+    const scoreY = isMobile ? HEIGHT-36 : HEIGHT-24;
+    const highScoreY = isMobile ? HEIGHT-72 : HEIGHT-48;
+    const comboY = isMobile ? HEIGHT-108 : HEIGHT-72;
+    
+    if (this.scoreText) {
+      this.scoreText.y = scoreY;
+    }
+    if (this.highScoreText) {
+      this.highScoreText.y = highScoreY;
+    }
+    if (this.comboText) {
+      this.comboText.y = comboY;
+    }
+    
+    // Update combo meter position
+    if (this.comboMeterBg) {
+      const meterY = comboY + 30;
+      this.comboMeterY = meterY;
+      this.comboMeterBg.clear();
+      this.comboMeterBg.fillStyle(0x333333, 0.5);
+      this.comboMeterBg.fillRect(10, meterY, 200, 8);
+    }
+    
+    // Recreate starfield with new dimensions
+    if (this.stars) {
+      this.createStarfield();
+    }
+    
+    // Update grid if visible
+    if (this.gridVisible && this.gridGraphics) {
+      this._drawPerspectiveGrid();
+    }
+    
+    // Update mobile controls positions if they exist
+    if (this.mobileControls) {
+      this.setupMobileControls();
+    }
+  }
+  
   updateTrails(dt) {
     this.trailGraphics.clear();
     
@@ -3697,13 +3764,19 @@ class Main extends Phaser.Scene {
   }
 }
 
-// Initialize Phaser game
+// Initialize Phaser game with proper scale configuration
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   width: WIDTH,
   height: HEIGHT,
   parent: 'gameContainer',
-  scene: [StartupScene, Main]
+  scene: [StartupScene, Main],
+  scale: {
+    mode: Phaser.Scale.RESIZE,
+    parent: 'gameContainer',
+    width: '100%',
+    height: '100%'
+  }
 });
 
 // Register service worker for PWA
@@ -3719,12 +3792,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Simple reload on orientation change for consistent experience
-window.addEventListener('orientationchange', () => {
-  setTimeout(() => {
-    location.reload();
-  }, 100);
-});
+// Removed - now handled by Phaser's scale manager
 </script>
 </body>
 </html>
