@@ -213,11 +213,21 @@
       align-items: center;
       justify-content: center;
       transition: all 0.2s;
+      position: relative;
     }
+    
     
     .control-btn:hover {
       background: #222;
       box-shadow: 0 0 10px #0f0;
+    }
+    
+    .control-btn.inactive svg {
+      stroke: #666 !important;
+    }
+    
+    .control-btn.active svg {
+      stroke: #0f0 !important;
     }
     
     .track-squares {
@@ -1228,6 +1238,54 @@ function evolve() {
 // Schedule evolution
 Tone.Transport.scheduleRepeat(() => evolve(), "1m");
 
+// UI State Management
+const uiState = {
+  isPlaying: false,
+  settingsOpen: false,
+  gridVisible: false
+};
+
+function updatePlayPauseButton() {
+  const btn = document.getElementById('playPauseBtn');
+  if (!btn) return;
+  
+  // Use text symbols for now
+  if (uiState.isPlaying) {
+    btn.textContent = '⏸';
+    btn.title = 'Pause';
+  } else {
+    btn.textContent = '▶';
+    btn.title = 'Play';
+  }
+}
+
+function updateSettingsButton() {
+  const btn = document.getElementById('expandBtn');
+  if (!btn) return;
+  
+  if (uiState.settingsOpen) {
+    btn.textContent = '✕';
+    btn.title = 'Close Settings';
+  } else {
+    btn.textContent = '⚙';
+    btn.title = 'Settings';
+  }
+}
+
+function updateGridButton() {
+  const btn = document.getElementById('gridToggleBtn');
+  if (!btn) return;
+  
+  btn.textContent = '⊞';
+  
+  if (uiState.gridVisible) {
+    btn.style.color = '#0f0';
+  } else {
+    btn.style.color = '#666';
+  }
+}
+
+
 // Controls
 const playPauseBtn = document.getElementById('playPauseBtn');
 if (playPauseBtn) {
@@ -1241,14 +1299,14 @@ if (playPauseBtn) {
       updatePatterns();
       Tone.Transport.start();
       document.getElementById('status').textContent = 'PLAYING';
-      playPauseBtn.innerHTML = '⏸';
-      playPauseBtn.title = 'Pause';
+      uiState.isPlaying = true;
+      updatePlayPauseButton();
     } else {
       // Pause
       Tone.Transport.pause();
       document.getElementById('status').textContent = 'PAUSED';
-      playPauseBtn.innerHTML = '▶';
-      playPauseBtn.title = 'Play';
+      uiState.isPlaying = false;
+      updatePlayPauseButton();
     }
   });
 }
@@ -1427,11 +1485,13 @@ if (expandBtn) {
     if (expandedPanel.classList.contains('expanded')) {
       // Panel is open, close it
       expandedPanel.classList.remove('expanded');
-      expandBtn.innerHTML = '⚙';
+      uiState.settingsOpen = false;
+      updateSettingsButton();
     } else {
       // Panel is closed, open it
       expandedPanel.classList.add('expanded');
-      expandBtn.innerHTML = '▼';
+      uiState.settingsOpen = true;
+      updateSettingsButton();
     }
   });
 }
@@ -2015,6 +2075,8 @@ class Main extends Phaser.Scene {
       if (document.getElementById('status')) {
         document.getElementById('status').textContent = 'PLAYING';
       }
+      uiState.isPlaying = true;
+      updatePlayPauseButton();
     }
     
     // Initialize trail system
@@ -2106,11 +2168,9 @@ class Main extends Phaser.Scene {
     
     this.gridVisible = gridEnabled; // Use persistent grid setting
     
-    // Set initial grid button color
-    const gridBtn = document.getElementById('gridToggleBtn');
-    if(gridBtn) {
-      gridBtn.style.color = gridEnabled ? '#0f0' : '#666';
-    }
+    // Sync initial grid UI state
+    uiState.gridVisible = gridEnabled;
+    updateGridButton();
 
     // Mobile controls setup
     this.setupMobileControls();
@@ -2184,10 +2244,8 @@ class Main extends Phaser.Scene {
           this.gridGraphics.clear();
         }
         // Update button visual state
-        const btn = document.getElementById('gridToggleBtn');
-        if(btn) {
-          btn.style.color = this.gridVisible ? '#0f0' : '#666';
-        }
+        uiState.gridVisible = this.gridVisible;
+        updateGridButton();
       },
       reset: ()=>{ this.scene.restart(); }
     };
@@ -3469,6 +3527,9 @@ class Main extends Phaser.Scene {
       if(!this.gridVisible && this.gridGraphics) {
         this.gridGraphics.clear();
       }
+      // Sync UI state
+      uiState.gridVisible = this.gridVisible;
+      updateGridButton();
     }
     
     // Switch laser sounds with number keys
