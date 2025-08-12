@@ -2349,6 +2349,11 @@ class Main extends Phaser.Scene {
     this.pauseScoreText = null;
     this.pauseHighScoreText = null;
     
+    // Initialize death/invincibility state
+    this.isShowingGameOver = false;
+    this.isInvincible = false;
+    this.playerCanControl = true;
+    
     // Store reference for external access
     window.gameScene = this;
     
@@ -3668,7 +3673,10 @@ class Main extends Phaser.Scene {
   checkDashCollision() {
     // Check collision with obstacles during dash - using Y position like regular collision
     for(let o of this.obstacles) {
-      if(Math.abs(o.y - this.player.y) < PLAYER_CONFIG.collision.yThreshold && o.lane === this.playerLane && !this.isJumping) {
+      if(Math.abs(o.y - this.player.y) < PLAYER_CONFIG.collision.yThreshold && o.lane === this.playerLane && !this.isJumping && !this.isInvincible) {
+        // Set invincible immediately to prevent multiple deaths
+        this.isInvincible = true;
+        
         // Hit obstacle during dash - game over
         this.cameras.main.shake(500, 0.03);
         this.player.setTint(0xff0000);
@@ -4049,13 +4057,17 @@ class Main extends Phaser.Scene {
   }
   
   showGameOverScreen() {
+    // Set flag to block pause and controls
+    this.isShowingGameOver = true;
+    this.playerCanControl = false;
+    
     // Darken the screen
     const overlay = this.add.graphics();
     overlay.fillStyle(0x000000, 0.7);
     overlay.fillRect(0, 0, WIDTH, HEIGHT);
     overlay.setAlpha(0);
     
-    // Check if new high score
+    // Check if new high score (before resetting)
     const beatHighScore = this.score > sessionHighScore;
     if(beatHighScore) {
       sessionHighScore = this.score;
@@ -4112,6 +4124,7 @@ class Main extends Phaser.Scene {
       });
       highScoreText.setOrigin(0.5);
       highScoreText.setAlpha(0);
+      highScoreText.setData('isHighScoreText', true); // Mark for later cleanup
       
       this.tweens.add({
         targets: highScoreText,
@@ -4183,19 +4196,82 @@ class Main extends Phaser.Scene {
       delay: 1200
     });
     
-    // Restart after delay
+    // Respawn after delay
     this.time.delayedCall(2500, () => {
-      // Reset UI transparency before restart
-      const musicControls = document.getElementById('musicControls');
-      const expandedPanel = document.getElementById('expandedPanel');
-      if(musicControls) {
-        musicControls.classList.remove('touched');
-      }
-      if(expandedPanel) {
-        expandedPanel.classList.remove('touched');
-        expandedPanel.classList.remove('expanded');
-      }
-      this.scene.restart();
+      // Fade out game over screen elements
+      const highScoreElement = this.children.list.find(child => child && child.getData && child.getData('isHighScoreText'));
+      this.tweens.add({
+        targets: [overlay, scoreLabel, scoreText, restartText, congratsText, highScoreElement].filter(Boolean),
+        alpha: 0,
+        duration: 300,
+        onComplete: () => {
+          // Clean up game over screen elements
+          overlay.destroy();
+          scoreLabel.destroy();
+          scoreText.destroy();
+          restartText.destroy();
+          if(congratsText) congratsText.destroy();
+          if(highScoreElement) highScoreElement.destroy();
+          
+          // Reset score and combo for new round
+          this.score = 0;
+          this.scoreText.setText('0');
+          this.combo = 1;
+          this.comboText.setAlpha(0);
+          
+          // Reset difficulty progression
+          this.beats = 0;
+          
+          // Clear any power-ups
+          this.rapidFire = false;
+          this.rapidFireTimer = 0;
+          this.player.clearTint();
+          
+          // Reset player to center lane with invincibility
+          this.playerLane = 2;
+          this.player.x = this._laneX(2);
+          this.player.setVisible(true);
+          
+          // Reset player states
+          this.isJumping = false;
+          this.isCrouching = false;
+          this.isStretching = false;
+          this.isDashing = false;
+          this.isMoving = false;
+          this.isTouchFiring = false;
+          this.crouchTimer = 0;
+          if(this.chargeGlow) this.chargeGlow.setVisible(false);
+          
+          // Re-enable controls and continue invincibility
+          this.isShowingGameOver = false;
+          this.playerCanControl = true;
+          
+          // Stop any existing invincibility tween
+          if(this.invincibilityTween) {
+            this.invincibilityTween.stop();
+            this.invincibilityTween = null;
+          }
+          
+          // Create flashing effect for invincibility
+          this.invincibilityTween = this.tweens.add({
+            targets: this.player,
+            alpha: { from: 0.3, to: 1 },
+            duration: 100,
+            yoyo: true,
+            repeat: -1
+          });
+          
+          // End invincibility after 2 seconds (from when screen fades)
+          this.time.delayedCall(2000, () => {
+            this.isInvincible = false;
+            if(this.invincibilityTween) {
+              this.invincibilityTween.stop();
+              this.invincibilityTween = null;
+              this.player.setAlpha(1);
+            }
+          });
+        }
+      });
     });
   }
   
@@ -4422,8 +4498,8 @@ class Main extends Phaser.Scene {
     }
   }
   _fire(){ 
-    // Can't shoot while moving
-    if(this.isMoving) return;
+    // Can't shoot while controls disabled or moving
+    if(!this.playerCanControl || this.isMoving) return;
     
     // Check if we're off-screen for horizontal shooting
     const isOffScreen = this.playerLane < 0 || this.playerLane >= LANES;
@@ -4550,8 +4626,9 @@ class Main extends Phaser.Scene {
   }
 
   update(_, dt){
-    // Handle ESC key for pause
+    // Handle ESC key for pause (blocked during game over)
     if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
+      if (this.isShowingGameOver) return; // Block pause during game over
       if (!this.isPaused) {
         this.pauseGame();
       } else {
@@ -4722,7 +4799,9 @@ class Main extends Phaser.Scene {
     }
     
     // Movement with rubber band effect and smooth transitions
-    if(Phaser.Input.Keyboard.JustDown(this.keys.LEFT)||Phaser.Input.Keyboard.JustDown(this.keys.A)){ 
+    if(!this.playerCanControl) {
+      // Block all movement when controls are disabled
+    } else if(Phaser.Input.Keyboard.JustDown(this.keys.LEFT)||Phaser.Input.Keyboard.JustDown(this.keys.A)){ 
       const now = this.time.now;
       // Check for double-tap dash
       if(now - this.lastLeftPress < this.doubleTapWindow) {
@@ -4746,7 +4825,7 @@ class Main extends Phaser.Scene {
         this.lastLeftPress = now;
       }
     }
-    if(Phaser.Input.Keyboard.JustDown(this.keys.RIGHT)||Phaser.Input.Keyboard.JustDown(this.keys.D)){ 
+    else if(Phaser.Input.Keyboard.JustDown(this.keys.RIGHT)||Phaser.Input.Keyboard.JustDown(this.keys.D)){ 
       const now = this.time.now;
       // Check for double-tap dash
       if(now - this.lastRightPress < this.doubleTapWindow) {
@@ -4875,7 +4954,7 @@ class Main extends Phaser.Scene {
     }
     
     // Crouch/charge mechanic for super jump - hold DOWN to charge, release to jump
-    if((this.keys.DOWN.isDown || this.keys.S.isDown) && !this.isJumping){
+    if(this.playerCanControl && (this.keys.DOWN.isDown || this.keys.S.isDown) && !this.isJumping){
       if(!this.isCrouching) {
         this.isCrouching = true;
         this.crouchTimer = 0;
@@ -4934,7 +5013,7 @@ class Main extends Phaser.Scene {
     }
     
     // Regular jump mechanic - UP or W key (only if not crouching)
-    if((Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)) && !this.isCrouching){
+    if(this.playerCanControl && (Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)) && !this.isCrouching){
       this.jump();
     }
     
@@ -5013,7 +5092,10 @@ class Main extends Phaser.Scene {
       
       // Remove or check collision (can't hit while jumping or stretching)
       if(e.progress > 1.1){ e.destroy(); this.enemies.splice(i,1); }
-      else if(e.progress > 0.9 && !this.isJumping && !this.isStretching && this._aabb(e, this.player)){ 
+      else if(e.progress > 0.9 && !this.isJumping && !this.isStretching && !this.isInvincible && this._aabb(e, this.player)){ 
+        // Set invincible immediately to prevent multiple deaths
+        this.isInvincible = true;
+        
         // Save highscore before restarting
         if(this.score > sessionHighScore) {
           sessionHighScore = this.score;
@@ -5054,7 +5136,10 @@ class Main extends Phaser.Scene {
       
       // Check collision with player (can jump over obstacles!)
       // Check when obstacle is near player Y position  
-      if(Math.abs(o.y - this.player.y) < PLAYER_CONFIG.collision.yThreshold && o.lane === this.playerLane && !this.isJumping && !this.isStretching) {
+      if(Math.abs(o.y - this.player.y) < PLAYER_CONFIG.collision.yThreshold && o.lane === this.playerLane && !this.isJumping && !this.isStretching && !this.isInvincible) {
+        // Set invincible immediately to prevent multiple deaths
+        this.isInvincible = true;
+        
         // Save highscore before restarting
         if(this.score > sessionHighScore) {
           sessionHighScore = this.score;
