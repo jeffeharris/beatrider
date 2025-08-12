@@ -1497,7 +1497,8 @@ if (gridToggleBtn) {
 }
 
 if (expandBtn) {
-  expandBtn.addEventListener('click', () => {
+  expandBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent document click from firing
     if (expandedPanel.classList.contains('expanded')) {
       // Panel is open, close it
       expandedPanel.classList.remove('expanded');
@@ -1511,6 +1512,38 @@ if (expandBtn) {
     }
   });
 }
+
+// Close menu when clicking outside
+document.addEventListener('click', (e) => {
+  if (!uiState.settingsOpen) return;
+  
+  const panel = document.getElementById('expandedPanel');
+  const btn = document.getElementById('expandBtn');
+  const musicControls = document.getElementById('musicControls');
+  
+  // Check if click is outside panel, button, and music controls
+  if (!panel.contains(e.target) && !btn.contains(e.target) && !musicControls.contains(e.target)) {
+    panel.classList.remove('expanded');
+    uiState.settingsOpen = false;
+    updateSettingsButton();
+  }
+});
+
+// Close menu when game control keys are pressed
+document.addEventListener('keydown', (e) => {
+  if (!uiState.settingsOpen) return;
+  
+  // Game control keys that should close the menu
+  const gameKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 
+                    'a', 'd', 'w', 's', ' ', 'Escape'];
+  
+  if (gameKeys.includes(e.key) || gameKeys.includes(e.key.toLowerCase())) {
+    const panel = document.getElementById('expandedPanel');
+    panel.classList.remove('expanded');
+    uiState.settingsOpen = false;
+    updateSettingsButton();
+  }
+});
 
 
 // Game sounds that blend with the music - route through sidechain for cohesion
