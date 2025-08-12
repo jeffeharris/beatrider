@@ -4566,13 +4566,19 @@ class Main extends Phaser.Scene {
     b.w = b.w || Math.floor(6 * MOBILE_SCALE); 
     b.h = b.h || Math.floor(12 * MOBILE_SCALE);
     
-    // If jumping, give bullet an arc trajectory (only for vertical shots)
-    if(this.isJumping && !HORIZONTAL_SHOOTING) {
+    // If jumping, give bullet an arc trajectory
+    if(this.isJumping && !isOffScreen) {
       b.isArcShot = true;
       b.arcHeight = 0; // Height offset from base trajectory
       b.arcVelocity = -500; // Stronger initial upward velocity
       b.gravity = 600; // Slightly less gravity for longer arc
       b.startY = this.player.y; // Remember starting height
+      console.log('Arc shot created:', {
+        isJumping: this.isJumping,
+        arcVelocity: b.arcVelocity,
+        gravity: b.gravity,
+        startY: b.startY
+      });
     } 
     if(this.rapidFire) {
       b.vy *= 1.5; // Faster bullets in rapid fire
@@ -5293,9 +5299,19 @@ class Main extends Phaser.Scene {
         const o = this.obstacles[j];
         if(o.lane === b.lane && Math.abs(o.progress - b.progress) < 0.05){
           // Arc shots can go over obstacles if high enough
-          // Obstacles are 8 pixels tall, so check if bullet is clearly above
-          if(b.isArcShot && b.y < (o.y - o.h/2 - 10)) {
-            continue; // Bullet is flying over the obstacle, don't collide
+          // Check if bullet is above the obstacle (lower y = higher on screen)
+          if(b.isArcShot) {
+            console.log('Arc shot collision check:', {
+              bulletY: b.y,
+              obstacleY: o.y,
+              obstacleHeight: o.h,
+              arcHeight: b.arcHeight,
+              threshold: o.y - 20,
+              willPass: b.y < (o.y - 20)
+            });
+            if(b.y < (o.y - 20)) {
+              continue; // Bullet is flying over the obstacle, don't collide
+            }
           }
           
           // Bullet hits obstacle - small spark effect
