@@ -4205,7 +4205,7 @@ class Main extends Phaser.Scene {
       b.currentLane = this.playerLane < 0 ? -0.5 : 4.5; // Start just outside visible area
       b.w = Math.floor(12 * MOBILE_SCALE); // Wider for horizontal
       b.h = Math.floor(6 * MOBILE_SCALE); // Shorter for horizontal
-      b.setRotation(direction > 0 ? 0 : Math.PI); // Face the direction of travel
+      b.setRotation(direction > 0 ? Math.PI/2 : -Math.PI/2); // Rotate 90 degrees for horizontal orientation
     } else {
       // Normal vertical shooting
       b.vy=-BULLET_SPEED; 
