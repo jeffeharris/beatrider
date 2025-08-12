@@ -1,4 +1,4 @@
-const CACHE_NAME = 'beatrider-v4';
+const CACHE_NAME = 'beatrider-v5';
 const urlsToCache = [
   './',
   './index.html',

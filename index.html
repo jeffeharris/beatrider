@@ -34,9 +34,11 @@
       overflow: hidden;
     }
     .container {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       overflow: hidden;
     }
     .left-panel {
@@ -1662,9 +1664,9 @@ if (isMobile) {
   document.body.classList.add('mobile');
 }
 
-// Initialize game dimensions - now dynamic for resize support
-let WIDTH = window.innerWidth;
-let HEIGHT = window.innerHeight;
+// Initialize game dimensions - use visualViewport for accurate mobile sizing
+let WIDTH = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+let HEIGHT = window.visualViewport ? window.visualViewport.height : window.innerHeight;
 const LANES = 5;
 let LANE_W = WIDTH/LANES;
 
@@ -4786,8 +4788,8 @@ const game = new Phaser.Game({
   scale: {
     mode: Phaser.Scale.RESIZE,
     parent: 'gameContainer',
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: window.visualViewport ? window.visualViewport.width : window.innerWidth,
+    height: window.visualViewport ? window.visualViewport.height : window.innerHeight,
     autoCenter: Phaser.Scale.CENTER_BOTH
   }
 });
@@ -4810,6 +4812,15 @@ setTimeout(() => {
         game.scale.refresh();
       }
     });
+    
+    // Handle visual viewport changes (mobile browser UI showing/hiding)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        if (game && game.scale) {
+          game.scale.refresh();
+        }
+      });
+    }
     
     // Check orientation changes
     window.addEventListener('orientationchange', () => {
