@@ -2691,7 +2691,7 @@ class Main extends Phaser.Scene {
         // Execute actions based on zone entry
         switch(newZone) {
           case 'leftMove':
-            if (this.currentZone === 'center' && canMove) {
+            if ((this.currentZone === 'center' || this.currentZone === 'jump') && canMove) {
               this.laneBeforeMove = this.playerLane; // Save position before move
               this.moveLeft();
               this.lastMoveTime = currentTime;
@@ -2717,7 +2717,7 @@ class Main extends Phaser.Scene {
             break;
             
           case 'rightMove':
-            if (this.currentZone === 'center' && canMove) {
+            if ((this.currentZone === 'center' || this.currentZone === 'jump') && canMove) {
               this.laneBeforeMove = this.playerLane; // Save position before move
               this.moveRight();
               this.lastMoveTime = currentTime;
@@ -2731,6 +2731,11 @@ class Main extends Phaser.Scene {
                     console.log('RECENTERING after right move complete');
                     this.touchStartX = activePointer.x;
                     this.touchStartY = activePointer.y;
+                    
+                    // Update visual zones at new position
+                    if (this.zoneVisuals) {
+                      this.updateZoneVisuals();
+                    }
                   }
                 }
               });
@@ -2742,21 +2747,17 @@ class Main extends Phaser.Scene {
               // Check if we just moved (within 250ms like keyboard double-tap)
               if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < 250) {
                 // Cancel the move and dash from original position
-                // Kill any x-axis tweens
-                this.tweens.getTweensOf(this.player).forEach(tween => {
-                  if (tween.data && tween.data[0] && tween.data[0].key === 'x') {
-                    tween.stop();
-                  }
-                });
+                // Kill ALL tweens to prevent any move animations from continuing
+                this.tweens.killTweensOf(this.player);
                 
-                // Reset to original lane
+                // Reset to original lane AND position
                 this.playerLane = this.laneBeforeMove;
-                if (!this.isJumping) {
-                  this.player.x = this._laneX(this.playerLane);
-                }
+                this.player.x = this._laneX(this.playerLane);
+                this.player.setScale(1, 1); // Reset scale
                 
                 // Clear the flag
                 this.laneBeforeMove = null;
+                this.isMoving = false; // Clear moving flag
               }
               
               // Dash 2 lanes
@@ -2770,21 +2771,17 @@ class Main extends Phaser.Scene {
               // Check if we just moved (within 250ms like keyboard double-tap)
               if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < 250) {
                 // Cancel the move and dash from original position
-                // Kill any x-axis tweens
-                this.tweens.getTweensOf(this.player).forEach(tween => {
-                  if (tween.data && tween.data[0] && tween.data[0].key === 'x') {
-                    tween.stop();
-                  }
-                });
+                // Kill ALL tweens to prevent any move animations from continuing
+                this.tweens.killTweensOf(this.player);
                 
-                // Reset to original lane
+                // Reset to original lane AND position
                 this.playerLane = this.laneBeforeMove;
-                if (!this.isJumping) {
-                  this.player.x = this._laneX(this.playerLane);
-                }
+                this.player.x = this._laneX(this.playerLane);
+                this.player.setScale(1, 1); // Reset scale
                 
                 // Clear the flag
                 this.laneBeforeMove = null;
+                this.isMoving = false; // Clear moving flag
               }
               
               // Dash 2 lanes
@@ -2795,8 +2792,14 @@ class Main extends Phaser.Scene {
             
           case 'jump':
             // Simple jump zone - just do a regular jump
+            console.log('JUMP ZONE ENTERED', {
+              currentZone: this.currentZone,
+              isJumping: this.isJumping,
+              isChargingJump: this.isChargingJump,
+              willJump: this.currentZone !== 'jump' && !this.isJumping && !this.isChargingJump
+            });
             if (this.currentZone !== 'jump' && !this.isJumping && !this.isChargingJump) {
-              console.log('REGULAR JUMP');
+              console.log('EXECUTING JUMP');
               this.jump();
             }
             break;
@@ -2960,6 +2963,11 @@ class Main extends Phaser.Scene {
             duration: cfg.slingshot.duration,
             ease: 'Power2',
             onComplete: () => {
+              // Skip bounce if dash is starting or in progress
+              if (this.isDashStarting || this.isDashing) {
+                this.isMoving = false;
+                return;
+              }
               // Bounce back with secondary wobble
               this.tweens.add({
                 targets: this.player,
@@ -3073,6 +3081,11 @@ class Main extends Phaser.Scene {
             duration: cfg.slingshot.duration,
             ease: 'Power2',
             onComplete: () => {
+              // Skip bounce if dash is starting or in progress
+              if (this.isDashStarting || this.isDashing) {
+                this.isMoving = false;
+                return;
+              }
               // Bounce back with secondary wobble
               this.tweens.add({
                 targets: this.player,
@@ -3161,34 +3174,63 @@ class Main extends Phaser.Scene {
     const startLane = this.playerLane;
     const targetLane = Math.max(-1, this.playerLane - 2);  // Dash 2 lanes total
     
-    // Can't dash if already at leftmost position
-    if(startLane <= 0) return;  // Changed from -1 to 0
+    console.log('DASH LEFT START', {
+      startLane,
+      targetLane,
+      lanesMoving: startLane - targetLane,
+      currentPlayerX: this.player.x,
+      startLaneX: this._laneX(startLane),
+      targetLaneX: this._laneX(targetLane),
+      WIDTH,
+      LANES,
+      LANE_W
+    });
+    
+    // Can't dash if already at leftmost position  
+    if(startLane <= -1) return;  // Allow dashing from lane 0
     
     this.isDashing = true;
     this.isMoving = true;
     
-    // Kill any existing movement tweens but preserve jump
-    // We need to stop horizontal movement even when jumping
-    this.tweens.getTweensOf(this.player).forEach(tween => {
-      // Only kill tweens that affect x position
-      if (tween.data && tween.data[0] && tween.data[0].key === 'x') {
-        tween.stop();
-      }
-    });
+    // Set a flag to prevent move animations from creating bounce tweens
+    this.isDashStarting = true;
     
-    // Always update X to current lane position before dashing
+    // Store jump state before killing tweens
+    const wasJumping = this.isJumping;
+    const jumpY = this.player.y;
+    
+    // Kill ALL existing tweens to prevent move animations from continuing
+    this.tweens.killTweensOf(this.player);
+    
+    // Restore jump if we were jumping
+    if (wasJumping) {
+      // Continue the jump animation
+      this.tweens.add({
+        targets: this.player,
+        y: PLAYER_Y,
+        duration: 250,
+        ease: 'Quad.easeIn',
+        onComplete: () => {
+          this.isJumping = false;
+          this.player.y = PLAYER_Y;
+        }
+      });
+    }
+    
+    // Always update X to start lane position before dashing
+    const startX = this._laneX(startLane);
     if (!this.isJumping) {
-      this.player.x = this._laneX(this.playerLane);
+      this.player.x = startX;
     }
     this.player.setScale(1, 1);  // Reset scale
     this.player.angle = 0;  // Reset rotation
     
-    // Create dash trail effect
-    const trail1 = this.add.image(this.player.x, this.player.y, 'playerTex');
+    // Create dash trail effect at start position
+    const trail1 = this.add.image(startX, this.player.y, 'playerTex');
     trail1.setAlpha(0.5);
     trail1.setTint(0x00ffff);
     
-    const trail2 = this.add.image(this.player.x, this.player.y, 'playerTex');
+    const trail2 = this.add.image(startX, this.player.y, 'playerTex');
     trail2.setAlpha(0.3);
     trail2.setTint(0x00ffff);
     
@@ -3201,23 +3243,81 @@ class Main extends Phaser.Scene {
       gameSounds.offScreenWomp.triggerAttackRelease("C3", "32n", now);
     } catch(e) {}
     
-    // Since we're only moving 1 lane (first tap already moved 1), just dash directly
+    // Update lane immediately so firing is in sync
+    this.playerLane = targetLane;
+    
     const targetX = this._laneX(targetLane);
     
     // Check collision in the starting lane (we're passing through it during dash)
-    // The first tap moved us here, but we're dashing through it quickly
     this.checkDashCollision();
+    
+    // Set player to start position explicitly
+    this.player.x = startX;
+    
+    // Log what we're about to animate
+    console.log('DASH ANIMATION', {
+      from: startX,
+      to: targetX,
+      playerBefore: this.player.x
+    });
     
     // Fast dash animation to the target
     this.tweens.add({
       targets: [this.player, trail1, trail2],
-      x: targetX,
+      x: targetX,  // Just animate to target, don't use from/to syntax
       duration: PLAYER_CONFIG.dash.duration,  // 60ms - same as stretch phase
       ease: 'Power2',
       onComplete: () => {
-        this.playerLane = targetLane;  // Update lane AFTER animation completes
         this.isMoving = false;
         this.isDashing = false;
+        // Clear the dash starting flag after dash completes
+        this.isDashStarting = false;
+        // Ensure visual position matches logical lane
+        const expectedX = this._laneX(this.playerLane);
+        this.player.x = expectedX;
+        console.log('DASH COMPLETE', {
+          playerLane: this.playerLane,
+          expectedX: expectedX,
+          actualX: this.player.x,
+          lane0X: this._laneX(0),
+          lane1X: this._laneX(1),
+          lane2X: this._laneX(2),
+          lane3X: this._laneX(3),
+          lane4X: this._laneX(4),
+          visualCheck: `Is player.x (${this.player.x}) closer to lane 2 (${this._laneX(2)}) or lane 3 (${this._laneX(3)})?`
+        });
+        
+        // Log position again after a frame to see if something changes it
+        this.time.delayedCall(16, () => {
+          console.log('POSITION CHECK 1 FRAME LATER', {
+            playerX: this.player.x,
+            playerLane: this.playerLane,
+            expectedX: this._laneX(this.playerLane)
+          });
+        });
+        
+        // Store the expected position and check if anything modifies it
+        const correctX = expectedX;
+        let checkCount = 0;
+        const positionChecker = this.time.addEvent({
+          delay: 1,
+          repeat: 200,
+          callback: () => {
+            if (Math.abs(this.player.x - correctX) > 1) {
+              console.log(`POSITION CHANGED at ${checkCount}ms! Was ${correctX}, now ${this.player.x}`);
+              // Log all active tweens
+              const activeTweens = this.tweens.getTweensOf(this.player);
+              if (activeTweens.length > 0) {
+                console.log('ACTIVE TWEENS:', activeTweens.map(t => ({
+                  targets: t.targets,
+                  props: t.data ? t.data.map(d => d.key) : []
+                })));
+              }
+              positionChecker.remove();
+            }
+            checkCount++;
+          }
+        });
         // Check collision at endpoint
         this.checkDashCollision();
         
@@ -3256,34 +3356,60 @@ class Main extends Phaser.Scene {
     const startLane = this.playerLane;
     const targetLane = Math.min(LANES, this.playerLane + 2);  // Dash 2 lanes total
     
+    console.log('DASH RIGHT START', {
+      startLane,
+      targetLane,
+      lanesMoving: targetLane - startLane,
+      currentPlayerX: this.player.x,
+      startLaneX: this._laneX(startLane),
+      targetLaneX: this._laneX(targetLane)
+    });
+    
     // Can't dash if already at rightmost position
     if(startLane >= LANES - 1) return;  // Changed from LANES to LANES - 1
     
     this.isDashing = true;
     this.isMoving = true;
     
-    // Kill any existing movement tweens but preserve jump
-    // We need to stop horizontal movement even when jumping
-    this.tweens.getTweensOf(this.player).forEach(tween => {
-      // Only kill tweens that affect x position
-      if (tween.data && tween.data[0] && tween.data[0].key === 'x') {
-        tween.stop();
-      }
-    });
+    // Set a flag to prevent move animations from creating bounce tweens
+    this.isDashStarting = true;
     
-    // Always update X to current lane position before dashing
+    // Store jump state before killing tweens
+    const wasJumping = this.isJumping;
+    const jumpY = this.player.y;
+    
+    // Kill ALL existing tweens to prevent move animations from continuing
+    this.tweens.killTweensOf(this.player);
+    
+    // Restore jump if we were jumping
+    if (wasJumping) {
+      // Continue the jump animation
+      this.tweens.add({
+        targets: this.player,
+        y: PLAYER_Y,
+        duration: 250,
+        ease: 'Quad.easeIn',
+        onComplete: () => {
+          this.isJumping = false;
+          this.player.y = PLAYER_Y;
+        }
+      });
+    }
+    
+    // Always update X to start lane position before dashing
+    const startX = this._laneX(startLane);
     if (!this.isJumping) {
-      this.player.x = this._laneX(this.playerLane);
+      this.player.x = startX;
     }
     this.player.setScale(1, 1);  // Reset scale
     this.player.angle = 0;  // Reset rotation
     
-    // Create dash trail effect
-    const trail1 = this.add.image(this.player.x, this.player.y, 'playerTex');
+    // Create dash trail effect at start position
+    const trail1 = this.add.image(startX, this.player.y, 'playerTex');
     trail1.setAlpha(0.5);
     trail1.setTint(0x00ffff);
     
-    const trail2 = this.add.image(this.player.x, this.player.y, 'playerTex');
+    const trail2 = this.add.image(startX, this.player.y, 'playerTex');
     trail2.setAlpha(0.3);
     trail2.setTint(0x00ffff);
     
@@ -3296,23 +3422,81 @@ class Main extends Phaser.Scene {
       gameSounds.offScreenWomp.triggerAttackRelease("C3", "32n", now);
     } catch(e) {}
     
-    // Since we're only moving 1 lane (first tap already moved 1), just dash directly
+    // Update lane immediately so firing is in sync
+    this.playerLane = targetLane;
+    
     const targetX = this._laneX(targetLane);
     
     // Check collision in the starting lane (we're passing through it during dash)
-    // The first tap moved us here, but we're dashing through it quickly
     this.checkDashCollision();
+    
+    // Set player to start position explicitly
+    this.player.x = startX;
+    
+    // Log what we're about to animate
+    console.log('DASH ANIMATION', {
+      from: startX,
+      to: targetX,
+      playerBefore: this.player.x
+    });
     
     // Fast dash animation to the target
     this.tweens.add({
       targets: [this.player, trail1, trail2],
-      x: targetX,
+      x: targetX,  // Just animate to target, don't use from/to syntax
       duration: PLAYER_CONFIG.dash.duration,  // 60ms - same as stretch phase
       ease: 'Power2',
       onComplete: () => {
-        this.playerLane = targetLane;  // Update lane AFTER animation completes
         this.isMoving = false;
         this.isDashing = false;
+        // Clear the dash starting flag after dash completes
+        this.isDashStarting = false;
+        // Ensure visual position matches logical lane
+        const expectedX = this._laneX(this.playerLane);
+        this.player.x = expectedX;
+        console.log('DASH COMPLETE', {
+          playerLane: this.playerLane,
+          expectedX: expectedX,
+          actualX: this.player.x,
+          lane0X: this._laneX(0),
+          lane1X: this._laneX(1),
+          lane2X: this._laneX(2),
+          lane3X: this._laneX(3),
+          lane4X: this._laneX(4),
+          visualCheck: `Is player.x (${this.player.x}) closer to lane 2 (${this._laneX(2)}) or lane 3 (${this._laneX(3)})?`
+        });
+        
+        // Log position again after a frame to see if something changes it
+        this.time.delayedCall(16, () => {
+          console.log('POSITION CHECK 1 FRAME LATER', {
+            playerX: this.player.x,
+            playerLane: this.playerLane,
+            expectedX: this._laneX(this.playerLane)
+          });
+        });
+        
+        // Store the expected position and check if anything modifies it
+        const correctX = expectedX;
+        let checkCount = 0;
+        const positionChecker = this.time.addEvent({
+          delay: 1,
+          repeat: 200,
+          callback: () => {
+            if (Math.abs(this.player.x - correctX) > 1) {
+              console.log(`POSITION CHANGED at ${checkCount}ms! Was ${correctX}, now ${this.player.x}`);
+              // Log all active tweens
+              const activeTweens = this.tweens.getTweensOf(this.player);
+              if (activeTweens.length > 0) {
+                console.log('ACTIVE TWEENS:', activeTweens.map(t => ({
+                  targets: t.targets,
+                  props: t.data ? t.data.map(d => d.key) : []
+                })));
+              }
+              positionChecker.remove();
+            }
+            checkCount++;
+          }
+        });
         // Check collision at endpoint
         this.checkDashCollision();
         
@@ -4192,9 +4376,22 @@ class Main extends Phaser.Scene {
       const now = this.time.now;
       // Check for double-tap dash
       if(now - this.lastLeftPress < this.doubleTapWindow) {
+        // Cancel the previous move and dash from original position (like touch controls)
+        if (this.laneBeforeKeyboardMove !== undefined && this.isMoving) {
+          // Kill ALL tweens to prevent move animations from continuing
+          this.tweens.killTweensOf(this.player);
+          
+          // Reset to original lane AND position
+          this.playerLane = this.laneBeforeKeyboardMove;
+          this.player.x = this._laneX(this.playerLane);
+          this.player.setScale(1, 1);
+          this.isMoving = false;
+        }
         this.dashLeft();
         this.lastLeftPress = 0; // Reset to prevent triple-tap
+        this.laneBeforeKeyboardMove = undefined; // Clear the saved lane
       } else {
+        this.laneBeforeKeyboardMove = this.playerLane; // Save current lane before move
         this.moveLeft();
         this.lastLeftPress = now;
       }
@@ -4203,9 +4400,22 @@ class Main extends Phaser.Scene {
       const now = this.time.now;
       // Check for double-tap dash
       if(now - this.lastRightPress < this.doubleTapWindow) {
+        // Cancel the previous move and dash from original position (like touch controls)
+        if (this.laneBeforeKeyboardMove !== undefined && this.isMoving) {
+          // Kill ALL tweens to prevent move animations from continuing
+          this.tweens.killTweensOf(this.player);
+          
+          // Reset to original lane AND position
+          this.playerLane = this.laneBeforeKeyboardMove;
+          this.player.x = this._laneX(this.playerLane);
+          this.player.setScale(1, 1);
+          this.isMoving = false;
+        }
         this.dashRight();
         this.lastRightPress = 0; // Reset to prevent triple-tap
+        this.laneBeforeKeyboardMove = undefined; // Clear the saved lane
       } else {
+        this.laneBeforeKeyboardMove = this.playerLane; // Save current lane before move
         this.moveRight();
         this.lastRightPress = now;
       }
