@@ -401,7 +401,7 @@
     <!-- Minimized music controls -->
     <div id="musicControls" class="music-controls">
       <button id="playPauseBtn" class="control-btn" title="Play/Pause">▶</button>
-      <button id="expandBtn" class="control-btn" title="Settings">⚙</button>
+      <button id="expandBtn" class="control-btn" title="Settings">☰</button>
       <button id="gridToggleBtn" class="control-btn" title="Toggle Grid">⊞</button>
     </div>
     
@@ -1256,7 +1256,7 @@ function updatePlayPauseButton() {
     btn.textContent = '||';
     btn.title = 'Pause';
   } else {
-    btn.textContent = '▸';
+    btn.textContent = '▶';
     btn.title = 'Play';
   }
 }
@@ -1293,22 +1293,36 @@ const playPauseBtn = document.getElementById('playPauseBtn');
 if (playPauseBtn) {
   playPauseBtn.addEventListener('click', async () => {
     await Tone.start();
-    if (Tone.Transport.state !== 'started') {
-      // Play
-      currentBar = 0;
-      currentChordIndex = 0;
-      lastSection = '';
-      updatePatterns();
-      Tone.Transport.start();
-      document.getElementById('status').textContent = 'PLAYING';
-      uiState.isPlaying = true;
-      updatePlayPauseButton();
+    
+    // Check if game is running and handle game pause
+    const gameScene = window.gameScene;
+    if (gameScene && gameScene.scene.isActive()) {
+      if (Tone.Transport.state === 'started') {
+        // Pause both music and game
+        gameScene.pauseGame();
+      } else {
+        // Resume both music and game
+        gameScene.resumeGame();
+      }
     } else {
-      // Pause
-      Tone.Transport.pause();
-      document.getElementById('status').textContent = 'PAUSED';
-      uiState.isPlaying = false;
-      updatePlayPauseButton();
+      // No game running, just handle music
+      if (Tone.Transport.state !== 'started') {
+        // Play
+        currentBar = 0;
+        currentChordIndex = 0;
+        lastSection = '';
+        updatePatterns();
+        Tone.Transport.start();
+        document.getElementById('status').textContent = 'PLAYING';
+        uiState.isPlaying = true;
+        updatePlayPauseButton();
+      } else {
+        // Pause
+        Tone.Transport.pause();
+        document.getElementById('status').textContent = 'PAUSED';
+        uiState.isPlaying = false;
+        updatePlayPauseButton();
+      }
     }
   });
 }
@@ -2160,6 +2174,50 @@ class StartupScene extends Phaser.Scene {
   }
 }
 
+// Pulse pattern definitions for grid movement
+// Logic: In non-chaos modes, grid pulses follow predictable patterns that players can learn.
+// Each musical section (INTRO, BUILD, MAIN, etc.) has a pattern intensity that matches its energy.
+// Patterns are applied to the existing sub bass hits (2 per bar) rather than creating new timing.
+// This creates a "dancing" grid that feels musical rather than random, while chaos mode stays unpredictable.
+// Patterns cycle every 8 bars within a section for variety without being overwhelming.
+// -1 = skip pulse, 0 = forward, 1 = left, 2 = right
+const pulsePatternPool = {
+  gentle: [
+    [1, 2],           // left, right
+    [2, 1],           // right, left  
+    [-1, 1],          // skip, left
+    [2, -1],          // right, skip
+    [1, -1],          // left, skip
+    [-1, 2]           // skip, right
+  ],
+  building: [
+    [0, 1],           // forward, left
+    [0, 2],           // forward, right
+    [1, 0],           // left, forward
+    [2, 0],           // right, forward
+    [0, -1],          // forward, skip
+    [1, 2]            // left, right
+  ],
+  intense: [
+    [0, 1, 2, 1],     // forward, left, right, left
+    [0, 2, 1, 2],     // forward, right, left, right
+    [1, 0, 2, 0],     // left, forward, right, forward
+    [2, 0, 1, 0],     // right, forward, left, forward
+    [1, 2, 0, 1],     // left, right, forward, left
+    [2, 1, 0, 2]      // right, left, forward, right
+  ]
+};
+
+// Map sections to pattern types
+const sectionPatternMap = {
+  'INTRO': 'gentle',
+  'BUILD': 'building', 
+  'MAIN': 'intense',
+  'BREAK': 'gentle',
+  'DROP': 'intense',
+  'OUTRO': 'gentle'
+};
+
 class Main extends Phaser.Scene {
   constructor() {
     super({ key: 'Main' });
@@ -2251,6 +2309,16 @@ class Main extends Phaser.Scene {
     this.vanishX = WIDTH / 2;
     this.vanishY = HEIGHT * 0.15;
     
+    // Initialize pause state
+    this.isPaused = false;
+    this.pauseOverlay = null;
+    this.pauseText = null;
+    this.pauseScoreText = null;
+    this.pauseHighScoreText = null;
+    
+    // Store reference for external access
+    window.gameScene = this;
+    
     // Scene is already created, no need to wait for ready event
     
     this.cameras.main.setBackgroundColor('#000');
@@ -2336,7 +2404,7 @@ class Main extends Phaser.Scene {
     this.lastLeftPress = 0;
     this.lastRightPress = 0;
     this.doubleTapWindow = PLAYER_CONFIG.dash.doubleTapWindow; // ms window for double-tap
-    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX');
+    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC');
     this.score=0; 
     this.beats=0;
     // Combo system variables
@@ -2352,8 +2420,19 @@ class Main extends Phaser.Scene {
     const highScoreY = isMobile ? HEIGHT-72 : HEIGHT-48;
     const comboY = isMobile ? HEIGHT-108 : HEIGHT-72;
     
-    this.scoreText=this.add.text(10, scoreY, 'score 0', {font:`${scoreFontSize} monospace`, fill:'#0f0'});
-    this.highScoreText=this.add.text(10, highScoreY, 'high ' + sessionHighScore, {font:`${scoreFontSize} monospace`, fill:'#ff0'});
+    // Create score labels and values separately for alignment
+    const labelOffset = 10;
+    const valueOffset = 80; // Position for right-aligned numbers - reduced to prevent overlap
+    
+    // High score (on top)
+    this.highScoreLabel = this.add.text(labelOffset, highScoreY, 'high', {font:`${scoreFontSize} monospace`, fill:'#ff0'});
+    this.highScoreText = this.add.text(valueOffset, highScoreY, sessionHighScore.toString(), {font:`${scoreFontSize} monospace`, fill:'#ff0'});
+    this.highScoreText.setOrigin(0, 0); // Left align the number after the label
+    
+    // Current score (below)
+    this.scoreLabel = this.add.text(labelOffset, scoreY, 'score', {font:`${scoreFontSize} monospace`, fill:'#0f0'});
+    this.scoreText = this.add.text(valueOffset, scoreY, '0', {font:`${scoreFontSize} monospace`, fill:'#0f0'});
+    this.scoreText.setOrigin(0, 0); // Left align the number after the label
     // Combo display
     this.comboText=this.add.text(10, comboY, '', {font:`${scoreFontSize} monospace`, fill:'#ff00ff'});
     this.comboText.setAlpha(0);
@@ -2444,6 +2523,9 @@ class Main extends Phaser.Scene {
         // Immediately clear graphics when hiding, just like G key does
         if(!this.gridVisible && this.gridGraphics) {
           this.gridGraphics.clear();
+        } else if(this.gridVisible && this.isPaused) {
+          // When paused and turning grid on, we need to draw it manually
+          this._drawPerspectiveGrid();
         }
         // Update button visual state
         uiState.gridVisible = this.gridVisible;
@@ -3821,6 +3903,118 @@ class Main extends Phaser.Scene {
     this.cameras.main.flash(200, 0, 255, 204, true);
   }
   
+  pauseGame() {
+    if (this.isPaused) return;
+    
+    this.isPaused = true;
+    
+    // Pause all tweens
+    this.tweens.pauseAll();
+    
+    // Apply blur effect
+    this.cameras.main.setPostPipeline('Blur');
+    
+    // Create pause overlay
+    this.pauseOverlay = this.add.graphics();
+    this.pauseOverlay.fillStyle(0x000000, 0.5);
+    this.pauseOverlay.fillRect(0, 0, WIDTH, HEIGHT);
+    this.pauseOverlay.setDepth(10000);
+    
+    // Calculate responsive font sizes
+    const baseFontSize = Math.min(WIDTH, HEIGHT) * 0.08;
+    const smallFontSize = Math.min(WIDTH, HEIGHT) * 0.04;
+    
+    // Add PAUSED text
+    this.pauseText = this.add.text(WIDTH/2, HEIGHT/2 - 60, 'PAUSED', {
+      font: `${baseFontSize}px monospace`,
+      fill: '#ffffff'
+    });
+    this.pauseText.setOrigin(0.5);
+    this.pauseText.setDepth(10001);
+    
+    // Add high score display (on top) - centered with proper spacing
+    this.pauseHighScoreText = this.add.text(WIDTH/2, HEIGHT/2, `High Score: ${sessionHighScore}`, {
+      font: `${smallFontSize}px monospace`,
+      fill: '#ff0'
+    });
+    this.pauseHighScoreText.setOrigin(0.5, 0.5);
+    this.pauseHighScoreText.setDepth(10001);
+    
+    // Add current score display (below) - centered with proper spacing
+    this.pauseScoreText = this.add.text(WIDTH/2, HEIGHT/2 + 40, `Score: ${this.score}`, {
+      font: `${smallFontSize}px monospace`,
+      fill: '#0f0'
+    });
+    this.pauseScoreText.setOrigin(0.5, 0.5);
+    this.pauseScoreText.setDepth(10001);
+    
+    // Add instruction text
+    this.pauseInstructionText = this.add.text(WIDTH/2, HEIGHT/2 + 80, 'Press SPACE or tap to continue', {
+      font: `${smallFontSize * 0.7}px monospace`,
+      fill: '#888888'
+    });
+    this.pauseInstructionText.setOrigin(0.5);
+    this.pauseInstructionText.setDepth(10001);
+    
+    // Pause music
+    if (Tone.Transport.state === 'started') {
+      Tone.Transport.pause();
+    }
+    
+    // Update play/pause button to show play icon
+    const btn = document.getElementById('playPauseBtn');
+    if (btn) {
+      btn.textContent = '▶';
+      btn.title = 'Resume';
+    }
+  }
+  
+  resumeGame() {
+    if (!this.isPaused) return;
+    
+    this.isPaused = false;
+    
+    // Resume all tweens
+    this.tweens.resumeAll();
+    
+    // Remove blur effect
+    this.cameras.main.resetPostPipeline();
+    
+    // Clean up pause overlay
+    if (this.pauseOverlay) {
+      this.pauseOverlay.destroy();
+      this.pauseOverlay = null;
+    }
+    if (this.pauseText) {
+      this.pauseText.destroy();
+      this.pauseText = null;
+    }
+    if (this.pauseScoreText) {
+      this.pauseScoreText.destroy();
+      this.pauseScoreText = null;
+    }
+    if (this.pauseHighScoreText) {
+      this.pauseHighScoreText.destroy();
+      this.pauseHighScoreText = null;
+    }
+    if (this.pauseInstructionText) {
+      this.pauseInstructionText.destroy();
+      this.pauseInstructionText = null;
+    }
+    
+    // Resume music if it was playing
+    if (Tone.Transport.state === 'paused') {
+      Tone.Transport.start();
+    }
+    
+    // Update play/pause button to show pause icon
+    const btn = document.getElementById('playPauseBtn');
+    if (btn) {
+      btn.textContent = '||';
+      btn.title = 'Pause';
+    }
+  }
+  
   showGameOverScreen() {
     // Darken the screen
     const overlay = this.add.graphics();
@@ -4078,12 +4272,56 @@ class Main extends Phaser.Scene {
   }
   
   _pulseGrid(){
-    // Set a pulse flag and timer with random direction
+    // Set a pulse flag and timer
     this.pulseActive = true;
     this.pulseTimer = 150; // milliseconds
     this.pulsePhase = 0;
-    // Random pulse type: 0 = forward, 1 = left, 2 = right
-    this.pulseType = Math.floor(Math.random() * 3);
+    
+    // Check if we're in chaos mode - use random
+    if (currentDifficulty === DIFFICULTY_PRESETS.chaos) {
+      // Random pulse type: 0 = forward, 1 = left, 2 = right
+      this.pulseType = Math.floor(Math.random() * 3);
+    } else {
+      // Use pattern based on current section
+      const section = getSection(currentBar);
+      const patternType = sectionPatternMap[section] || 'gentle';
+      const patterns = pulsePatternPool[patternType];
+      
+      // Pick a pattern based on the current cycle
+      // Use currentBar to ensure consistency within each section
+      const patternIndex = Math.floor(currentBar / 8) % patterns.length;
+      const pattern = patterns[patternIndex];
+      
+      // Calculate position within pattern (2 sub hits per bar)
+      const hitsPerBar = 2;
+      const totalHits = currentBar * hitsPerBar;
+      const positionInPattern = totalHits % pattern.length;
+      
+      // Get direction from pattern (-1 = skip, 0 = forward, 1 = left, 2 = right)
+      const direction = pattern[positionInPattern];
+      
+      if (direction === -1) {
+        // Skip this pulse
+        this.pulseActive = false;
+        return;
+      }
+      
+      // Safety check: prevent more than 2 forward pulses in a row
+      if (!this.lastTwoDirections) this.lastTwoDirections = [];
+      if (direction === 0 && this.lastTwoDirections.length >= 2 && 
+          this.lastTwoDirections[0] === 0 && this.lastTwoDirections[1] === 0) {
+        // Force a side movement instead
+        this.pulseType = Math.random() > 0.5 ? 1 : 2;
+      } else {
+        this.pulseType = direction;
+      }
+      
+      // Track last two directions
+      this.lastTwoDirections.unshift(this.pulseType);
+      if (this.lastTwoDirections.length > 2) {
+        this.lastTwoDirections.pop();
+      }
+    }
   }
   
   _drawPerspectiveGrid(){
@@ -4165,6 +4403,10 @@ class Main extends Phaser.Scene {
     }
     
     const now=this.time.now; 
+    
+    // Block firing if we just resumed from pause
+    if(this.fireBlockTime && now < this.fireBlockTime) return;
+    
     const cooldown = this.rapidFire ? FIRE_COOLDOWN/3 : FIRE_COOLDOWN;
     if(now-this.lastShotAt<cooldown) return; 
     this.lastShotAt=now;
@@ -4275,6 +4517,42 @@ class Main extends Phaser.Scene {
   }
 
   update(_, dt){
+    // Handle ESC key for pause
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
+      if (!this.isPaused) {
+        this.pauseGame();
+      } else {
+        this.resumeGame();
+      }
+    }
+    
+    // Handle grid toggle even when paused
+    if(Phaser.Input.Keyboard.JustDown(this.keys.G)){
+      this.gridVisible = !this.gridVisible;
+      gridEnabled = this.gridVisible; // Save to persistent setting
+      saveGameData({ gridEnabled: gridEnabled });
+      if(!this.gridVisible && this.gridGraphics) {
+        this.gridGraphics.clear();
+      } else if(this.gridVisible && this.isPaused) {
+        // When paused and turning grid on, we need to draw it manually
+        // since the normal update loop won't run
+        this._drawPerspectiveGrid();
+      }
+      // Sync UI state
+      uiState.gridVisible = this.gridVisible;
+      updateGridButton();
+    }
+    
+    // Handle resume from pause with SPACE or touch
+    if (this.isPaused) {
+      if (this.keys.SPACE.isDown || this.isTouchFiring) {
+        this.resumeGame();
+        // Small delay to prevent immediate firing after resume
+        this.fireBlockTime = this.time.now + 100;
+      }
+      return; // Skip all updates when paused
+    }
+    
     // Update idle wobble animation when not moving
     if(!this.isMoving && !this.isJumping && !this.isDashing && this.player) {
       // Breathing/idle animation
@@ -4352,8 +4630,8 @@ class Main extends Phaser.Scene {
         const amount = Math.sin(t * Math.PI);
         
         if(this.pulseType === 0){
-          // Forward pulse
-          pulseShift = amount * 0.05;
+          // Forward pulse - reduced from 0.05 to 0.015 for gentler movement
+          pulseShift = amount * 0.015;
         } else if(this.pulseType === 1){
           // Left pulse
           pulseXShift = -amount * 30; // pixels
@@ -4369,18 +4647,7 @@ class Main extends Phaser.Scene {
     // Get current BPM from Tone.Transport or use default
     const currentBPM = (typeof Tone !== 'undefined' && Tone.Transport) ? Tone.Transport.bpm.value : 132;
     // Scale grid speed to BPM - higher BPM = faster scrolling
-    // Toggle grid with G key
-    if(Phaser.Input.Keyboard.JustDown(this.keys.G)){
-      this.gridVisible = !this.gridVisible;
-      gridEnabled = this.gridVisible; // Save to persistent setting
-      saveGameData({ gridEnabled: gridEnabled });
-      if(!this.gridVisible && this.gridGraphics) {
-        this.gridGraphics.clear();
-      }
-      // Sync UI state
-      uiState.gridVisible = this.gridVisible;
-      updateGridButton();
-    }
+    // Grid toggle moved to top of update() to work when paused
     
     // Switch laser sounds with number keys
     if(Phaser.Input.Keyboard.JustDown(this.keys.ONE)) {
@@ -4409,7 +4676,7 @@ class Main extends Phaser.Scene {
     }
     
     // Add pulse shift to grid movement
-    this.gridOffset += (dt / 1000) * (currentBPM / 60) + pulseShift * 2; // Lines per second based on BPM
+    this.gridOffset += (dt / 1000) * (currentBPM / 60) + pulseShift * 1; // Reduced multiplier from 2 to 1 for gentler pulse
     if(this.gridVisible) {
       this._drawPerspectiveGrid();
     }
@@ -4962,7 +5229,7 @@ class Main extends Phaser.Scene {
             // Apply combo multiplier
             const points = basePoints * this.combo;
             this.score += points;
-            this.scoreText.setText('score '+this.score);
+            this.scoreText.setText(this.score.toString());
             
             // Show combo text with animation
             if(this.combo > 1) {
@@ -5011,7 +5278,7 @@ class Main extends Phaser.Scene {
             if(this.score > sessionHighScore) {
               sessionHighScore = this.score;
               saveGameData({ highScore: sessionHighScore });
-              this.highScoreText.setText('high ' + sessionHighScore);
+              this.highScoreText.setText(sessionHighScore.toString());
               this.highScoreText.setColor('#0ff'); // Cyan when beating high score
             }
             
