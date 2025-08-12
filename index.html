@@ -1708,6 +1708,7 @@ let PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobil
 const ENEMY_SPEED_BASE = isMobile ? 150 : 200; // Slower on mobile for easier play
 const BULLET_SPEED = 520;
 const FIRE_COOLDOWN = 110;
+const HORIZONTAL_SHOOTING = true; // Enable horizontal shooting across lanes
 // Smart scaling based on device and orientation
 let isLandscape = window.innerWidth > window.innerHeight;
 let MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1; // Smaller scale in landscape
@@ -2315,6 +2316,8 @@ class Main extends Phaser.Scene {
     this.rapidFire = false;
     this.rapidFireTimer = 0;
     this.offScreenTimer = 0; // Timer for rubber band effect
+    this.offScreenShotCount = 0; // Track shots fired while off-screen
+    this.offScreenTurnDelay = 0; // Delay before can fire when off-screen
     this.isMoving = false; // Prevent shooting while transitioning
     this.isStretching = false; // Track stretch phase for collision immunity
     this.isJumping = false; // Track jump state
@@ -2894,6 +2897,8 @@ class Main extends Phaser.Scene {
 
   moveLeft() {
     if(this.isMoving) return;
+    // Block movement if already off-screen
+    if(this.playerLane < 0 || this.playerLane >= LANES) return;
     const previousLane = this.playerLane;
     this.playerLane=Math.max(-1,this.playerLane-1); // Can go to -1 (off-screen left)
     const targetX = this._laneX(this.playerLane);
@@ -3000,6 +3005,11 @@ class Main extends Phaser.Scene {
     if(this.playerLane < 0 || this.playerLane >= LANES){
       this.offScreenTimer = PLAYER_CONFIG.offScreen.gracePeriod;
       this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
+      // Reset off-screen shooting counters when entering off-screen
+      if(previousLane >= 0 && previousLane < LANES) {
+        this.offScreenShotCount = 0;
+        this.offScreenTurnDelay = 600; // 600ms delay to "turn around"
+      }
     } else {
       this.player.setAlpha(1);
     }
@@ -3012,6 +3022,8 @@ class Main extends Phaser.Scene {
 
   moveRight() {
     if(this.isMoving) return;
+    // Block movement if already off-screen
+    if(this.playerLane < 0 || this.playerLane >= LANES) return;
     const previousLane = this.playerLane;
     this.playerLane=Math.min(LANES,this.playerLane+1); // Can go to 5 (off-screen right)
     const targetX = this._laneX(this.playerLane);
@@ -3118,6 +3130,11 @@ class Main extends Phaser.Scene {
     if(this.playerLane < 0 || this.playerLane >= LANES){
       this.offScreenTimer = PLAYER_CONFIG.offScreen.gracePeriod;
       this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
+      // Reset off-screen shooting counters when entering off-screen
+      if(previousLane >= 0 && previousLane < LANES) {
+        this.offScreenShotCount = 0;
+        this.offScreenTurnDelay = 600; // 600ms delay to "turn around"
+      }
     } else {
       this.player.setAlpha(1);
     }
@@ -3170,6 +3187,8 @@ class Main extends Phaser.Scene {
 
   dashLeft() {
     if(this.isDashing) return;  // Only check isDashing, not isMoving
+    // Block dashing if already off-screen
+    if(this.playerLane < 0 || this.playerLane >= LANES) return;
     
     const startLane = this.playerLane;
     const targetLane = Math.max(-1, this.playerLane - 2);  // Dash 2 lanes total
@@ -3352,6 +3371,8 @@ class Main extends Phaser.Scene {
   
   dashRight() {
     if(this.isDashing) return;  // Only check isDashing, not isMoving
+    // Block dashing if already off-screen
+    if(this.playerLane < 0 || this.playerLane >= LANES) return;
     
     const startLane = this.playerLane;
     const targetLane = Math.min(LANES, this.playerLane + 2);  // Dash 2 lanes total
@@ -4130,8 +4151,18 @@ class Main extends Phaser.Scene {
     }
   }
   _fire(){ 
-    // Can't shoot while moving or off-screen (but CAN shoot while jumping!)
-    if(this.isMoving || this.playerLane < 0 || this.playerLane >= LANES) return;
+    // Can't shoot while moving
+    if(this.isMoving) return;
+    
+    // Check if we're off-screen for horizontal shooting
+    const isOffScreen = this.playerLane < 0 || this.playerLane >= LANES;
+    if(!HORIZONTAL_SHOOTING && isOffScreen) return; // Original behavior - can't shoot off-screen
+    
+    // Enforce turn delay and shot limit when off-screen
+    if(HORIZONTAL_SHOOTING && isOffScreen) {
+      if(this.offScreenTurnDelay > 0) return; // Still turning around
+      if(this.offScreenShotCount >= 2) return; // Already fired 2 shots
+    }
     
     const now=this.time.now; 
     const cooldown = this.rapidFire ? FIRE_COOLDOWN/3 : FIRE_COOLDOWN;
@@ -4161,12 +4192,31 @@ class Main extends Phaser.Scene {
     const normalizedY = (this.player.y - vanishY) / (HEIGHT - vanishY);
     // Inverse the exponential curve formula to get progress from Y position
     b.progress = Math.pow(normalizedY, 1/2.5);
-    b.vy=-BULLET_SPEED; 
-    b.w = Math.floor(6 * MOBILE_SCALE); 
-    b.h = Math.floor(12 * MOBILE_SCALE);
     
-    // If jumping, give bullet an arc trajectory
-    if(this.isJumping) {
+    if (HORIZONTAL_SHOOTING && isOffScreen) {
+      // Horizontal shooting when off-screen - sweep across all lanes
+      // Determine direction based on which side we're on
+      const direction = this.playerLane < 0 ? 1 : -1; // Shoot right if on left, left if on right
+      
+      b.vx = direction * BULLET_SPEED * 1.2; // Slightly faster for dramatic effect
+      b.vy = 0; // No vertical movement
+      b.isHorizontal = true;
+      b.startLane = this.playerLane;
+      b.currentLane = this.playerLane < 0 ? -0.5 : 4.5; // Start just outside visible area
+      b.w = Math.floor(12 * MOBILE_SCALE); // Wider for horizontal
+      b.h = Math.floor(6 * MOBILE_SCALE); // Shorter for horizontal
+      b.setRotation(direction > 0 ? 0 : Math.PI); // Face the direction of travel
+    } else {
+      // Normal vertical shooting
+      b.vy=-BULLET_SPEED; 
+      b.isHorizontal = false;
+    }
+    
+    b.w = b.w || Math.floor(6 * MOBILE_SCALE); 
+    b.h = b.h || Math.floor(12 * MOBILE_SCALE);
+    
+    // If jumping, give bullet an arc trajectory (only for vertical shots)
+    if(this.isJumping && !HORIZONTAL_SHOOTING) {
       b.isArcShot = true;
       b.arcHeight = 0; // Height offset from base trajectory
       b.arcVelocity = -500; // Stronger initial upward velocity
@@ -4424,6 +4474,9 @@ class Main extends Phaser.Scene {
     // Rubber band effect - pull player back if off-screen too long
     if(this.playerLane < 0 || this.playerLane >= LANES){
       this.offScreenTimer -= dt;
+      if(this.offScreenTurnDelay > 0) {
+        this.offScreenTurnDelay -= dt;
+      }
       
       // Apply distortion effects when off-screen
       // Screen shake intensity based on how long off-screen
@@ -4795,31 +4848,50 @@ class Main extends Phaser.Scene {
     for(let i=this.bullets.length-1; i>=0; i--){
       const b=this.bullets[i]; 
       
-      // Move backward along perspective curve
-      b.progress -= (Math.abs(b.vy) * dt/1000) / (HEIGHT * 0.8);
-      
-      // Calculate base position on exponential curve
-      let y = vanishY + (HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
-      
-      // Apply arc trajectory if this is a jump shot
-      if(b.isArcShot) {
-        // Update arc physics
-        b.arcVelocity += b.gravity * (dt/1000);
-        b.arcHeight += b.arcVelocity * (dt/1000);
+      if(b.isHorizontal) {
+        // Horizontal bullet movement across lanes
+        b.currentLane += (b.vx * dt/1000) / 150; // Convert speed to lane units
+        b.lane = Math.floor(b.currentLane + 0.5); // Round to nearest lane for collision
         
-        // Calculate arc offset - negative arcHeight means bullet is above base trajectory
-        // The arc starts negative (going up) then becomes positive (falling down)
-        y += b.arcHeight; // Add the arc offset to Y (negative = higher on screen)
+        // Update position using current lane and constant progress
+        b.x = this._laneX(b.currentLane, b.progress);
+        b.y = vanishY + (HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
         
-        // Rotate bullet to show trajectory
-        b.setRotation(Math.atan2(b.arcVelocity, -b.vy) * 0.5);
+        // Remove if bullet has crossed all lanes
+        if((b.vx > 0 && b.currentLane > 5) || (b.vx < 0 && b.currentLane < -1)) {
+          b.destroy(); 
+          this.bullets.splice(i,1); 
+          continue;
+        }
+      } else {
+        // Normal vertical bullet movement
+        // Move backward along perspective curve
+        b.progress -= (Math.abs(b.vy) * dt/1000) / (HEIGHT * 0.8);
         
+        // Calculate base position on exponential curve
+        let y = vanishY + (HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
+        
+        // Apply arc trajectory if this is a jump shot
+        if(b.isArcShot) {
+          // Update arc physics
+          b.arcVelocity += b.gravity * (dt/1000);
+          b.arcHeight += b.arcVelocity * (dt/1000);
+          
+          // Calculate arc offset - negative arcHeight means bullet is above base trajectory
+          // The arc starts negative (going up) then becomes positive (falling down)
+          y += b.arcHeight; // Add the arc offset to Y (negative = higher on screen)
+          
+          // Rotate bullet to show trajectory
+          b.setRotation(Math.atan2(b.arcVelocity, -b.vy) * 0.5);
+        }
+        
+        b.y = y;
+        
+        // Update X position along perspective lane
+        b.x = this._laneX(b.lane, b.progress);
+        
+        if(b.progress < 0){ b.destroy(); this.bullets.splice(i,1); continue; }
       }
-      
-      b.y = y;
-      
-      // Update X position along perspective lane
-      b.x = this._laneX(b.lane, b.progress);
       
       // Add bullet trail
       if(!b.trailPoints) b.trailPoints = [];
@@ -4829,8 +4901,6 @@ class Main extends Phaser.Scene {
       // Scale based on distance
       const scale = 0.1 + b.progress * 1.2;
       b.setScale(scale);
-      
-      if(b.progress < 0){ b.destroy(); this.bullets.splice(i,1); continue; }
       
       // Check collision with obstacles first
       let hitObstacle = false;
