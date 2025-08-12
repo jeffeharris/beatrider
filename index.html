@@ -2450,338 +2450,392 @@ class Main extends Phaser.Scene {
     };
   }
 
+  updateZoneVisuals() {
+    if (!this.zoneVisuals) return;
+    
+    this.zoneVisuals.clear();
+    
+    // Draw dead zone circle (center)
+    this.zoneVisuals.lineStyle(2, 0x00aaff, 0.4);
+    this.zoneVisuals.fillStyle(0x00aaff, 0.1);
+    this.zoneVisuals.fillCircle(this.touchStartX, this.touchStartY, this.zoneDeadRadius);
+    this.zoneVisuals.strokeCircle(this.touchStartX, this.touchStartY, this.zoneDeadRadius);
+    
+    // Draw outer radius circle
+    this.zoneVisuals.lineStyle(1, 0xffffff, 0.2);
+    this.zoneVisuals.strokeCircle(this.touchStartX, this.touchStartY, this.zoneRadius);
+    
+    // Draw zone boundary lines based on actual angles
+    const cx = this.touchStartX;
+    const cy = this.touchStartY;
+    const r = this.zoneRadius;
+    
+    // Convert angles to radians and draw boundary lines
+    const angle60 = 60 * Math.PI / 180;
+    const angle120 = 120 * Math.PI / 180;
+    
+    this.zoneVisuals.lineStyle(1, 0xffffff, 0.3);
+    // Right zone boundaries (±60°)
+    this.zoneVisuals.lineBetween(cx, cy, cx + r * Math.cos(-angle60), cy + r * Math.sin(-angle60));
+    this.zoneVisuals.lineBetween(cx, cy, cx + r * Math.cos(angle60), cy + r * Math.sin(angle60));
+    
+    // Left zone boundaries (±120°)
+    this.zoneVisuals.lineBetween(cx, cy, cx + r * Math.cos(-angle120), cy + r * Math.sin(-angle120));
+    this.zoneVisuals.lineBetween(cx, cy, cx + r * Math.cos(angle120), cy + r * Math.sin(angle120));
+    
+    // Add colored arcs to show zones more clearly
+    // Jump zone (top) - green
+    this.zoneVisuals.lineStyle(3, 0x00ff00, 0.4);
+    this.zoneVisuals.arc(cx, cy, r * 0.8, -angle120, -angle60, false);
+    
+    // Crouch zone (bottom) - blue
+    this.zoneVisuals.lineStyle(3, 0x0088ff, 0.4);
+    this.zoneVisuals.arc(cx, cy, r * 0.8, angle60, angle120, false);
+    
+    // Movement zones (left/right) - orange
+    this.zoneVisuals.lineStyle(3, 0xff8800, 0.4);
+    this.zoneVisuals.arc(cx, cy, r * 0.8, -angle60, angle60, false); // Right
+    this.zoneVisuals.arc(cx, cy, r * 0.8, angle120, Math.PI, false); // Left part 1
+    this.zoneVisuals.arc(cx, cy, r * 0.8, -Math.PI, -angle120, false); // Left part 2
+  }
+
   setupMobileControls() {
-    // Touch control state
+    // Zone-based control state
     this.touchStartX = 0;
     this.touchStartY = 0;
-    this.touchStartTime = 0;
+    this.touchZoneActive = false;
     this.isTouchFiring = false;
-    this.swipeThreshold = PLAYER_CONFIG.touch.swipeThreshold; // Minimum distance for swipe
-    this.swipeTimeLimit = PLAYER_CONFIG.touch.swipeTimeLimit; // Max time for swipe gesture (ms)
     
-    // Jump sensitivity settings (0.1 = strict, 1.0 = very lenient)
-    // You can adjust these values to fine-tune the feel:
-    this.jumpSensitivity = PLAYER_CONFIG.touch.jumpSensitivity; // Regular jump: easier to trigger
-    this.superJumpSensitivity = PLAYER_CONFIG.touch.superJumpSensitivity; // Super jump: forgiving threshold
+    // Zone configuration - based on comfortable thumb reach
+    this.zoneRadius = 100; // Radius from touch point to edge
+    this.zoneDeadRadius = 35; // Dead zone radius around initial touch
     
-    // Double-swipe tracking for dash
-    this.lastSwipeDirection = null;
-    this.lastSwipeTime = 0;
-    this.doubleSwipeWindow = PLAYER_CONFIG.touch.doubleSwipeWindow; // ms window for double-swipe
+    // We'll use angle-based detection for the 4 directional zones
+    // No need to pre-define boundaries, we'll calculate on the fly
     
-    // Calculate thresholds based on sensitivity
-    this.verticalSwipeThreshold = this.swipeThreshold * (1.1 - this.jumpSensitivity);
-    this.superJumpDownThreshold = this.swipeThreshold * (1.1 - this.superJumpSensitivity) * 0.5; // Much more lenient
+    // Movement state tracking
+    this.currentZone = 'center';
+    this.lastMoveTime = 0;
+    this.moveCooldown = 150; // ms between lane changes
+    this.laneBeforeMove = null; // Track lane position before any move starts
     
-    // Create touch indicator (for debugging)
-    this.touchIndicator = this.add.circle(0, 0, 20, 0x00ff00, 0.3);
+    // Jump charge tracking
+    this.jumpChargeAmount = 0;
+    this.maxPullDistance = 0; // Track the furthest pull distance
+    this.isChargingJump = false;
+    this.jumpThreshold = 40; // pixels up for jump
+    
+    // Visual debug indicator (optional)
+    this.touchIndicator = this.add.circle(0, 0, 15, 0x00ff00, 0.3);
     this.touchIndicator.setVisible(false);
+    
+    // Zone visualization (for debugging - remove in production)
+    if (true) { // Set to false in production
+      this.zoneVisuals = this.add.graphics();
+      this.zoneVisuals.setDepth(1000);
+    }
     
     // Touch start - anywhere on screen
     this.input.on('pointerdown', (pointer) => {
       this.touchStartX = pointer.x;
       this.touchStartY = pointer.y;
-      this.touchStartTime = this.time.now;
-      this.lastSwipeX = pointer.x; // Track last X position for continuous swipes
-      this.lastSwipeY = pointer.y; // Track last Y position for continuous swipes
-      this.swipeHistory = []; // Track swipe path for down-up detection
-      this.swipeStartTime = null; // Reset swipe timing
-      this.swipeStartX = null;
-      this.actionCooldown = false; // Clear any lingering cooldown
+      this.touchZoneActive = true;
+      
+      // Reset state
+      this.currentZone = 'center';
+      this.isChargingJump = false;
+      this.jumpChargeAmount = 0;
+      this.maxPullDistance = 0;
       
       // Show touch indicator
       this.touchIndicator.setPosition(pointer.x, pointer.y);
       this.touchIndicator.setVisible(true);
       this.touchIndicator.setAlpha(0.5);
       
-      // ALWAYS start firing - this is primary action
-      this.fireHoldTimer = this.time.delayedCall(150, () => {
-        this.isTouchFiring = true;
-        // Visual feedback for auto-fire mode
-        this.touchIndicator.setFillStyle(0xff0000, 0.5);
-      });
+      // Start firing immediately
+      this.isTouchFiring = true;
+      
+      // Visualize zones if enabled
+      if (this.zoneVisuals) {
+        this.updateZoneVisuals();
+      }
     });
     
-    // Touch move - detect swipes and update indicator
+    // Touch move - zone-based movement detection
     this.input.on('pointermove', (pointer) => {
-      if (!pointer.isDown) return;
+      if (!pointer.isDown || !this.touchZoneActive) return;
       
       // Update touch indicator position
       if (this.touchIndicator && this.touchIndicator.visible) {
         this.touchIndicator.setPosition(pointer.x, pointer.y);
       }
       
-      // Track swipe history for gesture detection
-      this.swipeHistory.push({
-        x: pointer.x,
-        y: pointer.y,
-        time: this.time.now
-      });
-      
-      // Keep only last 500ms of history (more time for super jump gesture)
-      const cutoffTime = this.time.now - 500;
-      this.swipeHistory = this.swipeHistory.filter(point => point.time > cutoffTime);
-      
+      const currentTime = this.time.now;
       const dx = pointer.x - this.touchStartX;
       const dy = pointer.y - this.touchStartY;
-      const elapsed = this.time.now - this.touchStartTime;
       
-      // Horizontal swipe - track incremental movements
-      const incrementalX = pointer.x - (this.lastSwipeX || this.touchStartX);
-      
-      // Log EVERY movement, even tiny ones
-      if (Math.abs(incrementalX) > 0) {
-        const willTriggerMove = Math.abs(incrementalX) > this.swipeThreshold && !this.isMoving && !this.actionCooldown;
-        const willCheckSpeed = Math.abs(incrementalX) > 20 && !this.actionCooldown;
-        console.log('MOVEMENT:', {
-          incrementalX: incrementalX.toFixed(1),
-          totalFromStart: (pointer.x - this.touchStartX).toFixed(1),
-          actionCooldown: this.actionCooldown,
-          isMoving: this.isMoving,
-          willCheckSpeed: willCheckSpeed,
-          willTriggerMove: willTriggerMove,
-          thresholds: `speed:20px move:${this.swipeThreshold}px`
-        });
+      // Update jump charge if in crouch zone or after leaving it (elastic pull)
+      if (this.isChargingJump) {
+        // Track the maximum pull distance (furthest point pulled down)
+        const currentPullDistance = Math.max(0, dy); // Only positive (downward) distance
+        this.maxPullDistance = Math.max(this.maxPullDistance, currentPullDistance);
+        
+        // Charge based on the furthest pull, not current position
+        const maxPullThreshold = this.zoneRadius * 1.5; // Pull to 150% of zone radius for max charge
+        this.jumpChargeAmount = Math.min(this.maxPullDistance / maxPullThreshold, 1.0); // 0 to 1 based on max pull
+        
+        // Update charge glow effect (same as keyboard)
+        this.chargeGlow.clear();
+        this.chargeGlow.setPosition(this.player.x, this.player.y);
+        
+        // Pulsing glow effect that grows with charge
+        const pulseSpeed = 10 + this.jumpChargeAmount * 20; // Faster pulse as charge increases
+        const pulse = Math.sin(currentTime * pulseSpeed * 0.001) * 0.2 + 0.8;
+        const glowRadius = 30 + this.jumpChargeAmount * 50 * pulse;
+        const glowAlpha = 0.3 + this.jumpChargeAmount * 0.5 * pulse;
+        
+        // Color transitions from blue to yellow to purple
+        const glowColor = this.jumpChargeAmount < 0.3 ? 
+          { r: 0, g: 136, b: 255 } : // Blue
+          this.jumpChargeAmount < 0.7 ? 
+          { r: 255, g: 255, b: 0 } : // Yellow
+          { r: 255, g: 0, b: 255 };  // Purple
+        
+        const hexColor = Phaser.Display.Color.GetColor(glowColor.r, glowColor.g, glowColor.b);
+        
+        this.chargeGlow.fillStyle(hexColor, glowAlpha);
+        this.chargeGlow.fillCircle(0, 0, glowRadius);
+        
+        // Update pitch of charge sound
+        try {
+          const pitchShift = 1 + this.jumpChargeAmount * 2; // Rise up to 3x pitch
+          gameSounds.jumpCharge.frequency.exponentialRampToValueAtTime(
+            Tone.Frequency("C2").toFrequency() * pitchShift,
+            Tone.now() + 0.05
+          );
+        } catch(e) {}
+        
+        // Visual feedback for charging on touch indicator too
+        if (this.touchIndicator) {
+          // Pulse and grow indicator based on charge
+          const scale = 15 + this.jumpChargeAmount * 20;
+          this.touchIndicator.setRadius(scale);
+          this.touchIndicator.setFillStyle(hexColor, 0.5 + this.jumpChargeAmount * 0.3);
+        }
       }
       
-      // DON'T update lastSwipeX here - wait until after processing!
+      // Determine which zone we're in using radial detection
+      let newZone = 'center';
+      const distance = Math.sqrt(dx * dx + dy * dy);
       
-      // If we executed an action and user is still moving significantly, stay in cooldown
-      if (this.actionCooldown && Math.abs(incrementalX) > 5) {
-        console.log('COOLDOWN: Still swiping after action, waiting for stop');
-        // Don't return - still allow vertical swipes for jumping
-      } else if (this.actionCooldown && Math.abs(incrementalX) <= 5) {
-        // Movement has stopped, exit cooldown
-        console.log('COOLDOWN END: Movement stopped');
-        this.actionCooldown = false;
-        this.touchStartX = pointer.x; // Reset reference point
-        this.lastSwipeX = pointer.x; // Also reset lastSwipeX for next swipe
-        this.swipeStartTime = null; // Reset swipe motion tracking
-        this.swipeStartX = null;
+      if (distance <= this.zoneDeadRadius) {
+        newZone = 'center';
+      } else {
+        // Calculate angle from center (-180 to 180)
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        
+        // Determine zone based on angle
+        // Steeper angles for up/down (narrower zones)
+        // Right: -60 to 60 degrees (wider)
+        // Bottom: 60 to 120 degrees (narrower)
+        // Left: 120 to -120 degrees (wider)
+        // Top: -120 to -60 degrees (narrower)
+        
+        if (angle >= -60 && angle < 60) {
+          // Right zone - move extends to full radius, dash beyond
+          newZone = distance > this.zoneRadius ? 'rightDash' : 'rightMove';
+        } else if (angle >= 60 && angle < 120) {
+          // Bottom zone - narrower angle, harder to accidentally trigger
+          newZone = 'crouch';
+        } else if (angle >= -120 && angle < -60) {
+          // Top zone - narrower angle for jump
+          newZone = 'jump';
+        } else {
+          // Left zone (120 to 180 or -180 to -120)
+          newZone = distance > this.zoneRadius ? 'leftDash' : 'leftMove';
+        }
       }
       
-      // Check for any significant movement (but skip if in cooldown)
-      if (Math.abs(incrementalX) > 30 && !this.actionCooldown) {
-        const swipeDirection = incrementalX > 0 ? 'right' : 'left';
+      // Handle zone changes for horizontal movement
+      if (newZone !== this.currentZone) {
+        console.log('ZONE CHANGE', { from: this.currentZone, to: newZone, distance, angle: Math.atan2(dy, dx) * 180 / Math.PI });
         
-        // Calculate Y movement to detect diagonal
-        const incrementalY = pointer.y - (this.lastSwipeY || this.touchStartY);
-        const isDiagonal = Math.abs(incrementalY) > 25; // Significant Y movement = diagonal
-        
-        // 1. RAW SWIPE DATA
-        console.log('SWIPE DETECTED:', {
-          incrementalX: incrementalX.toFixed(1),
-          incrementalY: incrementalY.toFixed(1),
-          isDiagonal: isDiagonal,
-          direction: swipeDirection
-        });
-        
-        // Diagonal swipe = DASH (2 lanes)
-        if (isDiagonal && !this.isDashing) {
-          // 2. DETECTED INPUT
-          console.log('DETECTED: DIAGONAL SWIPE for DASH', {
-            x: Math.abs(incrementalX).toFixed(0) + 'px',
-            y: Math.abs(incrementalY).toFixed(0) + 'px',
-            direction: swipeDirection
-          });
-          
-          // Fast swipe detected - dash 2 lanes!
-          // First, cancel any in-progress movement
-          if (this.isMoving && !this.isJumping) {
-            console.log('CANCELLING in-progress movement');
-            this.tweens.killTweensOf(this.player);
-            this.isMoving = false;
+        // Visual feedback for zone change
+        if (this.touchIndicator) {
+          switch(newZone) {
+            case 'leftDash':
+            case 'rightDash':
+              this.touchIndicator.setFillStyle(0xff0000, 0.6); // Red for dash
+              break;
+            case 'leftMove':
+            case 'rightMove':
+              this.touchIndicator.setFillStyle(0xff8800, 0.5); // Orange for move
+              break;
+            case 'jump':
+              this.touchIndicator.setFillStyle(0x00ff00, 0.5); // Green for jump
+              break;
+            case 'crouch':
+              this.touchIndicator.setFillStyle(0x0088ff, 0.5); // Blue for crouch
+              break;
+            default:
+              this.touchIndicator.setFillStyle(0x00aaff, 0.3); // Light blue for center
           }
-          
-          // Now dash 2 lanes from current position
-          const targetLane = swipeDirection === 'right'
-            ? Math.min(LANES, this.playerLane + 2)
-            : Math.max(-1, this.playerLane - 2);
-          
-          if (targetLane !== this.playerLane) {
-            // 3. EXECUTED COMMAND
-            console.log('EXECUTING: DASH', {
-              from: this.playerLane,
-              to: targetLane,
-              direction: swipeDirection
-            });
-            
-            this.isDashing = true;
-            this.isMoving = true;
-            
-            // Enter cooldown to prevent multiple actions from one swipe
-            this.actionCooldown = true;
-            this.swipeStartTime = null;  // Reset swipe motion tracking
-            this.swipeStartX = null;
-            
-            // Snap to current lane position before dashing
-            if (!this.isJumping) {
-              this.player.x = this._laneX(this.playerLane);
+        }
+        
+        // Check if we can execute movement - prevent rapid firing
+        const timeSinceLastMove = currentTime - this.lastMoveTime;
+        const canMove = !this.isMoving && !this.isDashing && timeSinceLastMove > this.moveCooldown;
+        // Dash can always interrupt movement, just check we're not already dashing
+        const canDash = !this.isDashing;
+        
+        // Execute actions based on zone entry
+        switch(newZone) {
+          case 'leftMove':
+            if (this.currentZone === 'center' && canMove) {
+              this.laneBeforeMove = this.playerLane; // Save position before move
+              this.moveLeft();
+              this.lastMoveTime = currentTime;
+              
+              // Schedule recentering after move completes (150ms)
+              this.time.delayedCall(150, () => {
+                if (this.touchZoneActive) {
+                  // Get current pointer position
+                  const activePointer = this.input.activePointer;
+                  if (activePointer && activePointer.isDown) {
+                    console.log('RECENTERING after move complete');
+                    this.touchStartX = activePointer.x;
+                    this.touchStartY = activePointer.y;
+                    
+                    // Update visual zones at new position
+                    if (this.zoneVisuals) {
+                      this.updateZoneVisuals();
+                    }
+                  }
+                }
+              });
             }
+            break;
             
-            // Create dash trail effect
-            const trail1 = this.add.image(this.player.x, this.player.y, 'playerTex');
-            trail1.setAlpha(0.5);
-            trail1.setTint(0x00ffff);
-            const trail2 = this.add.image(this.player.x, this.player.y, 'playerTex');
-            trail2.setAlpha(0.3);
-            trail2.setTint(0x00ffff);
+          case 'rightMove':
+            if (this.currentZone === 'center' && canMove) {
+              this.laneBeforeMove = this.playerLane; // Save position before move
+              this.moveRight();
+              this.lastMoveTime = currentTime;
+              
+              // Schedule recentering after move completes (150ms)
+              this.time.delayedCall(150, () => {
+                if (this.touchZoneActive) {
+                  // Get current pointer position
+                  const activePointer = this.input.activePointer;
+                  if (activePointer && activePointer.isDown) {
+                    console.log('RECENTERING after right move complete');
+                    this.touchStartX = activePointer.x;
+                    this.touchStartY = activePointer.y;
+                  }
+                }
+              });
+            }
+            break;
             
-            // Update to target lane
-            this.playerLane = targetLane;
+          case 'leftDash':
+            if (canDash) {
+              // Check if we just moved (within 250ms like keyboard double-tap)
+              if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < 250) {
+                // Cancel the move and dash from original position
+                // Kill any x-axis tweens
+                this.tweens.getTweensOf(this.player).forEach(tween => {
+                  if (tween.data && tween.data[0] && tween.data[0].key === 'x') {
+                    tween.stop();
+                  }
+                });
+                
+                // Reset to original lane
+                this.playerLane = this.laneBeforeMove;
+                if (!this.isJumping) {
+                  this.player.x = this._laneX(this.playerLane);
+                }
+                
+                // Clear the flag
+                this.laneBeforeMove = null;
+              }
+              
+              // Dash 2 lanes
+              this.dashLeft();
+              this.lastMoveTime = currentTime;
+            }
+            break;
             
-            // Play dash sound
+          case 'rightDash':
+            if (canDash) {
+              // Check if we just moved (within 250ms like keyboard double-tap)
+              if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < 250) {
+                // Cancel the move and dash from original position
+                // Kill any x-axis tweens
+                this.tweens.getTweensOf(this.player).forEach(tween => {
+                  if (tween.data && tween.data[0] && tween.data[0].key === 'x') {
+                    tween.stop();
+                  }
+                });
+                
+                // Reset to original lane
+                this.playerLane = this.laneBeforeMove;
+                if (!this.isJumping) {
+                  this.player.x = this._laneX(this.playerLane);
+                }
+                
+                // Clear the flag
+                this.laneBeforeMove = null;
+              }
+              
+              // Dash 2 lanes
+              this.dashRight();
+              this.lastMoveTime = currentTime;
+            }
+            break;
+            
+          case 'jump':
+            // Simple jump zone - just do a regular jump
+            if (this.currentZone !== 'jump' && !this.isJumping && !this.isChargingJump) {
+              console.log('REGULAR JUMP');
+              this.jump();
+            }
+            break;
+            
+          case 'crouch':
+            // Start charging jump (distance-based, not time-based)
+            if (!this.isChargingJump && !this.isJumping) {
+              console.log('STARTING JUMP CHARGE');
+              this.isChargingJump = true;
+              this.chargeGlow.setVisible(true);
+              
+              // Start charge sound
+              try {
+                gameSounds.jumpCharge.triggerAttack("C2");
+              } catch(e) {}
+            }
+            break;
+        }
+        
+        // If we left the crouch zone and went to a horizontal zone, cancel the charge
+        // But keep it active if going through center (which is part of the swipe path to jump)
+        if (this.currentZone === 'crouch' && this.isChargingJump) {
+          if (newZone === 'leftMove' || newZone === 'rightMove' || 
+              newZone === 'leftDash' || newZone === 'rightDash') {
+            // Cancelled by moving horizontally
+            this.isChargingJump = false;
+            this.jumpChargeAmount = 0;
+            this.maxPullDistance = 0;
+            this.chargeGlow.setVisible(false);
+            
+            // Stop charge sound
             try {
-              gameSounds.dash.triggerAttackRelease("C7", "32n");
+              gameSounds.jumpCharge.triggerRelease();
             } catch(e) {}
-            
-            // Dash animation
-            const targetX = this._laneX(targetLane);
-            this.tweens.add({
-              targets: this.player,
-              x: targetX,
-              duration: PLAYER_CONFIG.dash.duration,
-              ease: 'Power2',
-              onComplete: () => {
-                this.isDashing = false;
-                this.isMoving = false;
-              }
-            });
-            
-            // Trail animation
-            this.tweens.add({
-              targets: [trail1, trail2],
-              x: targetX,
-              duration: PLAYER_CONFIG.dash.duration,
-              ease: 'Power2',
-              onComplete: () => {
-                trail1.destroy();
-                trail2.destroy();
-              }
-            });
-            
-            // Visual feedback
-            this.touchIndicator.setFillStyle(0x00ffff, 0.8);
           }
-          
-          // Update tracking
-          this.lastSwipeX = pointer.x;
-          
-        } else if (Math.abs(incrementalX) > 35 && !this.isMoving && !isDiagonal) { // Straight horizontal swipe for move
-          // 2. DETECTED INPUT
-          console.log('DETECTED: STRAIGHT SWIPE for MOVE', {
-            incrementalX: incrementalX.toFixed(1),
-            incrementalY: incrementalY.toFixed(1),
-            direction: swipeDirection
-          });
-          
-          // 3. EXECUTED COMMAND
-          console.log('EXECUTING: MOVE', {
-            from: this.playerLane,
-            to: this.playerLane + (swipeDirection === 'right' ? 1 : -1),
-            direction: swipeDirection
-          });
-          
-          // Normal speed swipe - move 1 lane
-          if (swipeDirection === 'right') {
-            this.moveRight();
-          } else {
-            this.moveLeft();
-          }
-          
-          // Update reference point after action executes
-          this.lastSwipeX = pointer.x;
-          
-          // Enter cooldown to prevent multiple actions from one swipe
-          this.actionCooldown = true;
-          this.swipeStartTime = null;  // Reset swipe motion tracking
-          this.swipeStartX = null;
-        } else if (Math.abs(incrementalX) > 20) {
-          // Movement detected but blocked
-          console.log('BLOCKED:', {
-            reason: this.isMoving ? 'isMoving=true' : 'below threshold',
-            incrementalX: incrementalX,
-            threshold: this.swipeThreshold
-          });
+          // Keep charge active when going through center or to jump
         }
-      }
-      
-      // DON'T update lastSwipeX here - only update when action executes!
-      
-      // Vertical swipe detection - track incremental Y movements (no time limit)
-      const incrementalY = pointer.y - (this.lastSwipeY || this.touchStartY);
-      
-      // Check for down-then-up swipe pattern for super jump
-      if (this.swipeHistory.length >= 3) {
-        const recent = this.swipeHistory.slice(-10); // Last 10 points
-        if (recent.length >= 3) {
-          // Find the lowest point
-          let lowestPoint = recent[0];
-          let lowestIndex = 0;
-          for (let i = 1; i < recent.length; i++) {
-            if (recent[i].y > lowestPoint.y) {
-              lowestPoint = recent[i];
-              lowestIndex = i;
-            }
-          }
-          
-          // Check if we went down then up
-          const firstY = recent[0].y;
-          const currentY = pointer.y;
-          const bottomY = lowestPoint.y;
-          
-          // Down-then-up pattern detected (using lenient threshold)
-          if (lowestIndex > 0 && lowestIndex < recent.length - 1 && 
-              bottomY - firstY > this.superJumpDownThreshold && 
-              bottomY - currentY > this.superJumpDownThreshold &&
-              !this.isJumping) {
-            
-            // Calculate super jump power based on swipe distance
-            const totalSwipeDistance = (bottomY - firstY) + (bottomY - currentY);
-            const maxSwipeDistance = HEIGHT * 0.4; // 40% of screen height for max power
-            const chargePercent = Math.min(totalSwipeDistance / maxSwipeDistance, 1.0);
-            
-            // Execute super jump
-            this.superJump(chargePercent);
-            
-            // Clear history to prevent repeated triggers
-            this.swipeHistory = [];
-            this.lastSwipeY = pointer.y;
-            
-            // Visual feedback
-            this.touchIndicator.setFillStyle(0xffff00, 0.7);
-          }
-        }
-      }
-      
-      // Simple vertical swipe up for regular jump
-      const upSwipe = pointer.y - (this.lastSwipeY || this.touchStartY);
-      if (upSwipe < -30 && !this.isJumping && !this.actionCooldown) {
-        // Check if this is primarily vertical (not part of diagonal dash)
-        const horizontalMove = Math.abs(pointer.x - (this.lastSwipeX || this.touchStartX));
-        const isMainlyVertical = Math.abs(upSwipe) > horizontalMove * 1.5; // Y must be 1.5x larger than X
         
-        // Check if this is just a simple up swipe (not part of down-up pattern)
-        const hasRecentDown = this.swipeHistory.some(point => 
-          point.y > pointer.y && 
-          this.time.now - point.time < 200
-        );
-        
-        if (isMainlyVertical && !hasRecentDown) {
-          console.log('DETECTED: UP SWIPE for JUMP', {
-            upSwipe: upSwipe.toFixed(1),
-            horizontalMove: horizontalMove.toFixed(1),
-            isMainlyVertical: isMainlyVertical
-          });
-          this.jump();
-          this.lastSwipeY = pointer.y; // Track last Y position
-          this.actionCooldown = true; // Prevent multiple jumps
-          
-          // Clear cooldown after a short delay
-          this.time.delayedCall(200, () => {
-            this.actionCooldown = false;
-          });
-        }
+        this.currentZone = newZone;
       }
     });
     
@@ -2793,24 +2847,44 @@ class Main extends Phaser.Scene {
         this.touchIndicator.setFillStyle(0x00ff00, 0.3); // Reset color
       }
       
-      
-      // Cancel firing timer if it hasn't triggered yet
-      if (this.fireHoldTimer) {
-        this.fireHoldTimer.remove();
-        this.fireHoldTimer = null;
+      // Clear zone visuals if enabled
+      if (this.zoneVisuals) {
+        this.zoneVisuals.clear();
       }
       
-      // Stop firing
+      // Check if we should execute a charged jump on release
+      if (this.isChargingJump && this.jumpChargeAmount > 0) {
+        const chargePercent = this.jumpChargeAmount;
+        console.log('RELEASE TO JUMP', { chargePercent });
+        
+        if (chargePercent > 0.3) {
+          // Super jump if charged enough
+          this.superJump(chargePercent);
+        } else {
+          // Regular jump if barely charged
+          this.jump();
+        }
+        
+        // Hide glow
+        this.chargeGlow.setVisible(false);
+        
+        // Stop charge sound
+        try {
+          gameSounds.jumpCharge.triggerRelease();
+        } catch(e) {}
+      }
+      
+      // Reset state
+      this.touchZoneActive = false;
       this.isTouchFiring = false;
+      this.currentZone = 'center';
+      this.isChargingJump = false;
+      this.jumpChargeAmount = 0;
+      this.maxPullDistance = 0;
       
-      // Check for tap (no significant movement and quick release)
-      const dx = pointer.x - this.touchStartX;
-      const dy = pointer.y - this.touchStartY;
-      const elapsed = this.time.now - this.touchStartTime;
-      
-      if (Math.abs(dx) < 20 && Math.abs(dy) < 20 && elapsed < 200) {
-        // It's a tap - fire once
-        this._fire();
+      // Reset indicator size
+      if (this.touchIndicator) {
+        this.touchIndicator.setRadius(15);
       }
     });
   }
@@ -3085,7 +3159,7 @@ class Main extends Phaser.Scene {
     if(this.isDashing) return;  // Only check isDashing, not isMoving
     
     const startLane = this.playerLane;
-    const targetLane = Math.max(-1, this.playerLane - 1);  // Only dash 1 more lane since first tap already moved 1
+    const targetLane = Math.max(-1, this.playerLane - 2);  // Dash 2 lanes total
     
     // Can't dash if already at leftmost position
     if(startLane <= 0) return;  // Changed from -1 to 0
@@ -3093,9 +3167,17 @@ class Main extends Phaser.Scene {
     this.isDashing = true;
     this.isMoving = true;
     
-    // Only kill tweens and snap position if not jumping (preserve jump animation)
+    // Kill any existing movement tweens but preserve jump
+    // We need to stop horizontal movement even when jumping
+    this.tweens.getTweensOf(this.player).forEach(tween => {
+      // Only kill tweens that affect x position
+      if (tween.data && tween.data[0] && tween.data[0].key === 'x') {
+        tween.stop();
+      }
+    });
+    
+    // Always update X to current lane position before dashing
     if (!this.isJumping) {
-      this.tweens.killTweensOf(this.player);
       this.player.x = this._laneX(this.playerLane);
     }
     this.player.setScale(1, 1);  // Reset scale
@@ -3172,7 +3254,7 @@ class Main extends Phaser.Scene {
     if(this.isDashing) return;  // Only check isDashing, not isMoving
     
     const startLane = this.playerLane;
-    const targetLane = Math.min(LANES, this.playerLane + 1);  // Only dash 1 more lane since first tap already moved 1
+    const targetLane = Math.min(LANES, this.playerLane + 2);  // Dash 2 lanes total
     
     // Can't dash if already at rightmost position
     if(startLane >= LANES - 1) return;  // Changed from LANES to LANES - 1
@@ -3180,9 +3262,17 @@ class Main extends Phaser.Scene {
     this.isDashing = true;
     this.isMoving = true;
     
-    // Only kill tweens and snap position if not jumping (preserve jump animation)
+    // Kill any existing movement tweens but preserve jump
+    // We need to stop horizontal movement even when jumping
+    this.tweens.getTweensOf(this.player).forEach(tween => {
+      // Only kill tweens that affect x position
+      if (tween.data && tween.data[0] && tween.data[0].key === 'x') {
+        tween.stop();
+      }
+    });
+    
+    // Always update X to current lane position before dashing
     if (!this.isJumping) {
-      this.tweens.killTweensOf(this.player);
       this.player.x = this._laneX(this.playerLane);
     }
     this.player.setScale(1, 1);  // Reset scale
