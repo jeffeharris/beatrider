@@ -4904,6 +4904,7 @@ class Main extends Phaser.Scene {
       b.safeDistance = ARC_SHOT_BASE_SAFE_DISTANCE + (jumpPercent * ARC_SHOT_HEIGHT_BONUS);
       b.startY = this.player.y; // Launch from jump height
       b.progress = 1.0; // Arc shots always start at bottom progress, regardless of visual height
+      b.initialProgress = 1.0; // Store this for point B calculation
     } 
     if(this.rapidFire) {
       b.vy *= 1.5; // Faster bullets in rapid fire
@@ -5620,17 +5621,21 @@ class Main extends Phaser.Scene {
           }
           
           if (distanceTraveled < b.safeDistance) {
-            // Follow elevated perspective curve, then blend down to normal curve
+            // Draw straight line from A to B
             const arcProgress = distanceTraveled / b.safeDistance;
             
-            // Calculate where we'd be on both curves
-            const elevatedY = normalY - perspectiveOffset - jumpHeight; // Elevated parallel curve
-            const targetY = normalY - perspectiveOffset; // Normal curve
+            // Point A: player position when fired
+            const pointA = b.startY;
             
-            // Interpolate between elevated and normal curves
-            // Use a smoother S-curve for more gradual transition
-            const blendFactor = arcProgress * arcProgress * (3 - 2 * arcProgress); // Smooth step function
-            y = elevatedY + (targetY - elevatedY) * blendFactor;
+            // Point B: After traveling safeDistance from progress 1.0
+            // The bullet will be at progress (1.0 - safeDistance)
+            // But we need to calculate where that is in screen Y
+            const progressAtB = 1.0 - b.safeDistance;
+            // This is the Y position for that progress value on the perspective curve
+            const pointB = vanishY + (HEIGHT - vanishY) * Math.pow(progressAtB, 2.5);
+            
+            // Linear interpolation from A to B
+            y = pointA + (pointB - pointA) * arcProgress;
           } else {
             // After safeDistance: Follow normal curve adjusted for perspective
             y = normalY - perspectiveOffset;
