@@ -5658,7 +5658,10 @@ class Main extends Phaser.Scene {
         for(let j=this.enemies.length-1; j>=0; j--){
           const e = this.enemies[j];
           // Check if in same lane and close in progress
-          if(Math.abs(e.lane - b.lane) < 0.5 && Math.abs(e.progress - b.progress) < 0.05){
+          // Drifters require more precise timing due to lane-changing movement
+          const progressThreshold = e.isDrifter ? 0.03 : 0.05; // Tighter window for drifters
+          const laneThreshold = e.isDrifter ? 0.3 : 0.5; // More precise lane alignment needed
+          if(Math.abs(e.lane - b.lane) < laneThreshold && Math.abs(e.progress - b.progress) < progressThreshold){
             // Create explosion at enemy position
             const explosionColor = e.isDrifter ? 0x9966ff : (e.enemyType === 'fastEnemyTex' ? 0xffff00 : 0xff3366);
             this._createExplosion(e.x, e.y, explosionColor, e.isDrifter ? 12 : 8);
