@@ -4549,6 +4549,18 @@ class Main extends Phaser.Scene {
     // Inverse the exponential curve formula to get progress from Y position
     b.progress = Math.pow(normalizedY, 1/2.5);
     
+    // Debug logging for arc shot spawn
+    if(this.isJumping) {
+      console.log('Arc shot spawn debug:', {
+        playerY: this.player.y,
+        PLAYER_Y: PLAYER_Y,
+        jumpHeight: PLAYER_Y - this.player.y,
+        bulletSpawnY: b.y,
+        bulletProgress: b.progress,
+        isJumping: this.isJumping
+      });
+    }
+    
     if (HORIZONTAL_SHOOTING && isOffScreen) {
       // Horizontal shooting when off-screen - sweep across all lanes
       // Determine direction based on which side we're on
@@ -5267,18 +5279,40 @@ class Main extends Phaser.Scene {
         if(b.isArcShot) {
           const distanceTraveled = 1.0 - b.progress;
           const normalY = vanishY + (HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
+          const normalStartY = vanishY + (HEIGHT - vanishY) * Math.pow(1.0, 2.5); // Where normal bullets start
+          const perspectiveOffset = normalStartY - PLAYER_Y; // How much the curve differs from player position
           const jumpHeight = PLAYER_Y - b.startY; // Positive when jumping
           
-          if (distanceTraveled < ARC_SHOT_BASE_SAFE_DISTANCE) {
-            // First 40%: Follow elevated parallel curve
-            y = normalY - jumpHeight;
-          } else if (distanceTraveled < b.safeDistance) {
-            // Between 40% and safeDistance: Parabolic arc down to normal curve
-            const arcProgress = (distanceTraveled - ARC_SHOT_BASE_SAFE_DISTANCE) / (b.safeDistance - ARC_SHOT_BASE_SAFE_DISTANCE);
-            y = normalY - jumpHeight * (1 - Math.pow(arcProgress, 2));
+          // Log first frame of arc shot
+          if (!b.arcLogged) {
+            console.log('Arc shot first frame:', {
+              startY: b.startY,
+              currentY: b.y,
+              normalY: normalY,
+              normalStartY: normalStartY,
+              perspectiveOffset: perspectiveOffset,
+              jumpHeight: jumpHeight,
+              distanceTraveled: distanceTraveled,
+              progress: b.progress
+            });
+            b.arcLogged = true;
+          }
+          
+          if (distanceTraveled < b.safeDistance) {
+            // Follow elevated perspective curve, then blend down to normal curve
+            const arcProgress = distanceTraveled / b.safeDistance;
+            
+            // Calculate where we'd be on both curves
+            const elevatedY = normalY - perspectiveOffset - jumpHeight; // Elevated parallel curve
+            const targetY = normalY - perspectiveOffset; // Normal curve
+            
+            // Interpolate between elevated and normal curves
+            // Use a smoother S-curve for more gradual transition
+            const blendFactor = arcProgress * arcProgress * (3 - 2 * arcProgress); // Smooth step function
+            y = elevatedY + (targetY - elevatedY) * blendFactor;
           } else {
-            // After safeDistance: Follow normal curve
-            y = normalY;
+            // After safeDistance: Follow normal curve adjusted for perspective
+            y = normalY - perspectiveOffset;
             b.isArcShot = false;
           }
         }
