@@ -428,7 +428,9 @@
             <option value="driving" selected>Driving</option>
             <option value="peak">Peak Time</option>
             <option value="acid">Acid Storm</option>
-            <option value="trance">Trance</option>
+            <option value="dark">Dark</option>
+            <option value="hypnotic">Hypnotic</option>
+            <option value="anthem">Anthem</option>
           </select>
           <span id="musicPresetDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Classic techno</span>
         </div>
@@ -443,6 +445,16 @@
           <span id="difficultyDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Standard</span>
         </div>
         <hr style="border-color: #0f0; margin: 15px 0; opacity: 0.3;">
+        <div style="margin-bottom: 15px;">
+          <label class="slider-label">Genre:</label>
+          <div style="display: flex; gap: 3px; margin-top: 5px; flex-wrap: wrap;">
+            <button id="genreTechno" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Techno</button>
+            <button id="genreDnb" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">D&B</button>
+            <button id="genreTropical" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Tropical</button>
+            <button id="genreDubstep" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Dubstep</button>
+            <button id="genreTrance" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Trance</button>
+          </div>
+        </div>
         <div class="slider-row">
           <label class="slider-label">BPM:</label>
           <input type="range" id="bpmSlider" min="120" max="150" value="132" class="slider">
@@ -592,7 +604,8 @@ const stabFilter = new Tone.Filter({
   Q: 2
 }).connect(stabReverb);
 
-const raveSynth = new Tone.PolySynth(Tone.Synth, {
+// Genre-specific stab synths
+const technoStab = new Tone.PolySynth(Tone.Synth, {
   oscillator: { 
     type: "sawtooth",
     partialCount: 3  // Fewer harmonics = softer sound
@@ -605,6 +618,40 @@ const raveSynth = new Tone.PolySynth(Tone.Synth, {
   },
   volume: -2       // Boost volume back up
 }).connect(stabFilter);
+
+// D&B Reese bass-style synth (detuned saws)
+const dnbReese = new Tone.PolySynth(Tone.Synth, {
+  oscillator: {
+    type: "sawtooth",
+    detune: 7  // Slight detune for movement
+  },
+  envelope: {
+    attack: 0.05,
+    decay: 0.3,
+    sustain: 0.7,
+    release: 0.5
+  },
+  volume: -4
+}).connect(stabFilter);
+
+// Tropical steel drum-style synth (metallic, bright attack)
+const tropicalPluck = new Tone.PolySynth(Tone.Synth, {
+  oscillator: {
+    type: "sine",  // Pure tone like steel drum
+    modulationType: "triangle",  // Add some metallic harmonics
+    modulationIndex: 2
+  },
+  envelope: {
+    attack: 0.001,   // Very quick attack for that steel drum "ping"
+    decay: 0.4,      // Let it ring a bit
+    sustain: 0.1,    // Small sustain
+    release: 0.3     // Natural ring-out
+  },
+  volume: 2  // Boost for presence
+}).connect(stabFilter);
+
+// Current active stab synth (will switch based on genre)
+let raveSynth = technoStab;  // Default to techno
 
 // Sub bass with EQ to prevent mud
 const subEQ = new Tone.EQ3({
@@ -686,6 +733,48 @@ function getChordProgression(section) {
   return Math.random() > 0.5 ? chordProgressions.variation1 : chordProgressions.variation2;
 }
 
+// Genre configurations with appropriate BPM ranges and pattern sets
+const GENRE_CONFIGS = {
+  techno: {
+    name: 'Techno/Acid',
+    bpmMin: 120,
+    bpmMax: 150,
+    bpmDefault: 132,
+    patterns: ['detroit', 'berlin', 'chicago', 'fourOnFloor', 'syncopated']
+  },
+  dnb: {
+    name: 'Drum & Bass',
+    bpmMin: 160,
+    bpmMax: 180,
+    bpmDefault: 174,
+    patterns: ['dnb_basic', 'dnb_amen', 'dnb_jump', 'dnb_roll']
+  },
+  tropical: {
+    name: 'Tropical/Kygo',
+    bpmMin: 100,
+    bpmMax: 115,
+    bpmDefault: 110,
+    patterns: ['kygo_basic', 'kygo_bounce', 'kygo_minimal', 'kygo_clap']
+  },
+  dubstep: {
+    name: 'Dubstep',
+    bpmMin: 138,
+    bpmMax: 145,
+    bpmDefault: 140,
+    patterns: ['dubstep_basic', 'dubstep_half', 'dubstep_roll']
+  },
+  trance: {
+    name: 'Trance',
+    bpmMin: 135,
+    bpmMax: 145,
+    bpmDefault: 138,
+    patterns: ['trance_kick', 'trance_build', 'trance_uplifting']
+  }
+};
+
+// Current genre (can be changed via UI)
+let currentGenre = 'techno';
+
 // Pattern bank with classic techno/acid patterns
 const patternBank = {
   kick: {
@@ -697,14 +786,46 @@ const patternBank = {
     detroit: [1,0,0,1, 1,0,0,0, 1,0,1,0, 1,0,0,0],  // Detroit techno style
     berlin: [1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,0,0],   // Berlin minimal
     chicago: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,1,0],  // Chicago acid house
-    fill: [1,0,1,0, 1,0,1,1, 1,1,1,0, 1,1,1,1]
+    fill: [1,0,1,0, 1,0,1,1, 1,1,1,0, 1,1,1,1],
+    // Drum & Bass patterns (breakbeat style)
+    dnb_basic: [1,0,0,0, 0,0,1,0, 0,0,1,0, 0,0,0,0],  // Basic D&B kick
+    dnb_amen: [1,0,0,1, 0,0,1,0, 0,1,0,0, 1,0,0,0],   // Amen-inspired
+    dnb_jump: [1,0,0,0, 0,0,0,1, 0,0,1,0, 0,0,0,1],    // Jump-up style
+    // Tropical/Kygo patterns (dembow/reggaeton influenced)
+    kygo_basic: [1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0],  // Basic tropical house
+    kygo_bounce: [1,0,0,0, 0,1,0,0, 1,0,0,0, 0,1,0,0], // Bouncy Kygo style
+    kygo_minimal: [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0], // Sparse tropical
+    // Dubstep patterns (half-time feel at 140 BPM)
+    dubstep_basic: [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0], // Classic dubstep
+    dubstep_half: [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],  // Ultra minimal
+    dubstep_roll: [1,0,0,0, 0,0,1,0, 0,0,1,0, 0,0,1,0],  // Rolling subs
+    // Trance patterns (driving four-on-floor)
+    trance_kick: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],   // Classic trance
+    trance_build: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],  // Build-up pattern
+    trance_uplifting: [1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1] // Uplifting variation
   },
   snare: {
     backbeat: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
     ghost: [0,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0],
     detroit: [0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0],  // Off-beat snare
     fill: [0,0,0,0, 1,0,1,0, 1,0,1,1, 1,1,1,1],
-    minimal: [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0]
+    minimal: [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0],
+    // Drum & Bass snare patterns (heavy on 2 and 4)
+    dnb_basic: [0,0,1,0, 1,0,0,0, 0,1,0,0, 1,0,0,0],   // Classic D&B snare
+    dnb_amen: [0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,1,0],    // Amen break style
+    dnb_roll: [0,0,1,0, 1,0,1,1, 0,0,1,0, 1,1,1,1],    // Rolling snares
+    // Tropical/Kygo snare patterns (lighter, more sparse)
+    kygo_clap: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],   // Simple clap on 2&4
+    kygo_snap: [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0],   // Finger snaps
+    kygo_rim: [0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,1,0],    // Rimshot pattern
+    // Dubstep snare patterns (heavy on the 3)
+    dubstep_basic: [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0], // Classic dubstep snare
+    dubstep_trap: [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,1,0],  // Trap-influenced
+    dubstep_roll: [0,0,0,0, 0,0,0,0, 1,0,1,1, 0,0,0,0],  // Snare rolls
+    // Trance snare patterns (uplifting, driving)
+    trance_clap: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],   // Standard clap
+    trance_build: [0,0,0,0, 1,0,0,1, 0,0,1,0, 1,0,1,1],  // Building energy
+    trance_uplift: [0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0]  // Uplifting pattern
   },
   // Classic acid bassline patterns (rhythm only, notes added later)
   acid: {
@@ -861,16 +982,41 @@ function generatePatterns(section, bar, energy) {
     patterns.snare = fill.snare;
     patterns.hihat = fill.hihat;
   } else {
-    // Use classic patterns based on section
+    // Use genre-specific patterns based on section
+    const genreConfig = GENRE_CONFIGS[currentGenre];
+    
     if (section === 'DROP') {
-      // Drop uses Chicago or Detroit patterns
-      patterns.kick = Math.random() > 0.5 ? patternBank.kick.chicago : patternBank.kick.detroit;
-      patterns.snare = energy > 70 ? patternBank.snare.detroit : patternBank.snare.backbeat;
+      // Drop section - use genre-specific intense patterns
+      if (currentGenre === 'dnb') {
+        patterns.kick = patternBank.kick.dnb_jump;
+        patterns.snare = patternBank.snare.dnb_roll;
+      } else if (currentGenre === 'tropical') {
+        patterns.kick = patternBank.kick.kygo_bounce;
+        patterns.snare = patternBank.snare.kygo_clap;
+      } else {
+        patterns.kick = Math.random() > 0.5 ? patternBank.kick.chicago : patternBank.kick.detroit;
+        patterns.snare = energy > 70 ? patternBank.snare.detroit : patternBank.snare.backbeat;
+      }
     } else if (section === 'MAIN') {
-      // Main section alternates between styles
-      const kickStyles = [patternBank.kick.fourOnFloor, patternBank.kick.berlin, patternBank.kick.detroit];
-      patterns.kick = kickStyles[Math.floor((bar / 4) % kickStyles.length)];
-      patterns.snare = patternBank.snare.backbeat;
+      // Main section - rotate through genre patterns
+      if (currentGenre === 'dnb') {
+        const dnbKicks = [patternBank.kick.dnb_basic, patternBank.kick.dnb_amen];
+        patterns.kick = dnbKicks[Math.floor((bar / 4) % dnbKicks.length)];
+        patterns.snare = patternBank.snare.dnb_basic;
+      } else if (currentGenre === 'tropical') {
+        patterns.kick = patternBank.kick.kygo_basic;
+        patterns.snare = patternBank.snare.kygo_rim;
+      } else if (currentGenre === 'dubstep') {
+        patterns.kick = patternBank.kick.dubstep_basic;
+        patterns.snare = patternBank.snare.dubstep_basic;
+      } else if (currentGenre === 'trance') {
+        patterns.kick = patternBank.kick.trance_kick;
+        patterns.snare = patternBank.snare.trance_clap;
+      } else {
+        const kickStyles = [patternBank.kick.fourOnFloor, patternBank.kick.berlin, patternBank.kick.detroit];
+        patterns.kick = kickStyles[Math.floor((bar / 4) % kickStyles.length)];
+        patterns.snare = patternBank.snare.backbeat;
+      }
     } else if (section === 'BUILD') {
       patterns.kick = patternBank.kick.halfTime;
       patterns.snare = patternBank.snare.minimal;
@@ -882,15 +1028,38 @@ function generatePatterns(section, bar, energy) {
       patterns.snare = patternBank.snare.minimal;
     }
     
-    // Hi-hat density based on energy AND tension
-    patterns.hihat = [];
-    const hihatDensity = (energy / 100) * 0.5 + (tensionLevel / 100) * 0.5;
-    for (let i = 0; i < 16; i++) {
-      // More rapid hits at high tension
-      if (tensionLevel > 70 && i % 2 === 1) {
-        patterns.hihat[i] = 1; // Constant 16ths at high tension
+    // Hi-hat patterns based on genre
+    if (currentGenre === 'dnb') {
+      // D&B has rapid, intricate hi-hats
+      if (tensionLevel > 70) {
+        patterns.hihat = new Array(16).fill(1); // Constant ride at high tension
       } else {
-        patterns.hihat[i] = Math.random() < hihatDensity ? 1 : 0;
+        patterns.hihat = [1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1]; // D&B shuffle
+      }
+    } else if (currentGenre === 'tropical') {
+      // Tropical has sparse, laid-back hi-hats
+      if (section === 'DROP') {
+        patterns.hihat = [0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1]; // Shaker pattern
+      } else {
+        patterns.hihat = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]; // Quarter notes
+      }
+    } else if (currentGenre === 'dubstep') {
+      // Dubstep has minimal, sparse hi-hats
+      patterns.hihat = [0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0]; // Very sparse
+    } else if (currentGenre === 'trance') {
+      // Trance has steady, driving hi-hats
+      patterns.hihat = [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0]; // Steady 8ths
+    } else {
+      // Techno - dynamic based on energy AND tension
+      patterns.hihat = [];
+      const hihatDensity = (energy / 100) * 0.5 + (tensionLevel / 100) * 0.5;
+      for (let i = 0; i < 16; i++) {
+        // More rapid hits at high tension
+        if (tensionLevel > 70 && i % 2 === 1) {
+          patterns.hihat[i] = 1; // Constant 16ths at high tension
+        } else {
+          patterns.hihat[i] = Math.random() < hihatDensity ? 1 : 0;
+        }
       }
     }
   }
@@ -1080,14 +1249,33 @@ function updatePatterns() {
     }
   }, patterns.stab, "16n");
   
-  // Sub bass pattern - offset from kick to avoid mud
-  // Play slightly after the kick hits to avoid frequency clash
-  const subPattern = [
-    null, chordInfo.bass, null, null,  // Offset by one 16th
-    null, null, null, null,
-    null, chordInfo.bass, null, null,  // Offset by one 16th
-    null, null, null, null
-  ];
+  // Sub bass pattern - genre-specific
+  let subPattern;
+  if (currentGenre === 'dnb') {
+    // D&B: Long sustained sub-bass notes, often sliding
+    subPattern = [
+      chordInfo.bass, null, null, null,
+      null, null, null, null,
+      null, null, null, null,
+      chordInfo.bass, null, null, null
+    ];
+  } else if (currentGenre === 'tropical') {
+    // Tropical: Bouncing, syncopated bass following dembow rhythm
+    subPattern = [
+      chordInfo.bass, null, null, chordInfo.bass,
+      null, null, chordInfo.bass, null,
+      chordInfo.bass, null, null, chordInfo.bass,
+      null, null, chordInfo.bass, null
+    ];
+  } else {
+    // Techno: Offset from kick to avoid mud
+    subPattern = [
+      null, chordInfo.bass, null, null,  // Offset by one 16th
+      null, null, null, null,
+      null, chordInfo.bass, null, null,  // Offset by one 16th
+      null, null, null, null
+    ];
+  }
   subLoop = new Tone.Sequence((time, note) => {
     if (note && !muteStates.sub) {
       const humanTime = humanize(time, 0.002); // Very slight timing variation
@@ -1355,11 +1543,13 @@ document.getElementById('soundSelector').addEventListener('change', (e) => {
 
 // Music preset definitions
 const MUSIC_PRESETS = {
-  'chill': { bpm: 122, energy: 30, tension: 20, description: 'Laid back minimal' },
-  'driving': { bpm: 132, energy: 60, tension: 40, description: 'Classic techno' },
-  'peak': { bpm: 138, energy: 85, tension: 70, description: 'Peak time energy' },
-  'acid': { bpm: 135, energy: 75, tension: 90, description: '303 madness' },
-  'trance': { bpm: 140, energy: 70, tension: 50, description: 'Euphoric' }
+  'chill': { energy: 30, tension: 20, description: 'Laid back minimal' },
+  'driving': { energy: 60, tension: 40, description: 'Classic driving' },
+  'peak': { energy: 85, tension: 70, description: 'Peak time energy' },
+  'acid': { energy: 75, tension: 90, description: '303 madness' },
+  'dark': { energy: 40, tension: 80, description: 'Dark & brooding' },
+  'hypnotic': { energy: 50, tension: 60, description: 'Repetitive & hypnotic' },
+  'anthem': { energy: 90, tension: 60, description: 'Stadium anthem' }
 };
 
 // Difficulty preset definitions
@@ -1378,14 +1568,11 @@ document.getElementById('musicPresetSelector')?.addEventListener('change', (e) =
   if (presetKey && MUSIC_PRESETS[presetKey]) {
     const preset = MUSIC_PRESETS[presetKey];
     
-    // Apply preset values
-    Tone.Transport.bpm.value = preset.bpm;
+    // Apply preset values (no BPM - let genre control that)
     energyLevel = preset.energy;
     tensionLevel = preset.tension;
     
-    // Update sliders
-    document.getElementById('bpmSlider').value = preset.bpm;
-    document.getElementById('bpmDisplay').textContent = preset.bpm;
+    // Update sliders (energy and tension only)
     document.getElementById('energySlider').value = preset.energy;
     document.getElementById('energyDisplay').textContent = preset.energy;
     document.getElementById('tensionSlider').value = preset.tension;
@@ -1424,8 +1611,91 @@ document.getElementById('bpmSlider').addEventListener('input', markCustomPreset)
 document.getElementById('energySlider').addEventListener('input', markCustomPreset);
 document.getElementById('tensionSlider').addEventListener('input', markCustomPreset);
 
-// Initial BPM
+// Genre switching handlers
+document.getElementById('genreTechno').addEventListener('click', () => switchGenre('techno'));
+document.getElementById('genreDnb').addEventListener('click', () => switchGenre('dnb'));
+document.getElementById('genreTropical').addEventListener('click', () => switchGenre('tropical'));
+document.getElementById('genreDubstep').addEventListener('click', () => switchGenre('dubstep'));
+document.getElementById('genreTrance').addEventListener('click', () => switchGenre('trance'));
+
+function switchGenre(genre) {
+  console.log('switchGenre called with:', genre);
+  currentGenre = genre;
+  const config = GENRE_CONFIGS[genre];
+  
+  // Update BPM slider range and value
+  const bpmSlider = document.getElementById('bpmSlider');
+  bpmSlider.min = config.bpmMin;
+  bpmSlider.max = config.bpmMax;
+  bpmSlider.value = config.bpmDefault;
+  
+  // Update BPM
+  Tone.Transport.bpm.value = config.bpmDefault;
+  document.getElementById('bpmDisplay').textContent = config.bpmDefault;
+  
+  // Switch stab synth based on genre
+  if (genre === 'dnb') {
+    raveSynth = dnbReese;
+  } else if (genre === 'tropical') {
+    raveSynth = tropicalPluck;
+  } else if (genre === 'dubstep') {
+    raveSynth = dnbReese; // Use Reese for dubstep wobbles
+  } else if (genre === 'trance') {
+    raveSynth = technoStab; // Use saw stabs for trance
+  } else {
+    raveSynth = technoStab;
+  }
+  
+  // Adjust kick tuning for genre (only if instruments are loaded)
+  if (typeof kick !== 'undefined') {
+    if (genre === 'tropical') {
+      // 808-style deeper kick for tropical
+      kick.oscillator.frequency.value = 50;
+      kick.octaves = 6;
+    } else if (genre === 'dnb') {
+      // Punchy, tight kick for D&B
+      kick.oscillator.frequency.value = 65;
+      kick.octaves = 3;
+    } else if (genre === 'dubstep') {
+      // Deep sub kick for dubstep
+      kick.oscillator.frequency.value = 45;
+      kick.octaves = 7;
+    } else if (genre === 'trance') {
+      // Punchy trance kick
+      kick.oscillator.frequency.value = 60;
+      kick.octaves = 4;
+    } else {
+      // Classic 909 kick for techno
+      kick.oscillator.frequency.value = 60;
+      kick.octaves = 4;
+    }
+  }
+  
+  // Update button styles
+  const genreButtonMap = {
+    'techno': 'genreTechno',
+    'dnb': 'genreDnb',
+    'tropical': 'genreTropical', 
+    'dubstep': 'genreDubstep',
+    'trance': 'genreTrance'
+  };
+  
+  Object.keys(genreButtonMap).forEach(g => {
+    const btn = document.getElementById(genreButtonMap[g]);
+    if (btn) {
+      btn.style.setProperty('background', genre === g ? '#0f0' : '#333', 'important');
+      btn.style.setProperty('color', genre === g ? '#000' : '#0f0', 'important');
+    }
+  });
+  
+  // Force pattern update on next bar
+  updatePatterns();
+}
+
+// Initial BPM and genre
 Tone.Transport.bpm.value = 132;
+// Set initial genre button highlighting
+switchGenre('techno');
 
 // Track square handlers for minimized controls
 ['kick', 'snare', 'hat', 'acid', 'stab', 'sub'].forEach(track => {
@@ -2408,7 +2678,17 @@ class Main extends Phaser.Scene {
     gfx.fillStyle(0xbf40ff,1).fillRect(8,4,obstacleW-16,obstacleH-8);    // Core
     gfx.generateTexture('obstacleTex',obstacleW,obstacleH).clear();
     gfx.fillStyle(0x00ff00,1).fillCircle(powerUpSize/2,powerUpSize/2,powerUpSize/2).generateTexture('powerUpTex',powerUpSize,powerUpSize).clear(); // Green power-up
-    gfx.fillStyle(0xff00ff,1).fillRect(2,2,enemySize-4,enemySize-4).generateTexture('drifterTex',enemySize,enemySize).destroy(); // Magenta drifter
+    // Create diamond-shaped drifter
+    const halfSize = enemySize / 2;
+    gfx.fillStyle(0xff00ff, 1);
+    gfx.beginPath();
+    gfx.moveTo(halfSize, 2); // Top point
+    gfx.lineTo(enemySize - 2, halfSize); // Right point
+    gfx.lineTo(halfSize, enemySize - 2); // Bottom point
+    gfx.lineTo(2, halfSize); // Left point
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.generateTexture('drifterTex',enemySize,enemySize).destroy(); // Diamond drifter
 
     this.playerLane=2; 
     this.player=this.add.image(this._laneX(this.playerLane), PLAYER_Y, 'playerTex');
@@ -2503,7 +2783,7 @@ class Main extends Phaser.Scene {
     window.GameAPI = {
       onBeat: ()=>{ 
         this.beats++; 
-        const speed=ENEMY_SPEED_BASE + Math.floor(this.beats/16)*30; 
+        const speed=(ENEMY_SPEED_BASE + Math.floor(this.beats/16)*30) * currentDifficulty.speedMult; 
         // Always spawn on kick
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnEnemy(lane, speed, 'enemyTex'); 
@@ -2517,7 +2797,7 @@ class Main extends Phaser.Scene {
       },
       onSnare: ()=>{ 
         // Fast yellow enemies on snare hits - always spawn
-        const speed=ENEMY_SPEED_BASE * 1.5 + Math.floor(this.beats/16)*30; 
+        const speed=(ENEMY_SPEED_BASE * 1.5 + Math.floor(this.beats/16)*30) * currentDifficulty.speedMult; 
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnEnemy(lane, speed, 'fastEnemyTex'); 
         
@@ -4380,7 +4660,9 @@ class Main extends Phaser.Scene {
     d.progress = 0;
     d.vy = ENEMY_SPEED_BASE * 0.8;
     d.baseSize = 20;
-    d.w = d.baseSize; d.h = d.baseSize;
+    // Smaller collision box for diamonds - about 70% of visual size for tighter timing
+    d.w = d.baseSize * 0.7; 
+    d.h = d.baseSize * 0.7;
     d.enemyType = 'drifterTex';
     d.isDrifter = true;
     d.driftTimer = 0;
@@ -4525,7 +4807,7 @@ class Main extends Phaser.Scene {
     // Block firing if we just resumed from pause
     if(this.fireBlockTime && now < this.fireBlockTime) return;
     
-    const cooldown = this.rapidFire ? FIRE_COOLDOWN/3 : FIRE_COOLDOWN;
+    const cooldown = (this.rapidFire ? FIRE_COOLDOWN/3 : FIRE_COOLDOWN) * currentDifficulty.fireMult;
     if(now-this.lastShotAt<cooldown) return; 
     this.lastShotAt=now;
     
@@ -5110,8 +5392,14 @@ class Main extends Phaser.Scene {
       e.setScale(scale);
       
       // Update collision box
-      e.w = e.baseSize * scale;
-      e.h = e.baseSize * scale;
+      if(e.isDrifter) {
+        // Drifters have tighter collision boxes (70% of visual size)
+        e.w = e.baseSize * scale * 0.7;
+        e.h = e.baseSize * scale * 0.7;
+      } else {
+        e.w = e.baseSize * scale;
+        e.h = e.baseSize * scale;
+      }
       
       // Remove or check collision (can't hit while jumping or stretching)
       if(e.progress > 1.1){ e.destroy(); this.enemies.splice(i,1); }
