@@ -3910,11 +3910,12 @@ class Main extends Phaser.Scene {
     const splatColor = 0x00ffcc;
     
     // Main splat circle that expands and fades
-    const splat = this.add.circle(x, y, 10, splatColor, 1);
+    const splat = this.add.circle(x, y, 30, splatColor, 1); // Much bigger initial size
+    splat.setDepth(1000); // Make sure it's on top
     this.tweens.add({
       targets: splat,
-      scaleX: 4,
-      scaleY: 0.5, // Squish vertically
+      scaleX: 6, // Bigger expansion
+      scaleY: 0.8, // Less squish
       alpha: 0,
       duration: 400,
       ease: 'Power2',
@@ -3923,7 +3924,8 @@ class Main extends Phaser.Scene {
     
     // Splatter particles that spray outward
     for(let i = 0; i < 12; i++) {
-      const particle = this.add.rectangle(x, y, 8, 8, splatColor);
+      const particle = this.add.rectangle(x, y, 16, 16, splatColor); // Bigger particles
+      particle.setDepth(1000); // Make sure particles are on top
       const angle = (Math.PI * 2 / 12) * i;
       const speed = 150 + Math.random() * 100;
       
@@ -4317,7 +4319,8 @@ class Main extends Phaser.Scene {
   _createExplosion(x, y, color = 0xff3366, particleCount = 8){
     // Create particle explosion effect
     for(let i = 0; i < particleCount; i++){
-      const particle = this.add.rectangle(x, y, 4, 4, color);
+      const particle = this.add.rectangle(x, y, 12, 12, color); // Make particles bigger
+      particle.setDepth(1000); // Ensure on top
       const angle = (Math.PI * 2 / particleCount) * i;
       const speed = 100 + Math.random() * 100;
       
@@ -4334,10 +4337,11 @@ class Main extends Phaser.Scene {
     }
     
     // Add a flash effect
-    const flash = this.add.circle(x, y, 20, color, 0.6);
+    const flash = this.add.circle(x, y, 40, color, 0.9); // Bigger and brighter
+    flash.setDepth(999); // Just below particles
     this.tweens.add({
       targets: flash,
-      scale: 2,
+      scale: 3, // Bigger expansion
       alpha: 0,
       duration: 200,
       ease: 'Power2',
