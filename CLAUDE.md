@@ -16,8 +16,8 @@ Beatrider is a single-file retro lane-based shooter game with procedurally gener
 
 ### Core Game Loop
 The game uses two Phaser scenes:
-- `StartupScene`: Handles start screen and player initialization
-- `Main`: Core gameplay with all game logic
+- `StartupScene` (line ~2048): Handles start screen and player initialization
+- `Main` (line ~2347): Core gameplay with all game logic
 
 ### Music → Game Communication Pattern
 Tone.js music engine drives gameplay via `window.GameAPI`:
