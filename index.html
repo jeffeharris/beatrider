@@ -3670,6 +3670,19 @@ class Main extends Phaser.Scene {
     // Update lane immediately so firing is in sync
     this.playerLane = targetLane;
     
+    // Reset rubber band timer when dashing off-screen
+    if(this.playerLane < 0 || this.playerLane >= LANES){
+      // Give extra time when dashing from edge lanes (0 or 4) to off-screen
+      const isDashingFromEdge = (startLane === 0 && this.playerLane < 0) || 
+                                (startLane === LANES - 1 && this.playerLane >= LANES);
+      this.offScreenTimer = isDashingFromEdge ? 
+        PLAYER_CONFIG.offScreen.gracePeriod + 400 : // Extra 400ms for edge dash
+        PLAYER_CONFIG.offScreen.gracePeriod;
+      this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
+    } else {
+      this.player.setAlpha(1);
+    }
+    
     const targetX = this._laneX(targetLane);
     
     // Check collision in the starting lane (we're passing through it during dash)
@@ -3792,7 +3805,7 @@ class Main extends Phaser.Scene {
     });
     
     // Can't dash if already at rightmost position
-    if(startLane >= LANES - 1) return;  // Changed from LANES to LANES - 1
+    if(startLane >= LANES) return;  // Allow dashing from lane 4 to off-screen
     
     this.isDashing = true;
     this.isMoving = true;
@@ -3850,6 +3863,19 @@ class Main extends Phaser.Scene {
     
     // Update lane immediately so firing is in sync
     this.playerLane = targetLane;
+    
+    // Reset rubber band timer when dashing off-screen
+    if(this.playerLane < 0 || this.playerLane >= LANES){
+      // Give extra time when dashing from edge lanes (0 or 4) to off-screen
+      const isDashingFromEdge = (startLane === 0 && this.playerLane < 0) || 
+                                (startLane === LANES - 1 && this.playerLane >= LANES);
+      this.offScreenTimer = isDashingFromEdge ? 
+        PLAYER_CONFIG.offScreen.gracePeriod + 400 : // Extra 400ms for edge dash
+        PLAYER_CONFIG.offScreen.gracePeriod;
+      this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
+    } else {
+      this.player.setAlpha(1);
+    }
     
     const targetX = this._laneX(targetLane);
     
@@ -5193,10 +5219,8 @@ class Main extends Phaser.Scene {
         this.cameras.main.setPostPipeline('ChromaticAberration');
       }
       
-      // Visual warning - flash player when time is running out
+      // Visual warning - increase shake as timer runs out
       if(this.offScreenTimer < 300){
-        this.player.setTint(0xff0000); // Red tint warning
-        // Increase shake as timer runs out
         this.cameras.main.shake(100, 0.02);
       }
       // Pull back when timer expires
@@ -5242,7 +5266,12 @@ class Main extends Phaser.Scene {
           ease: 'Power2'
         });
         
-        this.player.clearTint();
+        // Restore power-up tint if active
+        if(this.rapidFire) {
+          this.player.setTint(0x00ff00);
+        } else {
+          this.player.clearTint();
+        }
         this.player.setAlpha(1); // Restore full opacity
         this.offScreenPulse = false; // Reset audio pulse flag
         // Rubber band snap sound
