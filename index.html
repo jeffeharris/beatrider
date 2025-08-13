@@ -65,11 +65,32 @@
     }
     
     .left-panel.expanded {
-      max-height: 400px;
+      max-height: calc(100vh - 140px); /* Leave room for score at bottom */
       padding: 10px;
       border-width: 1px;
       overflow-y: auto;
       opacity: 1 !important; /* Always fully visible when expanded */
+    }
+    
+    /* Custom scrollbar styling for expanded panel */
+    .left-panel.expanded::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .left-panel.expanded::-webkit-scrollbar-track {
+      background: rgba(0, 255, 0, 0.1);
+      border-radius: 3px;
+    }
+    
+    .left-panel.expanded::-webkit-scrollbar-thumb {
+      background: rgba(0, 255, 0, 0.5);
+      border-radius: 3px;
+      border: 1px solid rgba(0, 255, 0, 0.3);
+    }
+    
+    .left-panel.expanded::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 255, 0, 0.8);
+      box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
     }
     #gameContainer {
       position: absolute;
@@ -108,6 +129,53 @@
     .slider {
       flex: 1;
       max-width: 200px;
+    }
+    
+    /* Special styling for sensitivity slider - no fill gradient */
+    .sensitivity-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      outline: none;
+      flex: 1;
+      max-width: 200px;
+    }
+    
+    .sensitivity-slider::-webkit-slider-track {
+      background: #333;
+      height: 4px;
+      border-radius: 2px;
+    }
+    
+    .sensitivity-slider::-moz-range-track {
+      background: #333;
+      height: 4px;
+      border-radius: 2px;
+    }
+    
+    .sensitivity-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #0f0;
+      border-radius: 50%;
+      cursor: pointer;
+      margin-top: -6px;
+    }
+    
+    .sensitivity-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #0f0;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+    
+    /* Show tick marks */
+    .sensitivity-slider::-webkit-slider-runnable-track {
+      background: #333;
     }
     .slider-value {
       min-width: 40px;
@@ -193,13 +261,15 @@
       opacity: 0.15; /* Very transparent by default */
       transition: opacity 0.3s ease;
       max-width: calc(100vw - 20px);
-      overflow-x: auto;
+      overflow: hidden; /* Prevent any scrolling */
       flex-wrap: wrap;
+      touch-action: none; /* Disable touch scrolling */
     }
     
     .music-controls:hover,
-    .music-controls.touched {
-      opacity: 1; /* Fully opaque when interacted with */
+    .music-controls.touched,
+    .music-controls.settings-open {
+      opacity: 1; /* Fully opaque when interacted with or settings open */
     }
     
     .control-btn {
@@ -363,7 +433,7 @@
     }
     
     body.mobile .left-panel.expanded {
-      max-height: 600px;
+      max-height: calc(100vh - 120px); /* Leave room for score on mobile */
       padding: 20px;
     }
     
@@ -481,6 +551,19 @@
             <option value="5">Pew Pew</option>
           </select>
           <span id="soundDisplay" class="slider-value">Triangle</span>
+        </div>
+        <div class="slider-row" id="touchSensitivityRow" style="display: none;">
+          <label class="slider-label" title="Size of center deadzone - smaller = more responsive">DEADZONE:</label>
+          <input type="range" id="touchSensitivitySlider" min="25" max="40" value="28" step="3" class="slider sensitivity-slider" list="touchSensitivitySteps" title="Adjust the size of the center deadzone">
+          <datalist id="touchSensitivitySteps">
+            <option value="25"></option>
+            <option value="28"></option>
+            <option value="31"></option>
+            <option value="34"></option>
+            <option value="37"></option>
+            <option value="40"></option>
+          </datalist>
+          <span id="touchSensitivityDisplay" class="slider-value" title="Smaller circle = more sensitive">●</span>
         </div>
       </div>
   
@@ -1769,16 +1852,44 @@ if (gridToggleBtn) {
 if (expandBtn) {
   expandBtn.addEventListener('click', (e) => {
     e.stopPropagation(); // Prevent document click from firing
+    const musicControls = document.getElementById('musicControls');
+    
     if (expandedPanel.classList.contains('expanded')) {
       // Panel is open, close it
       expandedPanel.classList.remove('expanded');
+      musicControls.classList.remove('settings-open');
       uiState.settingsOpen = false;
       updateSettingsButton();
+      
+      // Make player vulnerable again
+      const mainScene = game?.scene?.getScene('Main');
+      if (mainScene && mainScene.player) {
+        mainScene.isInvincible = false;
+      }
     } else {
       // Panel is closed, open it
       expandedPanel.classList.add('expanded');
+      musicControls.classList.add('settings-open');
       uiState.settingsOpen = true;
       updateSettingsButton();
+      
+      // Make player invincible and flash
+      const mainScene = game?.scene?.getScene('Main');
+      if (mainScene && mainScene.player) {
+        mainScene.isInvincible = true;
+        
+        // Flash effect
+        mainScene.player.setTint(0xffff00);
+        mainScene.time.delayedCall(100, () => {
+          mainScene.player.setTint(0xffffff);
+          mainScene.time.delayedCall(100, () => {
+            mainScene.player.setTint(0xffff00);
+            mainScene.time.delayedCall(100, () => {
+              mainScene.player.clearTint();
+            });
+          });
+        });
+      }
     }
   });
 }
@@ -1794,8 +1905,15 @@ document.addEventListener('click', (e) => {
   // Check if click is outside panel, button, and music controls
   if (!panel.contains(e.target) && !btn.contains(e.target) && !musicControls.contains(e.target)) {
     panel.classList.remove('expanded');
+    musicControls.classList.remove('settings-open');
     uiState.settingsOpen = false;
     updateSettingsButton();
+    
+    // Make player vulnerable again
+    const mainScene = game?.scene?.getScene('Main');
+    if (mainScene && mainScene.player) {
+      mainScene.isInvincible = false;
+    }
   }
 });
 
@@ -1809,9 +1927,17 @@ document.addEventListener('keydown', (e) => {
   
   if (gameKeys.includes(e.key) || gameKeys.includes(e.key.toLowerCase())) {
     const panel = document.getElementById('expandedPanel');
+    const musicControls = document.getElementById('musicControls');
     panel.classList.remove('expanded');
+    musicControls.classList.remove('settings-open');
     uiState.settingsOpen = false;
     updateSettingsButton();
+    
+    // Make player vulnerable again
+    const mainScene = game?.scene?.getScene('Main');
+    if (mainScene && mainScene.player) {
+      mainScene.isInvincible = false;
+    }
   }
 });
 
@@ -1979,6 +2105,56 @@ let gridEnabled = true; // Will be updated after savedData is loaded
 // Apply mobile class to body for CSS styling
 if (isMobile) {
   document.body.classList.add('mobile');
+  
+  // Initialize touch sensitivity selector (deferred until DOM is ready)
+  window.addEventListener('DOMContentLoaded', () => {
+    const touchSensitivityRow = document.getElementById('touchSensitivityRow');
+    if (touchSensitivityRow) {
+      touchSensitivityRow.style.display = 'flex';
+      
+      // Load saved sensitivity and update UI
+      const savedSensitivity = localStorage.getItem('touchSensitivity') || '28';
+      const touchSlider = document.getElementById('touchSensitivitySlider');
+      const touchDisplay = document.getElementById('touchSensitivityDisplay');
+      
+      if (touchSlider && touchDisplay) {
+        touchSlider.value = savedSensitivity;
+        
+        // Set up display with fixed width to prevent jitter
+        touchDisplay.style.width = '40px';
+        touchDisplay.style.textAlign = 'center';
+        touchDisplay.style.display = 'inline-block';
+        
+        // Show circle that scales based on deadzone value
+        const updateCircleDisplay = (value) => {
+          const val = parseInt(value);
+          // Scale from 0.625 (25px) to 1.0 (40px)
+          const scale = 0.625 + ((val - 25) / 15) * 0.375;
+          touchDisplay.innerHTML = `<span style="display: inline-block; transform: scale(${scale});">●</span>`;
+        };
+        
+        updateCircleDisplay(savedSensitivity);
+        
+        // Handle both input (while sliding) and change (on release) events
+        const updateTouchSensitivity = (e) => {
+          const newDeadzone = parseInt(e.target.value);
+          // Update the game's deadzone if a game scene is active
+          if (window.currentGameScene) {
+            window.currentGameScene.zoneDeadRadius = newDeadzone;
+          }
+          // Update display with scaled circle
+          updateCircleDisplay(e.target.value);
+        };
+        
+        touchSlider.addEventListener('input', updateTouchSensitivity);
+        touchSlider.addEventListener('change', (e) => {
+          updateTouchSensitivity(e);
+          // Save to localStorage only on change (when user releases)
+          localStorage.setItem('touchSensitivity', e.target.value);
+        });
+      }
+    }
+  });
 }
 
 // Initialize game dimensions - use visualViewport for accurate mobile sizing
@@ -2157,42 +2333,6 @@ const PLAYER_CONFIG = {
     }
   },
   
-  // Touch controls configuration
-  touch: {
-    // Swipe detection
-    swipeThreshold: 50,     // Pixels minimum for swipe
-    swipeTimeLimit: 300,    // ms - max time for swipe gesture
-    
-    // Jump sensitivities (0.1 = strict, 1.0 = very lenient)
-    jumpSensitivity: 0.85,       // Regular jump
-    superJumpSensitivity: 0.85,   // Super jump detection
-    
-    // Calculated thresholds (derived from sensitivities)
-    // These are computed at runtime but shown here for clarity:
-    // verticalSwipeThreshold: swipeThreshold * (1.1 - jumpSensitivity)
-    // superJumpDownThreshold: swipeThreshold * (1.1 - superJumpSensitivity) * 0.5
-    
-    // Double-swipe dash
-    doubleSwipeWindow: 300,  // ms for double-swipe
-    
-    // Diagonal swipe (for diagonal dash)
-    diagonalThreshold: 0.7,   // Multiplier of swipeThreshold
-    
-    // Touch feedback
-    holdFireDelay: 150,       // ms before auto-fire starts
-    swipeHistoryWindow: 500,  // ms of swipe history to keep
-    
-    // Visual indicator
-    indicator: {
-      radius: 20,
-      normalColor: 0x00ff00,
-      fireColor: 0xff0000,
-      dashColor: 0x00ffff,
-      superJumpColor: 0xffff00,
-      alpha: 0.3
-    }
-  },
-  
   // Idle animations (jello physics)
   idle: {
     wobble: {
@@ -2321,10 +2461,10 @@ class StartupScene extends Phaser.Scene {
     
     // Instructions - different for mobile vs desktop
     const instructions = isMobile ? [
-      'SWIPE LEFT/RIGHT - MOVE',
-      'SWIPE UP - JUMP', 
-      'TAP - FIRE',
-      'HOLD - AUTO-FIRE'
+      'DRAG LEFT/RIGHT - MOVE',
+      'DRAG UP - JUMP', 
+      'DRAG DOWN THEN RELEASE - SUPER JUMP',
+      'TAP CENTER - FIRE'
     ] : [
       'ARROWS/A/D - MOVE',
       'W/UP - JUMP',
@@ -2631,6 +2771,7 @@ class Main extends Phaser.Scene {
     
     // Store reference for external access
     window.gameScene = this;
+    window.currentGameScene = this; // For touch sensitivity settings
     
     // Scene is already created, no need to wait for ready event
     
@@ -2660,13 +2801,22 @@ class Main extends Phaser.Scene {
     
     const gfx=this.make.graphics({x:0,y:0,add:false});
     // Scale up sprite sizes for mobile
-    const playerSize = Math.floor(24 * MOBILE_SCALE);
-    const enemySize = Math.floor(20 * MOBILE_SCALE);
-    const bulletW = Math.floor(6 * MOBILE_SCALE);
-    const bulletH = Math.floor(12 * MOBILE_SCALE);
-    const obstacleW = Math.floor(60 * MOBILE_SCALE);
-    const obstacleH = Math.floor(16 * MOBILE_SCALE);
-    const powerUpSize = Math.floor(20 * MOBILE_SCALE);
+    // Desktop gets larger base sizes for better visual density
+    const basePlayerSize = isMobile ? 24 : 32;
+    const baseEnemySize = isMobile ? 20 : 28;
+    const baseBulletW = isMobile ? 6 : 8;
+    const baseBulletH = isMobile ? 12 : 16;
+    const baseObstacleW = isMobile ? 60 : 80;
+    const baseObstacleH = isMobile ? 16 : 22;
+    const basePowerUpSize = isMobile ? 20 : 28;
+    
+    const playerSize = Math.floor(basePlayerSize * MOBILE_SCALE);
+    const enemySize = Math.floor(baseEnemySize * MOBILE_SCALE);
+    const bulletW = Math.floor(baseBulletW * MOBILE_SCALE);
+    const bulletH = Math.floor(baseBulletH * MOBILE_SCALE);
+    const obstacleW = Math.floor(baseObstacleW * MOBILE_SCALE);
+    const obstacleH = Math.floor(baseObstacleH * MOBILE_SCALE);
+    const powerUpSize = Math.floor(basePowerUpSize * MOBILE_SCALE);
     
     gfx.fillStyle(0x00ffcc,1).fillRect(0,0,playerSize,playerSize).generateTexture('playerTex',playerSize,playerSize).clear();
     gfx.fillStyle(0xff3366,1).fillRect(0,0,enemySize,enemySize).generateTexture('enemyTex',enemySize,enemySize).clear();
@@ -2916,7 +3066,9 @@ class Main extends Phaser.Scene {
     
     // Zone configuration - based on comfortable thumb reach
     this.zoneRadius = 100; // Radius from touch point to edge
-    this.zoneDeadRadius = 35; // Dead zone radius around initial touch
+    // Load saved touch sensitivity or use default
+    const savedSensitivity = localStorage.getItem('touchSensitivity');
+    this.zoneDeadRadius = savedSensitivity ? parseInt(savedSensitivity) : 28;
     
     // We'll use angle-based detection for the 4 directional zones
     // No need to pre-define boundaries, we'll calculate on the fly
@@ -4904,7 +5056,7 @@ class Main extends Phaser.Scene {
       b.safeDistance = ARC_SHOT_BASE_SAFE_DISTANCE + (jumpPercent * ARC_SHOT_HEIGHT_BONUS);
       b.startY = this.player.y; // Launch from jump height
       b.progress = 1.0; // Arc shots always start at bottom progress, regardless of visual height
-      b.initialProgress = 1.0; // Store this for point B calculation
+      b.arcDistance = 0; // Track how far the arc shot has traveled
     } 
     if(this.rapidFire) {
       b.vy *= 1.5; // Faster bullets in rapid fire
@@ -5599,7 +5751,9 @@ class Main extends Phaser.Scene {
         
         // Apply arc trajectory if this is a jump shot
         if(b.isArcShot) {
-          const distanceTraveled = 1.0 - b.progress;
+          // Update arc distance based on bullet speed
+          b.arcDistance += (Math.abs(b.vy) * dt/1000) / (HEIGHT * 0.8);
+          const distanceTraveled = b.arcDistance;
           const normalY = vanishY + (HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
           const normalStartY = vanishY + (HEIGHT - vanishY) * Math.pow(1.0, 2.5); // Where normal bullets start
           const perspectiveOffset = normalStartY - PLAYER_Y; // How much the curve differs from player position
@@ -5636,9 +5790,38 @@ class Main extends Phaser.Scene {
             
             // Linear interpolation from A to B
             y = pointA + (pointB - pointA) * arcProgress;
+            
+            // Check at boundary
+            if (arcProgress > 0.99 && !b.boundaryChecked) {
+              const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should be pointB)
+              const nextFrameProgress = b.progress - (Math.abs(b.vy) * dt/1000) / (HEIGHT * 0.8);
+              const nextFrameY = vanishY + (HEIGHT - vanishY) * Math.pow(nextFrameProgress, 2.5) - perspectiveOffset;
+              console.log('Boundary check:', {
+                arcEndY,
+                pointB,
+                nextFrameY,
+                difference: nextFrameY - pointB
+              });
+              b.boundaryChecked = true;
+            }
+            
+            // Log near transition
+            if (arcProgress > 0.98 && !b.almostTransition) {
+              const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should equal pointB)
+              const normalStartProgress = 1.0 - b.safeDistance;
+              const normalStartY = vanishY + (HEIGHT - vanishY) * Math.pow(normalStartProgress, 2.5) - perspectiveOffset;
+              console.log('Transition point check:', {
+                arcEndY,
+                pointB,
+                normalStartY,
+                perspectiveOffset,
+                mismatch: normalStartY - arcEndY
+              });
+              b.almostTransition = true;
+            }
           } else {
-            // After safeDistance: Follow normal curve adjusted for perspective
-            y = normalY - perspectiveOffset;
+            // After safeDistance: Arc shots don't need perspective offset
+            y = normalY;
             b.isArcShot = false;
           }
         }
