@@ -1756,6 +1756,11 @@ const ENEMY_SPEED_BASE = isMobile ? 150 : 200; // Slower on mobile for easier pl
 const BULLET_SPEED = 520;
 const FIRE_COOLDOWN = 110;
 const HORIZONTAL_SHOOTING = true; // Enable horizontal shooting across lanes
+
+// Arc shot tuning parameters
+const ARC_SHOT_BASE_SAFE_DISTANCE = 0.4; // Base 40% of path immune to obstacles
+const ARC_SHOT_HEIGHT_BONUS = 0.3; // Additional 30% max based on jump height
+const ARC_SHOT_MAX_JUMP_HEIGHT = 360; // Reference for calculating height percentage
 // Smart scaling based on device and orientation
 let isLandscape = window.innerWidth > window.innerHeight;
 let MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1; // Smaller scale in landscape
@@ -4566,19 +4571,15 @@ class Main extends Phaser.Scene {
     b.w = b.w || Math.floor(6 * MOBILE_SCALE); 
     b.h = b.h || Math.floor(12 * MOBILE_SCALE);
     
-    // If jumping, give bullet an arc trajectory
+    // If jumping, give bullet an arc trajectory with safe distance
     if(this.isJumping && !isOffScreen) {
       b.isArcShot = true;
-      b.arcHeight = 0; // Height offset from base trajectory
-      b.arcVelocity = -500; // Stronger initial upward velocity
-      b.gravity = 600; // Slightly less gravity for longer arc
-      b.startY = this.player.y; // Remember starting height
-      console.log('Arc shot created:', {
-        isJumping: this.isJumping,
-        arcVelocity: b.arcVelocity,
-        gravity: b.gravity,
-        startY: b.startY
-      });
+      // Calculate safe distance based on jump height
+      const jumpHeight = Math.abs(this.player.y - PLAYER_Y);
+      const jumpPercent = Math.min(jumpHeight / ARC_SHOT_MAX_JUMP_HEIGHT, 1);
+      b.safeDistance = ARC_SHOT_BASE_SAFE_DISTANCE + (jumpPercent * ARC_SHOT_HEIGHT_BONUS);
+      b.startY = this.player.y; // Launch from jump height
+      b.progress = 1.0; // Arc shots always start at bottom progress, regardless of visual height
     } 
     if(this.rapidFire) {
       b.vy *= 1.5; // Faster bullets in rapid fire
@@ -5264,16 +5265,22 @@ class Main extends Phaser.Scene {
         
         // Apply arc trajectory if this is a jump shot
         if(b.isArcShot) {
-          // Update arc physics
-          b.arcVelocity += b.gravity * (dt/1000);
-          b.arcHeight += b.arcVelocity * (dt/1000);
+          const distanceTraveled = 1.0 - b.progress;
+          const normalY = vanishY + (HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
+          const jumpHeight = PLAYER_Y - b.startY; // Positive when jumping
           
-          // Calculate arc offset - negative arcHeight means bullet is above base trajectory
-          // The arc starts negative (going up) then becomes positive (falling down)
-          y += b.arcHeight; // Add the arc offset to Y (negative = higher on screen)
-          
-          // Rotate bullet to show trajectory
-          b.setRotation(Math.atan2(b.arcVelocity, -b.vy) * 0.5);
+          if (distanceTraveled < ARC_SHOT_BASE_SAFE_DISTANCE) {
+            // First 40%: Follow elevated parallel curve
+            y = normalY - jumpHeight;
+          } else if (distanceTraveled < b.safeDistance) {
+            // Between 40% and safeDistance: Parabolic arc down to normal curve
+            const arcProgress = (distanceTraveled - ARC_SHOT_BASE_SAFE_DISTANCE) / (b.safeDistance - ARC_SHOT_BASE_SAFE_DISTANCE);
+            y = normalY - jumpHeight * (1 - Math.pow(arcProgress, 2));
+          } else {
+            // After safeDistance: Follow normal curve
+            y = normalY;
+            b.isArcShot = false;
+          }
         }
         
         b.y = y;
@@ -5298,19 +5305,11 @@ class Main extends Phaser.Scene {
       for(let j=this.obstacles.length-1; j>=0; j--){
         const o = this.obstacles[j];
         if(o.lane === b.lane && Math.abs(o.progress - b.progress) < 0.05){
-          // Arc shots can go over obstacles if high enough
-          // Check if bullet is above the obstacle (lower y = higher on screen)
+          // Arc shots pass over obstacles during safe distance
           if(b.isArcShot) {
-            console.log('Arc shot collision check:', {
-              bulletY: b.y,
-              obstacleY: o.y,
-              obstacleHeight: o.h,
-              arcHeight: b.arcHeight,
-              threshold: o.y - 20,
-              willPass: b.y < (o.y - 20)
-            });
-            if(b.y < (o.y - 20)) {
-              continue; // Bullet is flying over the obstacle, don't collide
+            const distanceTraveled = 1.0 - b.progress;
+            if(distanceTraveled < b.safeDistance) {
+              continue; // Bullet is in safe flight, skip collision
             }
           }
           
