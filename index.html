@@ -2386,22 +2386,13 @@ class StartupScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#000');
     
     // Create grid effect in background
-    const gridGraphics = this.add.graphics();
-    gridGraphics.lineStyle(1, 0x00ff00, 0.1);
-    
-    // Vertical lines
-    for(let x = 0; x < WIDTH; x += 40) {
-      gridGraphics.lineBetween(x, 0, x, HEIGHT);
-    }
-    // Horizontal lines  
-    for(let y = 0; y < HEIGHT; y += 40) {
-      gridGraphics.lineBetween(0, y, WIDTH, y);
-    }
+    this.gridGraphics = this.add.graphics();
+    this.drawGrid();
     
     // Animated scan line effect
-    const scanline = this.add.rectangle(0, 0, WIDTH, 3, 0x00ff00, 0.5);
-    this.tweens.add({
-      targets: scanline,
+    this.scanline = this.add.rectangle(0, 0, WIDTH, 3, 0x00ff00, 0.5);
+    this.scanlineTween = this.tweens.add({
+      targets: this.scanline,
       y: HEIGHT,
       duration: 3000,
       repeat: -1,
@@ -2423,12 +2414,12 @@ class StartupScene extends Phaser.Scene {
       }
     };
     
-    const title = this.add.text(WIDTH/2, HEIGHT/3, 'BEATRIDER', titleStyle);
-    title.setOrigin(0.5);
+    this.title = this.add.text(WIDTH/2, HEIGHT/3, 'BEATRIDER', titleStyle);
+    this.title.setOrigin(0.5);
     
     // Pulsing glow animation for title
     this.tweens.add({
-      targets: title,
+      targets: this.title,
       scaleX: 1.05,
       scaleY: 1.05,
       duration: 1000,
@@ -2438,14 +2429,14 @@ class StartupScene extends Phaser.Scene {
     });
     
     // Subtitle with typewriter effect
-    const subtitleText = 'MELODIC TECHNO EDITION';
-    const subtitle = this.add.text(WIDTH/2, HEIGHT/3 + 80, '', {
+    const subtitleText = 'ENDLESS BEAT SURVIVOR';
+    this.subtitle = this.add.text(WIDTH/2, HEIGHT/3 + 80, '', {
       font: '24px monospace',
       fill: '#ff00ff',
       stroke: '#ff00ff',
       strokeThickness: 1
     });
-    subtitle.setOrigin(0.5);
+    this.subtitle.setOrigin(0.5);
     
     // Typewriter effect
     let charIndex = 0;
@@ -2453,7 +2444,7 @@ class StartupScene extends Phaser.Scene {
       delay: 100,
       callback: () => {
         if(charIndex < subtitleText.length) {
-          subtitle.text += subtitleText[charIndex];
+          this.subtitle.text += subtitleText[charIndex];
           charIndex++;
         }
       },
@@ -2465,7 +2456,7 @@ class StartupScene extends Phaser.Scene {
       'DRAG LEFT/RIGHT - MOVE',
       'DRAG UP - JUMP', 
       'DRAG DOWN THEN RELEASE - SUPER JUMP',
-      'TAP CENTER - FIRE'
+      'HOLD SCREEN - AUTO FIRE'
     ] : [
       'ARROWS/A/D - MOVE',
       'W/UP - JUMP',
@@ -2473,6 +2464,7 @@ class StartupScene extends Phaser.Scene {
       'G - TOGGLE GRID'
     ];
     
+    this.instructions = [];
     instructions.forEach((text, index) => {
       const instruction = this.add.text(WIDTH/2, HEIGHT/2 + 40 + index * 30, text, {
         font: '18px monospace',
@@ -2480,6 +2472,7 @@ class StartupScene extends Phaser.Scene {
       });
       instruction.setOrigin(0.5);
       instruction.setAlpha(0);
+      this.instructions.push(instruction);
       
       // Fade in with delay
       this.tweens.add({
@@ -2492,17 +2485,18 @@ class StartupScene extends Phaser.Scene {
     
     // Press start message - different for mobile
     const startMessage = isMobile ? 'TAP TO START' : 'PRESS SPACE TO START';
-    const startText = this.add.text(WIDTH/2, HEIGHT - 100, startMessage, {
+    const startY = (WIDTH > HEIGHT) ? HEIGHT - 50 : HEIGHT - 100; // Closer to bottom in landscape
+    this.startText = this.add.text(WIDTH/2, startY, startMessage, {
       font: 'bold 28px monospace',
       fill: '#ffff00',
       stroke: '#ffff00',
       strokeThickness: 1
     });
-    startText.setOrigin(0.5);
+    this.startText.setOrigin(0.5);
     
     // Blinking effect
     this.tweens.add({
-      targets: startText,
+      targets: this.startText,
       alpha: 0,
       duration: 500,
       yoyo: true,
@@ -2518,6 +2512,7 @@ class StartupScene extends Phaser.Scene {
       'SYSTEM READY'
     ];
     
+    this.bootTexts = [];
     const bootY = 60;
     bootLines.forEach((line, index) => {
       this.time.delayedCall(index * 300, () => {
@@ -2528,6 +2523,7 @@ class StartupScene extends Phaser.Scene {
         
         // Type-in effect for boot text
         bootText.setAlpha(0);
+        this.bootTexts.push(bootText);
         this.tweens.add({
           targets: bootText,
           alpha: 1,
@@ -2552,6 +2548,7 @@ class StartupScene extends Phaser.Scene {
     });
     
     // Floating particles in background
+    this.particles = [];
     for(let i = 0; i < 30; i++) {
       const particle = this.add.circle(
         Math.random() * WIDTH,
@@ -2560,6 +2557,8 @@ class StartupScene extends Phaser.Scene {
         0x00ff00,
         Math.random() * 0.3 + 0.1
       );
+      
+      this.particles.push(particle);
       
       this.tweens.add({
         targets: particle,
@@ -2592,32 +2591,109 @@ class StartupScene extends Phaser.Scene {
     this.input.on('pointerup', startGame);  // Some mobile browsers work better with up
     
     // Also add a fullscreen invisible button as fallback for iOS
-    const invisibleButton = this.add.rectangle(WIDTH/2, HEIGHT/2, WIDTH, HEIGHT, 0x000000, 0);
-    invisibleButton.setInteractive();
-    invisibleButton.once('pointerdown', startGame);
+    this.invisibleButton = this.add.rectangle(WIDTH/2, HEIGHT/2, WIDTH, HEIGHT, 0x000000, 0);
+    this.invisibleButton.setInteractive();
+    this.invisibleButton.once('pointerdown', startGame);
+  }
+  
+  drawGrid() {
+    this.gridGraphics.clear();
+    this.gridGraphics.lineStyle(1, 0x00ff00, 0.1);
+    
+    // Vertical lines
+    for(let x = 0; x < WIDTH; x += 40) {
+      this.gridGraphics.lineBetween(x, 0, x, HEIGHT);
+    }
+    // Horizontal lines  
+    for(let y = 0; y < HEIGHT; y += 40) {
+      this.gridGraphics.lineBetween(0, y, WIDTH, y);
+    }
   }
   
   resize(gameSize, baseSize, displaySize, resolution) {
-    // Update global dimensions from gameSize
-    if (!gameSize) return;
+    // Check if cameras exist before accessing
+    if (!this.cameras || !this.cameras.main) {
+      return;
+    }
     
-    WIDTH = gameSize.width;
-    HEIGHT = gameSize.height;
+    // Update global dimensions using the actual camera dimensions
+    WIDTH = this.cameras.main.width;
+    HEIGHT = this.cameras.main.height;
     
     // Only update if we're the active scene
     if (this.scene.isActive()) {
-      // Update text positions without calling create() again
-      if (this.titleText) {
-        this.titleText.x = WIDTH / 2;
-        this.titleText.y = HEIGHT * 0.3;
+      // Redraw grid with new dimensions
+      if (this.gridGraphics) {
+        this.drawGrid();
       }
+      
+      // Update scanline
+      if (this.scanline) {
+        this.scanline.width = WIDTH;
+        // Reset scanline tween
+        if (this.scanlineTween) {
+          this.scanlineTween.remove();
+        }
+        this.scanlineTween = this.tweens.add({
+          targets: this.scanline,
+          y: HEIGHT,
+          duration: 3000,
+          repeat: -1,
+          ease: 'Linear'
+        });
+      }
+      
+      // Update title position
+      if (this.title) {
+        this.title.x = WIDTH / 2;
+        this.title.y = HEIGHT / 3;
+      }
+      
+      // Update subtitle position
+      if (this.subtitle) {
+        this.subtitle.x = WIDTH / 2;
+        this.subtitle.y = HEIGHT / 3 + 80;
+      }
+      
+      // Update instructions positions
+      if (this.instructions) {
+        this.instructions.forEach((instruction, index) => {
+          instruction.x = WIDTH / 2;
+          instruction.y = HEIGHT / 2 + 40 + index * 30;
+        });
+      }
+      
+      // Update start text position
       if (this.startText) {
         this.startText.x = WIDTH / 2;
-        this.startText.y = HEIGHT * 0.6;
+        const startY = (WIDTH > HEIGHT) ? HEIGHT - 50 : HEIGHT - 100; // Closer to bottom in landscape
+        this.startText.y = startY;
       }
-      if (this.instructionText) {
-        this.instructionText.x = WIDTH / 2;
-        this.instructionText.y = HEIGHT * 0.75;
+      
+      // Update invisible button size
+      if (this.invisibleButton) {
+        this.invisibleButton.x = WIDTH / 2;
+        this.invisibleButton.y = HEIGHT / 2;
+        this.invisibleButton.width = WIDTH;
+        this.invisibleButton.height = HEIGHT;
+      }
+      
+      // Reposition particles
+      if (this.particles) {
+        this.particles.forEach(particle => {
+          // Stop current tween and restart with new dimensions
+          this.tweens.killTweensOf(particle);
+          particle.x = Math.random() * WIDTH;
+          particle.y = Math.random() * HEIGHT;
+          
+          this.tweens.add({
+            targets: particle,
+            y: particle.y - HEIGHT - 100,
+            duration: Math.random() * 10000 + 10000,
+            repeat: -1,
+            delay: Math.random() * 5000
+          });
+        });
       }
     }
   }
@@ -2917,6 +2993,11 @@ class Main extends Phaser.Scene {
     this.crouchTimer = 0; // Timer for crouch charge
     this.maxChargeTime = 1000; // Max charge time in ms for full power
     this.releaseGraceTime = 150; // Grace period after releasing down to still trigger super jump
+    this.queuedSuperJumpCharge = 0; // Queue super jump charge when jumping
+    this.keyboardJumpQueuedWhileAirborne = false; // Track if keyboard jump queued while airborne
+    this.queuedCrouchOnLanding = false; // Track if crouch was queued while airborne
+    this.usingTimeBasedCharge = false; // Whether using time-based charge (for queued touch)
+    this.touchChargeStartTime = 0; // When time-based charge started
     
     // Jello physics for idle animation
     this.idleWobblePhase = 0; // For idle breathing animation
@@ -3129,6 +3210,10 @@ class Main extends Phaser.Scene {
     this.lastMoveTime = 0;
     this.moveCooldown = 150; // ms between lane changes
     this.laneBeforeMove = null; // Track lane position before any move starts
+    this.zoneHoldTimer = 0; // Track how long we've been in a zone
+    this.zoneRepeatDelay = 300; // ms before first repeat
+    this.zoneRepeatRate = 150; // ms between repeats after first
+    this.lastZoneCheckTime = 0;
     
     // Jump charge tracking
     this.jumpChargeAmount = 0;
@@ -3148,8 +3233,10 @@ class Main extends Phaser.Scene {
     
     // Touch start - anywhere on screen
     this.input.on('pointerdown', (pointer) => {
-      this.touchStartX = pointer.x;
-      this.touchStartY = pointer.y;
+      // Edge constraint - keep control center within screen bounds with padding
+      const edgePadding = this.zoneRadius * 0.7; // Allow 30% of zone to go off-screen
+      this.touchStartX = Phaser.Math.Clamp(pointer.x, edgePadding, WIDTH - edgePadding);
+      this.touchStartY = Phaser.Math.Clamp(pointer.y, edgePadding, HEIGHT - edgePadding);
       this.touchZoneActive = true;
       
       // Reset state
@@ -3157,14 +3244,48 @@ class Main extends Phaser.Scene {
       this.isChargingJump = false;
       this.jumpChargeAmount = 0;
       this.maxPullDistance = 0;
+      this.queuedCrouchOnLanding = false;
+      this.usingTimeBasedCharge = false;
       
-      // Show touch indicator
-      this.touchIndicator.setPosition(pointer.x, pointer.y);
+      // Show touch indicator at clamped position
+      this.touchIndicator.setPosition(this.touchStartX, this.touchStartY);
       this.touchIndicator.setVisible(true);
       this.touchIndicator.setAlpha(0.5);
       
       // Start firing immediately
       this.isTouchFiring = true;
+      
+      // Check if we started in a movement zone (edge case)
+      const dx = pointer.x - this.touchStartX;
+      const dy = pointer.y - this.touchStartY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance > this.zoneDeadRadius) {
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        let startZone = 'center';
+        
+        if (angle >= -60 && angle < 60) {
+          startZone = distance > this.zoneRadius ? 'rightDash' : 'rightMove';
+        } else if (angle >= 60 && angle < 120) {
+          startZone = 'crouch';
+        } else if (angle >= -120 && angle < -60) {
+          startZone = 'jump';
+        } else {
+          startZone = distance > this.zoneRadius ? 'leftDash' : 'leftMove';
+        }
+        
+        if (startZone === 'leftMove' || startZone === 'rightMove') {
+          console.log('STARTED IN MOVEMENT ZONE', { startZone, dx, dy, distance });
+          // Trigger immediate movement
+          if (startZone === 'leftMove') {
+            this.moveLeft();
+          } else {
+            this.moveRight();
+          }
+          this.lastMoveTime = this.time.now;
+          this.currentZone = startZone;
+        }
+      }
       
       // Visualize zones if enabled
       if (this.zoneVisuals) {
@@ -3186,13 +3307,13 @@ class Main extends Phaser.Scene {
       const dy = pointer.y - this.touchStartY;
       
       // Update jump charge if in crouch zone or after leaving it (elastic pull)
-      if (this.isChargingJump) {
-        // Track the maximum pull distance (furthest point pulled down)
+      if (this.isChargingJump && !this.usingTimeBasedCharge) {
+        // Normal distance-based charge tracking (not time-based)
         const currentPullDistance = Math.max(0, dy); // Only positive (downward) distance
         this.maxPullDistance = Math.max(this.maxPullDistance, currentPullDistance);
         
         // Charge based on the furthest pull, not current position
-        const maxPullThreshold = this.zoneRadius * 1.5; // Pull to 150% of zone radius for max charge
+        const maxPullThreshold = this.zoneRadius * 2.25; // Pull to 225% of zone radius for max charge (1.5x original)
         this.jumpChargeAmount = Math.min(this.maxPullDistance / maxPullThreshold, 1.0); // 0 to 1 based on max pull
         
         // Update charge glow effect (same as keyboard)
@@ -3314,8 +3435,10 @@ class Main extends Phaser.Scene {
                   const activePointer = this.input.activePointer;
                   if (activePointer && activePointer.isDown) {
                     console.log('RECENTERING after move complete');
-                    this.touchStartX = activePointer.x;
-                    this.touchStartY = activePointer.y;
+                    // Recenter with edge constraints
+                    const edgePadding = this.zoneRadius * 0.7; // Allow 30% of zone to go off-screen
+                    this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
+                    this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, HEIGHT - edgePadding);
                     
                     // Update visual zones at new position
                     if (this.zoneVisuals) {
@@ -3340,8 +3463,10 @@ class Main extends Phaser.Scene {
                   const activePointer = this.input.activePointer;
                   if (activePointer && activePointer.isDown) {
                     console.log('RECENTERING after right move complete');
-                    this.touchStartX = activePointer.x;
-                    this.touchStartY = activePointer.y;
+                    // Recenter with edge constraints
+                    const edgePadding = this.zoneRadius * 0.7; // Allow 30% of zone to go off-screen
+                    this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
+                    this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, HEIGHT - edgePadding);
                     
                     // Update visual zones at new position
                     if (this.zoneVisuals) {
@@ -3416,30 +3541,48 @@ class Main extends Phaser.Scene {
             break;
             
           case 'crouch':
-            // Start charging jump (distance-based, not time-based)
-            if (!this.isChargingJump && !this.isJumping) {
-              console.log('STARTING JUMP CHARGE');
-              this.isChargingJump = true;
-              this.chargeGlow.setVisible(true);
-              
-              // Start charge sound
-              try {
-                gameSounds.jumpCharge.triggerAttack("C2");
-              } catch(e) {}
+            // Queue charging if airborne, or start immediately if on ground
+            if (!this.isChargingJump) {
+              if (this.isJumping) {
+                // Queue the charge to start when landing
+                console.log('TOUCH: QUEUEING CHARGE FOR LANDING', { 
+                  isJumping: this.isJumping
+                });
+                this.queuedCrouchOnLanding = true;
+                // Don't start charging yet, just track that we're in crouch zone
+              } else {
+                // Start charging immediately if on ground
+                console.log('TOUCH: STARTING JUMP CHARGE (ON GROUND)', { 
+                  isJumping: this.isJumping
+                });
+                this.isChargingJump = true;
+                this.chargeGlow.setVisible(true);
+                
+                // Start charge sound
+                try {
+                  gameSounds.jumpCharge.triggerAttack("C2");
+                } catch(e) {}
+              }
             }
             break;
         }
         
-        // If we left the crouch zone and went to a horizontal zone, cancel the charge
+        // If we left the crouch zone and went to a horizontal zone, cancel the charge or queue
         // But keep it active if going through center (which is part of the swipe path to jump)
-        if (this.currentZone === 'crouch' && this.isChargingJump) {
+        if (this.currentZone === 'crouch') {
           if (newZone === 'leftMove' || newZone === 'rightMove' || 
               newZone === 'leftDash' || newZone === 'rightDash') {
             // Cancelled by moving horizontally
-            this.isChargingJump = false;
-            this.jumpChargeAmount = 0;
-            this.maxPullDistance = 0;
-            this.chargeGlow.setVisible(false);
+            if (this.isChargingJump) {
+              this.isChargingJump = false;
+              this.jumpChargeAmount = 0;
+              this.maxPullDistance = 0;
+              this.chargeGlow.setVisible(false);
+            }
+            // Also cancel any queued crouch or time-based charge
+            this.queuedCrouchOnLanding = false;
+            this.usingTimeBasedCharge = false;
+            console.log('TOUCH: CROUCH/QUEUE CANCELLED BY HORIZONTAL MOVE');
             
             // Stop charge sound
             try {
@@ -3450,7 +3593,36 @@ class Main extends Phaser.Scene {
         }
         
         this.currentZone = newZone;
+        this.zoneHoldTimer = 0; // Reset hold timer on zone change
+      } else {
+        // Same zone - check for auto-repeat for movement zones
+        if (this.currentZone === 'leftMove' || this.currentZone === 'rightMove') {
+          const currentTime = this.time.now;
+          this.zoneHoldTimer += currentTime - (this.lastZoneCheckTime || currentTime);
+          
+          // Check if we should repeat the action
+          const repeatThreshold = this.zoneHoldTimer > this.zoneRepeatDelay ? 
+            this.zoneRepeatRate : this.zoneRepeatDelay;
+          
+          const timeSinceLastMove = currentTime - this.lastMoveTime;
+          if (timeSinceLastMove > repeatThreshold && !this.isMoving && !this.isDashing) {
+            console.log('AUTO-REPEAT MOVE', { 
+              zone: this.currentZone, 
+              holdTime: this.zoneHoldTimer,
+              timeSinceLastMove
+            });
+            
+            if (this.currentZone === 'leftMove') {
+              this.moveLeft();
+            } else {
+              this.moveRight();
+            }
+            this.lastMoveTime = currentTime;
+          }
+        }
       }
+      
+      this.lastZoneCheckTime = this.time.now;
     });
     
     // Touch end
@@ -3466,17 +3638,42 @@ class Main extends Phaser.Scene {
         this.zoneVisuals.clear();
       }
       
+      // Stop time-based charging
+      console.log('TOUCH: POINTER UP - STOPPING TIME-BASED CHARGE', {
+        wasUsingTimeBasedCharge: this.usingTimeBasedCharge,
+        finalCharge: this.jumpChargeAmount
+      });
+      this.usingTimeBasedCharge = false;
+      
       // Check if we should execute a charged jump on release
       if (this.isChargingJump && this.jumpChargeAmount > 0) {
         const chargePercent = this.jumpChargeAmount;
-        console.log('RELEASE TO JUMP', { chargePercent });
+        console.log('TOUCH: RELEASE TO JUMP', { 
+          chargePercent, 
+          isJumping: this.isJumping,
+          jumpQueuedWhileAirborne: this.jumpQueuedWhileAirborne,
+          currentQueuedCharge: this.queuedSuperJumpCharge
+        });
         
         if (chargePercent > 0.3) {
-          // Super jump if charged enough
-          this.superJump(chargePercent);
+          // Super jump if charged enough, or queue if airborne
+          if (!this.isJumping) {
+            console.log('TOUCH: EXECUTING SUPER JUMP IMMEDIATELY');
+            this.superJump(chargePercent);
+          } else {
+            // Queue the super jump to execute on landing
+            this.queuedSuperJumpCharge = chargePercent;
+            console.log('TOUCH: SUPER JUMP QUEUED FOR LANDING', { 
+              charge: this.queuedSuperJumpCharge,
+              playerY: this.player.y,
+              PLAYER_Y: PLAYER_Y
+            });
+          }
         } else {
-          // Regular jump if barely charged
-          this.jump();
+          // Regular jump if barely charged (only if not already jumping)
+          if (!this.isJumping) {
+            this.jump();
+          }
         }
         
         // Hide glow
@@ -3766,12 +3963,86 @@ class Main extends Phaser.Scene {
       duration: 250,
       ease: 'Quad.easeOut',
       yoyo: true,
+      onYoyo: () => {
+        // Player has reached apex and is starting to fall - allow jumping again
+        console.log('JUMP: REACHED APEX, STARTING DESCENT');
+      },
       onComplete: () => {
+        console.log('REGULAR JUMP LANDING', {
+          queuedSuperJumpCharge: this.queuedSuperJumpCharge,
+          queuedCrouchOnLanding: this.queuedCrouchOnLanding,
+          currentZone: this.currentZone
+        });
         this.isJumping = false;
         this.player.y = PLAYER_Y;
-        // Reset rotation if no mid-air move was performed
-        if(Math.abs(this.player.angle % 360) < 10) {
+        // Animate rotation back to 0 if needed
+        if(Math.abs(this.player.angle % 360) > 1) {
+          this.tweens.add({
+            targets: this.player,
+            angle: 0,
+            duration: 200,
+            ease: 'Cubic.easeOut'
+          });
+        } else {
           this.player.angle = 0;
+        }
+        
+        // Check if we should start charging based on queued crouch
+        if (this.queuedCrouchOnLanding && this.currentZone === 'crouch') {
+          console.log('TOUCH: AUTO-STARTING TIME-BASED CHARGE AFTER LANDING');
+          this.isChargingJump = true;
+          this.chargeGlow.setVisible(true);
+          this.queuedCrouchOnLanding = false;
+          
+          // Start time-based charging like keyboard
+          this.touchChargeStartTime = this.time.now;
+          this.usingTimeBasedCharge = true;
+          this.jumpChargeAmount = 0;
+          this.maxPullDistance = 0;
+          
+          console.log('TOUCH: INITIALIZED TIME-BASED CHARGE', {
+            touchChargeStartTime: this.touchChargeStartTime,
+            usingTimeBasedCharge: this.usingTimeBasedCharge,
+            maxChargeTime: this.maxChargeTime
+          });
+          
+          // Start charge sound
+          try {
+            gameSounds.jumpCharge.triggerAttack("C2");
+          } catch(e) {}
+          
+          // Reset touch reference point
+          const activePointer = this.input.activePointer;
+          if (activePointer && activePointer.isDown) {
+            const edgePadding = this.zoneRadius * 0.7;
+            this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
+            this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, HEIGHT - edgePadding);
+          }
+          
+          // Start charge sound
+          try {
+            gameSounds.jumpCharge.triggerAttack("C2");
+          } catch(e) {}
+          
+          // Squash animation when starting crouch
+          this.tweens.add({
+            targets: this.player,
+            scaleX: 1.4,
+            scaleY: 0.6,
+            duration: 100,
+            ease: 'Power2'
+          });
+        }
+        
+        // Check for queued super jump (old system, keeping for compatibility)
+        if (this.queuedSuperJumpCharge > 0) {
+          const charge = this.queuedSuperJumpCharge;
+          this.queuedSuperJumpCharge = 0;
+          console.log('REGULAR JUMP: EXECUTING QUEUED SUPER JUMP', { charge });
+          this.time.delayedCall(50, () => {
+            console.log('REGULAR JUMP: DELAYED SUPER JUMP EXECUTING NOW');
+            this.superJump(charge);
+          });
         }
       }
     });
@@ -3840,6 +4111,17 @@ class Main extends Phaser.Scene {
         onComplete: () => {
           this.isJumping = false;
           this.player.y = PLAYER_Y;
+          // Animate rotation back to 0 if needed
+          if(Math.abs(this.player.angle % 360) > 1) {
+            this.tweens.add({
+              targets: this.player,
+              angle: 0,
+              duration: 200,
+              ease: 'Cubic.easeOut'
+            });
+          } else {
+            this.player.angle = 0;
+          }
         }
       });
     }
@@ -4034,6 +4316,17 @@ class Main extends Phaser.Scene {
         onComplete: () => {
           this.isJumping = false;
           this.player.y = PLAYER_Y;
+          // Animate rotation back to 0 if needed
+          if(Math.abs(this.player.angle % 360) > 1) {
+            this.tweens.add({
+              targets: this.player,
+              angle: 0,
+              duration: 200,
+              ease: 'Cubic.easeOut'
+            });
+          } else {
+            this.player.angle = 0;
+          }
         }
       });
     }
@@ -4325,6 +4618,75 @@ class Main extends Phaser.Scene {
                   duration: 80,
                   ease: 'Quad.easeIn',
                   onComplete: () => {
+                    // Allow jumping after first bounce
+                    console.log('SUPER JUMP: FIRST BOUNCE COMPLETE, ENABLING JUMP');
+                    this.isJumping = false;
+                    this.player.y = PLAYER_Y;
+                    
+                    // Handle rotation reset and queued actions here
+                    if(Math.abs(this.player.angle % 360) > 1) {
+                      this.tweens.add({
+                        targets: this.player,
+                        angle: 0,
+                        duration: 200,
+                        ease: 'Cubic.easeOut'
+                      });
+                    } else {
+                      this.player.angle = 0;
+                    }
+                    
+                    // Check if we should start charging based on queued crouch
+                    if (this.queuedCrouchOnLanding && this.currentZone === 'crouch') {
+                      console.log('TOUCH: AUTO-STARTING TIME-BASED CHARGE AFTER BOUNCE');
+                      this.isChargingJump = true;
+                      this.chargeGlow.setVisible(true);
+                      this.queuedCrouchOnLanding = false;
+                      
+                      // Start time-based charging like keyboard
+                      this.touchChargeStartTime = this.time.now;
+                      this.usingTimeBasedCharge = true;
+                      this.jumpChargeAmount = 0;
+                      this.maxPullDistance = 0;
+                      
+                      console.log('TOUCH: INITIALIZED TIME-BASED CHARGE', {
+                        touchChargeStartTime: this.touchChargeStartTime,
+                        usingTimeBasedCharge: this.usingTimeBasedCharge,
+                        maxChargeTime: this.maxChargeTime
+                      });
+                      
+                      // Start charge sound
+                      try {
+                        gameSounds.jumpCharge.triggerAttack("C2");
+                      } catch(e) {}
+                      
+                      // Reset touch reference point
+                      const activePointer = this.input.activePointer;
+                      if (activePointer && activePointer.isDown) {
+                        const edgePadding = this.zoneRadius * 0.7;
+                        this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
+                        this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, HEIGHT - edgePadding);
+                      }
+                      
+                      // Squash animation when starting crouch
+                      this.tweens.add({
+                        targets: this.player,
+                        scaleX: 1.4,
+                        scaleY: 0.6,
+                        duration: 100,
+                        ease: 'Power2'
+                      });
+                    }
+                    
+                    // Check for queued super jump
+                    if (this.queuedSuperJumpCharge > 0) {
+                      const charge = this.queuedSuperJumpCharge;
+                      this.queuedSuperJumpCharge = 0;
+                      console.log('EXECUTING QUEUED SUPER JUMP AFTER BOUNCE', { charge });
+                      this.time.delayedCall(50, () => {
+                        this.superJump(charge);
+                      });
+                    }
+                    
                     // Final jello settle
                     this.tweens.add({
                       targets: this.player,
@@ -4334,11 +4696,10 @@ class Main extends Phaser.Scene {
                       ease: 'Elastic.easeOut',
                       easeParams: [0.2, 0.15],
                       onComplete: () => {
-                        this.isJumping = false;
-                        this.player.y = PLAYER_Y;
-                        if(Math.abs(this.player.angle % 360) < 10) {
-                          this.player.angle = 0;
-                        }
+                        // Final settle complete - everything was handled after first bounce
+                        console.log('SUPER JUMP: FINAL SETTLE COMPLETE', {
+                          isJumping: this.isJumping
+                        });
                       }
                     });
                   }
@@ -5227,6 +5588,55 @@ class Main extends Phaser.Scene {
       }
     }
     
+    // Handle time-based touch charge (when queued from air)
+    if (this.isChargingJump && this.usingTimeBasedCharge) {
+      const currentTime = this.time.now;
+      const elapsed = currentTime - this.touchChargeStartTime;
+      const previousCharge = this.jumpChargeAmount;
+      this.jumpChargeAmount = Math.min(elapsed / this.maxChargeTime, 1.0);
+      
+      // Log every 100ms to avoid spam
+      if (Math.floor(elapsed / 100) > Math.floor((elapsed - dt) / 100)) {
+        console.log('TOUCH: TIME-BASED CHARGE UPDATE', {
+          elapsed,
+          jumpChargeAmount: this.jumpChargeAmount,
+          previousCharge,
+          maxChargeTime: this.maxChargeTime,
+          currentZone: this.currentZone,
+          isChargingJump: this.isChargingJump,
+          usingTimeBasedCharge: this.usingTimeBasedCharge
+        });
+      }
+      
+      // Update the glow effect
+      this.chargeGlow.clear();
+      this.chargeGlow.setPosition(this.player.x, this.player.y);
+      
+      const pulseSpeed = 10 + this.jumpChargeAmount * 20;
+      const pulse = Math.sin(currentTime * pulseSpeed * 0.001) * 0.2 + 0.8;
+      const glowRadius = 30 + this.jumpChargeAmount * 50 * pulse;
+      const glowAlpha = 0.3 + this.jumpChargeAmount * 0.5 * pulse;
+      
+      const glowColor = this.jumpChargeAmount < 0.3 ? 
+        { r: 0, g: 136, b: 255 } : // Blue
+        this.jumpChargeAmount < 0.7 ? 
+        { r: 255, g: 255, b: 0 } : // Yellow
+        { r: 255, g: 0, b: 255 };  // Purple
+      
+      const hexColor = Phaser.Display.Color.GetColor(glowColor.r, glowColor.g, glowColor.b);
+      this.chargeGlow.fillStyle(hexColor, glowAlpha);
+      this.chargeGlow.fillCircle(0, 0, glowRadius);
+      
+      // Update pitch of charge sound
+      try {
+        const pitchShift = 1 + this.jumpChargeAmount * 2;
+        gameSounds.jumpCharge.frequency.exponentialRampToValueAtTime(
+          Tone.Frequency("C2").toFrequency() * pitchShift,
+          Tone.now() + 0.05
+        );
+      } catch(e) {}
+    }
+    
     // Update combo timer display
     if(this.combo > 1) {
       const timeSinceKill = this.time.now - this.lastKillTime;
@@ -5495,8 +5905,13 @@ class Main extends Phaser.Scene {
     }
     
     // Crouch/charge mechanic for super jump - hold DOWN to charge, release to jump
-    if(this.playerCanControl && (this.keys.DOWN.isDown || this.keys.S.isDown) && !this.isJumping){
+    // Allow charging even while jumping to queue next super jump
+    if(this.playerCanControl && (this.keys.DOWN.isDown || this.keys.S.isDown)){
       if(!this.isCrouching) {
+        console.log('KEYBOARD: STARTING CROUCH', {
+          isJumping: this.isJumping,
+          queuedSuperJumpCharge: this.queuedSuperJumpCharge
+        });
         this.isCrouching = true;
         this.crouchTimer = 0;
         this.chargeGlow.setVisible(true);
@@ -5508,14 +5923,16 @@ class Main extends Phaser.Scene {
           gameSounds.jumpCharge.frequency.rampTo(440, this.maxChargeTime / 1000);
         } catch(e) {}
         
-        // Squash animation when crouching
-        this.tweens.add({
-          targets: this.player,
-          scaleX: 1.4,
-          scaleY: 0.6,
-          duration: 100,
-          ease: 'Power2'
-        });
+        // Squash animation when crouching (only if on ground)
+        if (!this.isJumping) {
+          this.tweens.add({
+            targets: this.player,
+            scaleX: 1.4,
+            scaleY: 0.6,
+            duration: 100,
+            ease: 'Power2'
+          });
+        }
       }
       this.crouchTimer += dt;
       
@@ -5525,9 +5942,10 @@ class Main extends Phaser.Scene {
       this.chargeGlow.x = this.player.x;
       this.chargeGlow.y = this.player.y;
       
-      // Draw growing glow circle
-      const glowRadius = 20 + chargePercent * 30;
-      const glowAlpha = 0.3 + chargePercent * 0.4;
+      // Draw growing glow circle - match touch control max size
+      const pulse = Math.sin(this.time.now * (10 + chargePercent * 20) * 0.001) * 0.2 + 0.8;
+      const glowRadius = 30 + chargePercent * 50 * pulse; // Same as touch: 30-80 range
+      const glowAlpha = 0.3 + chargePercent * 0.5 * pulse; // Same as touch
       const glowColor = Phaser.Display.Color.Interpolate.ColorWithColor(
         {r: 0, g: 255, b: 204}, // Start cyan
         {r: 255, g: 255, b: 0}, // End yellow
@@ -5547,7 +5965,23 @@ class Main extends Phaser.Scene {
         gameSounds.jumpCharge.triggerRelease();
       } catch(e) {}
       
-      this.superJump(chargePercent);
+      // Execute super jump if on ground, or queue if airborne
+      console.log('KEYBOARD: RELEASE CROUCH', {
+        chargePercent,
+        isJumping: this.isJumping
+      });
+      if (!this.isJumping) {
+        console.log('KEYBOARD: EXECUTING SUPER JUMP IMMEDIATELY');
+        this.superJump(chargePercent);
+      } else {
+        // Queue the super jump to execute on landing
+        this.queuedSuperJumpCharge = chargePercent;
+        console.log('KEYBOARD: SUPER JUMP QUEUED FOR LANDING', { 
+          charge: this.queuedSuperJumpCharge,
+          playerY: this.player.y,
+          PLAYER_Y: PLAYER_Y
+        });
+      }
       this.isCrouching = false;
       this.crouchTimer = 0;
       this.chargeGlow.setVisible(false);
