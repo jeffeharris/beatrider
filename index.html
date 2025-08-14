@@ -17,6 +17,53 @@
   <script src="https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js"></script>
   <script src="https://unpkg.com/@tonejs/unmute@latest/build/unmute.min.js" data-add-button="true"></script>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+  
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6SQJ9NR8SD"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-6SQJ9NR8SD', {
+      send_page_view: true
+    });
+    
+    // Track control type (will be updated when controls are used)
+    window.controlType = 'unknown';
+    
+    // Helper function for safe GA event tracking
+    window.trackEvent = function(eventName, parameters) {
+      if (typeof gtag !== 'undefined') {
+        gtag('event', eventName, parameters);
+      }
+    };
+    
+    // Track session start
+    window.addEventListener('load', () => {
+      trackEvent('session_start', {
+        platform: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+        screen_size: `${window.innerWidth}x${window.innerHeight}`,
+        orientation: window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
+      });
+    });
+    
+    // Track time engagement automatically (GA4 does this but we can enhance it)
+    let engagementTime = 0;
+    let lastActiveTime = Date.now();
+    setInterval(() => {
+      if (document.hasFocus()) {
+        engagementTime += 10;
+        // Track milestone engagement times
+        if (engagementTime === 60) {
+          trackEvent('engagement_1min', {});
+        } else if (engagementTime === 300) {
+          trackEvent('engagement_5min', {});
+        } else if (engagementTime === 600) {
+          trackEvent('engagement_10min', {});
+        }
+      }
+    }, 10000); // Check every 10 seconds
+  </script>
   <style>
     * {
       margin: 0;
@@ -3128,6 +3175,13 @@ class Main extends Phaser.Scene {
         this.gridVisible = !this.gridVisible;
         gridEnabled = this.gridVisible;
         saveGameData({ gridEnabled: gridEnabled });
+        
+        // Track grid toggle
+        trackEvent('settings_change', {
+          setting_type: 'grid',
+          grid_enabled: gridEnabled
+        });
+        
         if (this.gridText) {
           const gridTextContent = isMobile ? 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') : 'GRID: ' + (this.gridVisible ? 'ON' : 'OFF') + ' [G]';
           this.gridText.setText(gridTextContent);
@@ -6075,7 +6129,17 @@ class Main extends Phaser.Scene {
     }
     
     // Firing - keyboard space or touch hold
-    if(this.keys.SPACE.isDown || this.isTouchFiring) this._fire();
+    if(this.keys.SPACE.isDown || this.isTouchFiring) {
+      // Track keyboard if space is pressed
+      if(this.keys.SPACE.isDown && (window.controlType === 'unknown' || window.controlType === 'touch')) {
+        window.controlType = 'keyboard';
+        trackEvent('control_type_detected', {
+          type: 'keyboard',
+          platform: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop'
+        });
+      }
+      this._fire();
+    }
 
     // Update enemies with perspective
     const vanishY = HEIGHT * 0.15;
@@ -6243,6 +6307,7 @@ class Main extends Phaser.Scene {
         p.destroy();
         this.powerUps.splice(i,1);
         this.score += 10; // Award 10 points for power-up collection
+        this.scoreText.setText(this.score.toString()); // Update score display
         this.rapidFire = true;
         this.rapidFireTimer = 5000; // 5 seconds
         this.player.setTint(0x00ff00); // Green tint
