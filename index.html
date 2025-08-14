@@ -2800,15 +2800,21 @@ class Main extends Phaser.Scene {
     this.trailGraphics = this.add.graphics();
     
     const gfx=this.make.graphics({x:0,y:0,add:false});
-    // Scale up sprite sizes for mobile
-    // Desktop gets larger base sizes for better visual density
-    const basePlayerSize = isMobile ? 24 : 32;
-    const baseEnemySize = isMobile ? 20 : 28;
-    const baseBulletW = isMobile ? 6 : 8;
-    const baseBulletH = isMobile ? 12 : 16;
-    const baseObstacleW = isMobile ? 60 : 80;
-    const baseObstacleH = isMobile ? 16 : 22;
-    const basePowerUpSize = isMobile ? 20 : 28;
+    
+    // Calculate sizes based on screen dimensions
+    // Use smaller dimension as reference for consistent scaling
+    const screenReference = Math.min(WIDTH, HEIGHT);
+    const screenScale = screenReference / 800; // 800px as reference size
+    
+    // Base sizes scale with screen, with mobile getting a slight boost
+    const mobileBoost = isMobile ? 1.2 : 1.0;
+    const basePlayerSize = Math.floor(36 * screenScale * mobileBoost);
+    const baseEnemySize = Math.floor(32 * screenScale * mobileBoost);
+    const baseBulletW = Math.floor(8 * screenScale * mobileBoost);
+    const baseBulletH = Math.floor(16 * screenScale * mobileBoost);
+    const baseObstacleW = Math.floor(80 * screenScale * mobileBoost);
+    const baseObstacleH = Math.floor(22 * screenScale * mobileBoost);
+    const basePowerUpSize = Math.floor(28 * screenScale * mobileBoost);
     
     const playerSize = Math.floor(basePlayerSize * MOBILE_SCALE);
     const enemySize = Math.floor(baseEnemySize * MOBILE_SCALE);
@@ -2817,6 +2823,10 @@ class Main extends Phaser.Scene {
     const obstacleW = Math.floor(baseObstacleW * MOBILE_SCALE);
     const obstacleH = Math.floor(baseObstacleH * MOBILE_SCALE);
     const powerUpSize = Math.floor(basePowerUpSize * MOBILE_SCALE);
+    
+    // Store sizes for use in spawn functions
+    this.enemyBaseSize = enemySize;
+    this.fastEnemyBaseSize = Math.floor(enemySize * 1.25); // Fast enemies 25% larger
     
     gfx.fillStyle(0x00ffcc,1).fillRect(0,0,playerSize,playerSize).generateTexture('playerTex',playerSize,playerSize).clear();
     gfx.fillStyle(0xff3366,1).fillRect(0,0,enemySize,enemySize).generateTexture('enemyTex',enemySize,enemySize).clear();
@@ -4355,7 +4365,7 @@ class Main extends Phaser.Scene {
     e.lane = lane;
     e.progress = 0; // 0 = at horizon, 1 = at player
     e.vy=speed; 
-    e.baseSize = Math.floor((texture === 'fastEnemyTex' ? 25 : 20) * MOBILE_SCALE);
+    e.baseSize = texture === 'fastEnemyTex' ? this.fastEnemyBaseSize : this.enemyBaseSize;
     e.w=e.baseSize; e.h=e.baseSize; 
     e.enemyType = texture; // Track enemy type
     e.setScale(0.1); // Start tiny at horizon
@@ -4740,13 +4750,13 @@ class Main extends Phaser.Scene {
     });
   }
   
-  _createDeathExplosion(playerX, playerY, enemyX, enemyY) {
+  _createDeathExplosion(playerX, playerY, enemyX, enemyY, enemyScale = 1.0) {
     // Multi-stage explosion for dramatic effect
     const colors = [0x00ffcc, 0xff3366, 0xffff00, 0xffffff];
     
     // Stage 1: Initial impact
-    this._createExplosion(playerX, playerY, 0x00ffcc, 25);
-    this._createExplosion(enemyX, enemyY, 0xff3366, 15);
+    this._createExplosion(playerX, playerY, 0x00ffcc, 25, 1.0); // Player explosion always full size
+    this._createExplosion(enemyX, enemyY, 0xff3366, 15, enemyScale); // Enemy explosion scales
     
     // Stage 2: Shockwave ring
     const ring = this.add.circle(playerX, playerY, 20, 0xffffff, 0);
@@ -4774,13 +4784,16 @@ class Main extends Phaser.Scene {
     this.cameras.main.flash(300, 255, 0, 0, true);
   }
   
-  _createExplosion(x, y, color = 0xff3366, particleCount = 8){
-    // Create particle explosion effect
-    for(let i = 0; i < particleCount; i++){
-      const particle = this.add.rectangle(x, y, 12, 12, color); // Make particles bigger
+  _createExplosion(x, y, color = 0xff3366, particleCount = 8, scale = 1.0){
+    // Create particle explosion effect scaled by distance
+    const scaledParticleCount = Math.max(3, Math.floor(particleCount * scale)); // Reduce particles for distant explosions
+    const particleSize = 12 * scale; // Scale particle size
+    
+    for(let i = 0; i < scaledParticleCount; i++){
+      const particle = this.add.rectangle(x, y, particleSize, particleSize, color);
       particle.setDepth(1000); // Ensure on top
-      const angle = (Math.PI * 2 / particleCount) * i;
-      const speed = 100 + Math.random() * 100;
+      const angle = (Math.PI * 2 / scaledParticleCount) * i;
+      const speed = (100 + Math.random() * 100) * scale; // Scale spread distance
       
       this.tweens.add({
         targets: particle,
@@ -4794,8 +4807,8 @@ class Main extends Phaser.Scene {
       });
     }
     
-    // Add a flash effect
-    const flash = this.add.circle(x, y, 40, color, 0.9); // Bigger and brighter
+    // Add a flash effect scaled by distance
+    const flash = this.add.circle(x, y, 40 * scale, color, 0.9); // Scale flash size
     flash.setDepth(999); // Just below particles
     this.tweens.add({
       targets: flash,
@@ -4837,7 +4850,7 @@ class Main extends Phaser.Scene {
     d.targetLane = lane; // Will change
     d.progress = 0;
     d.vy = ENEMY_SPEED_BASE * 0.8;
-    d.baseSize = 20;
+    d.baseSize = this.enemyBaseSize; // Use screen-relative size
     // Smaller collision box for diamonds - about 70% of visual size for tighter timing
     d.w = d.baseSize * 0.7; 
     d.h = d.baseSize * 0.7;
@@ -5594,8 +5607,9 @@ class Main extends Phaser.Scene {
           sessionHighScore = this.score;
         }
         
-        // Create dramatic explosion for enemy hit
-        this._createDeathExplosion(this.player.x, this.player.y, e.x, e.y);
+        // Create dramatic explosion for enemy hit with proper scale
+        const enemyScale = 0.1 + e.progress * 1.2; // Same formula as enemy scaling
+        this._createDeathExplosion(this.player.x, this.player.y, e.x, e.y, enemyScale);
         
         try {
           // Player death sound - descending pitch
@@ -5856,8 +5870,8 @@ class Main extends Phaser.Scene {
             }
           }
           
-          // Bullet hits obstacle - small spark effect
-          this._createExplosion(b.x, b.y, 0xffff00, 4);
+          // Bullet hits obstacle - small spark effect (obstacles don't scale)
+          this._createExplosion(b.x, b.y, 0xffff00, 4, 0.5);
           b.destroy(); 
           this.bullets.splice(i,1);
           hitObstacle = true;
@@ -5879,9 +5893,12 @@ class Main extends Phaser.Scene {
           const progressThreshold = e.isDrifter ? 0.03 : 0.05; // Tighter window for drifters
           const laneThreshold = e.isDrifter ? 0.3 : 0.5; // More precise lane alignment needed
           if(Math.abs(e.lane - b.lane) < laneThreshold && Math.abs(e.progress - b.progress) < progressThreshold){
-            // Create explosion at enemy position
+            // Calculate enemy scale for explosion
+            const enemyScale = 0.1 + e.progress * 1.2; // Same formula as enemy scaling
+            
+            // Create explosion at enemy position with proper scale
             const explosionColor = e.isDrifter ? 0x9966ff : (e.enemyType === 'fastEnemyTex' ? 0xffff00 : 0xff3366);
-            this._createExplosion(e.x, e.y, explosionColor, e.isDrifter ? 12 : 8);
+            this._createExplosion(e.x, e.y, explosionColor, e.isDrifter ? 12 : 8, enemyScale);
             
             b.destroy(); this.bullets.splice(i,1);
             e.destroy(); this.enemies.splice(j,1);
