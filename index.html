@@ -2381,6 +2381,7 @@ class StartupScene extends Phaser.Scene {
     // Register resize handler with proper binding
     this.scale.on('resize', this.resize, this);
     
+    
     // Black background
     this.cameras.main.setBackgroundColor('#000');
     
@@ -2679,6 +2680,11 @@ class Main extends Phaser.Scene {
   }
   
   createStarfield() {
+    // Clean up existing starfield graphics if they exist
+    if (this.starGraphics) {
+      this.starGraphics.destroy();
+    }
+    
     // Create three layers of stars for parallax effect
     this.stars = [
       [], // Far stars (slow)
@@ -2761,6 +2767,7 @@ class Main extends Phaser.Scene {
     this.isPaused = false;
     this.pauseOverlay = null;
     this.pauseText = null;
+    this.wasAutoPaused = false; // Track if pause was triggered by visibility change
     this.pauseScoreText = null;
     this.pauseHighScoreText = null;
     
@@ -2772,6 +2779,40 @@ class Main extends Phaser.Scene {
     // Store reference for external access
     window.gameScene = this;
     window.currentGameScene = this; // For touch sensitivity settings
+    
+    // Set up visibility change listener for auto-pause when tab/app goes to background
+    if (!this.visibilityHandler) {
+      this.visibilityHandler = () => {
+        // Check if document is hidden (tab switched or app went to background)
+        if (document.hidden) {
+          // Auto-pause if game is active and not already paused
+          if (!this.isPaused && !this.isShowingGameOver) {
+            this.pauseGame();
+            this.wasAutoPaused = true; // Track that this was an auto-pause
+          }
+        } else {
+          // When coming back to foreground, don't auto-resume
+          // The user will see the pause screen and can resume manually
+          if (this.wasAutoPaused) {
+            this.wasAutoPaused = false;
+            // Ensure pause screen is visible
+            if (this.isPaused && this.pauseOverlay) {
+              this.pauseOverlay.setVisible(true);
+              this.pauseText.setVisible(true);
+            }
+          }
+        }
+      };
+      
+      document.addEventListener('visibilitychange', this.visibilityHandler);
+      
+      // Clean up the event listener when scene shuts down
+      this.events.once('shutdown', () => {
+        if (this.visibilityHandler) {
+          document.removeEventListener('visibilitychange', this.visibilityHandler);
+        }
+      });
+    }
     
     // Scene is already created, no need to wait for ready event
     
@@ -6033,12 +6074,22 @@ class Main extends Phaser.Scene {
     const highScoreY = isMobile ? HEIGHT-72 : HEIGHT-48;
     const comboY = isMobile ? HEIGHT-108 : HEIGHT-72;
     
+    // Update score label and value positions
+    if (this.scoreLabel) {
+      this.scoreLabel.y = scoreY;
+    }
     if (this.scoreText) {
       this.scoreText.y = scoreY;
+    }
+    
+    // Update high score label and value positions
+    if (this.highScoreLabel) {
+      this.highScoreLabel.y = highScoreY;
     }
     if (this.highScoreText) {
       this.highScoreText.y = highScoreY;
     }
+    
     if (this.comboText) {
       this.comboText.y = comboY;
     }
