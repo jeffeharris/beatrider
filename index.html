@@ -5421,6 +5421,45 @@ class Main extends Phaser.Scene {
     const b=this.add.image(this.player.x, this.player.y, 'bulletTex'); 
     b.lane = this.playerLane;
     
+    // Set bullet color based on combo level - smooth progression white->green->cyan->purple
+    let bulletColor = 0xffffff; // 1x: Pure white (no combo)
+    
+    switch(this.combo) {
+      case 1: bulletColor = 0xffffff; break;  // Pure white
+      case 2: bulletColor = 0xccffcc; break;  // Light green
+      case 3: bulletColor = 0x00ff00; break;  // Pure green
+      case 4: bulletColor = 0x00ff88; break;  // Green-cyan blend
+      case 5: bulletColor = 0x00ffff; break;  // Pure cyan
+      case 6: bulletColor = 0x88ccff; break;  // Cyan-purple blend
+      case 7: bulletColor = 0xcc88ff; break;  // Light purple
+      case 8: 
+      default: bulletColor = 0xff00ff; break;  // Neon purple (max combo)
+    }
+    
+    // Modify brightness based on jump height for visual variety
+    if(this.isJumping) {
+      const jumpHeight = Math.max(0, this.groundY - this.player.y);
+      const heightPercent = Math.min(1, jumpHeight / 200);
+      // Add subtle brightness boost for jump shots
+      if(heightPercent > 0.5) {
+        // Brighten the color slightly for high jumps
+        const r = Math.min(255, ((bulletColor >> 16) & 0xFF) + 30);
+        const g = Math.min(255, ((bulletColor >> 8) & 0xFF) + 30);
+        const b = Math.min(255, (bulletColor & 0xFF) + 30);
+        bulletColor = (r << 16) | (g << 8) | b;
+      }
+    }
+    
+    b.setTint(bulletColor);
+    
+    // Store initial values for rotation calculation
+    b.lastX = this.player.x;
+    b.lastY = this.player.y;
+    b.rotationSpeed = 0; // For spinning effect at higher combos
+    if(this.combo >= 6) {
+      b.rotationSpeed = 0.3; // Spin bullets at high combo
+    }
+    
     // Calculate progress based on player's current Y position
     // When jumping, player.y is higher (smaller), so we need to adjust progress
     const vanishY = HEIGHT * 0.15;
@@ -6327,6 +6366,33 @@ class Main extends Phaser.Scene {
       if(!b.trailPoints) b.trailPoints = [];
       b.trailPoints.push({x: b.x, y: b.y, alpha: 1.0});
       if(b.trailPoints.length > 6) b.trailPoints.shift();
+      
+      // Calculate rotation to align with trajectory
+      if(!b.isHorizontal) {
+        const deltaX = b.x - b.lastX;
+        const deltaY = b.y - b.lastY;
+        
+        // Only update rotation if bullet has moved
+        if(Math.abs(deltaX) > 0.1 || Math.abs(deltaY) > 0.1) {
+          // Calculate angle from movement direction
+          let angle = Math.atan2(deltaY, deltaX) + Math.PI/2; // Add 90 degrees since bullet sprite points up
+          
+          // For arc shots, add some visual flair
+          if(b.isArcShot) {
+            // Slight wobble on arc shots
+            angle += Math.sin(b.progress * Math.PI * 4) * 0.1;
+          }
+          
+          b.setRotation(angle);
+          b.lastX = b.x;
+          b.lastY = b.y;
+        }
+        
+        // Add spinning effect for high combo bullets
+        if(b.rotationSpeed) {
+          b.rotation += b.rotationSpeed;
+        }
+      }
       
       // Scale based on distance
       const scale = 0.1 + b.progress * 1.2;
