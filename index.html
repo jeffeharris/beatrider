@@ -554,16 +554,16 @@
         </div>
         <div class="slider-row" id="touchSensitivityRow" style="display: none;">
           <label class="slider-label" title="Size of center deadzone - smaller = more responsive">DEADZONE:</label>
-          <input type="range" id="touchSensitivitySlider" min="25" max="40" value="28" step="3" class="slider sensitivity-slider" list="touchSensitivitySteps" title="Adjust the size of the center deadzone">
+          <input type="range" id="touchSensitivitySlider" min="0" max="5" value="2" step="1" class="slider sensitivity-slider" list="touchSensitivitySteps" title="Adjust the size of the center deadzone">
           <datalist id="touchSensitivitySteps">
-            <option value="25"></option>
-            <option value="28"></option>
-            <option value="31"></option>
-            <option value="34"></option>
-            <option value="37"></option>
-            <option value="40"></option>
+            <option value="0"></option>
+            <option value="1"></option>
+            <option value="2"></option>
+            <option value="3"></option>
+            <option value="4"></option>
+            <option value="5"></option>
           </datalist>
-          <span id="touchSensitivityDisplay" class="slider-value" title="Smaller circle = more sensitive">●</span>
+          <span id="touchSensitivityDisplay" class="slider-value">Normal</span>
         </div>
       </div>
   
@@ -2112,45 +2112,52 @@ if (isMobile) {
     if (touchSensitivityRow) {
       touchSensitivityRow.style.display = 'flex';
       
-      // Load saved sensitivity and update UI
-      const savedSensitivity = localStorage.getItem('touchSensitivity') || '28';
+      // Map slider positions to actual pixel values
+      const deadzoneValues = [17, 25, 30, 35, 40, 48];
+      const deadzoneLabels = ['Tight', 'Snappy', 'Normal', 'Relaxed', 'Loose', 'Lazy'];
+      
+      // Load saved sensitivity and convert to slider index
+      const savedPixels = parseInt(localStorage.getItem('touchSensitivity') || '30');
+      let savedIndex = deadzoneValues.indexOf(savedPixels);
+      if (savedIndex === -1) savedIndex = 2; // Default to Normal (30px)
+      
       const touchSlider = document.getElementById('touchSensitivitySlider');
       const touchDisplay = document.getElementById('touchSensitivityDisplay');
       
       if (touchSlider && touchDisplay) {
-        touchSlider.value = savedSensitivity;
+        touchSlider.value = savedIndex;
         
         // Set up display with fixed width to prevent jitter
-        touchDisplay.style.width = '40px';
+        touchDisplay.style.width = '60px';
         touchDisplay.style.textAlign = 'center';
         touchDisplay.style.display = 'inline-block';
         
-        // Show circle that scales based on deadzone value
-        const updateCircleDisplay = (value) => {
-          const val = parseInt(value);
-          // Scale from 0.625 (25px) to 1.0 (40px)
-          const scale = 0.625 + ((val - 25) / 15) * 0.375;
-          touchDisplay.innerHTML = `<span style="display: inline-block; transform: scale(${scale});">●</span>`;
+        // Show text label based on slider index
+        const updateSensitivityDisplay = (index) => {
+          touchDisplay.textContent = deadzoneLabels[index] || 'Normal';
         };
         
-        updateCircleDisplay(savedSensitivity);
+        updateSensitivityDisplay(savedIndex);
         
         // Handle both input (while sliding) and change (on release) events
         const updateTouchSensitivity = (e) => {
-          const newDeadzone = parseInt(e.target.value);
+          const index = parseInt(e.target.value);
+          const newDeadzone = deadzoneValues[index];
+          
           // Update the game's deadzone if a game scene is active
           if (window.currentGameScene) {
             window.currentGameScene.zoneDeadRadius = newDeadzone;
           }
-          // Update display with scaled circle
-          updateCircleDisplay(e.target.value);
+          // Update display with text label
+          updateSensitivityDisplay(index);
         };
         
         touchSlider.addEventListener('input', updateTouchSensitivity);
         touchSlider.addEventListener('change', (e) => {
           updateTouchSensitivity(e);
-          // Save to localStorage only on change (when user releases)
-          localStorage.setItem('touchSensitivity', e.target.value);
+          // Save actual pixel value to localStorage
+          const pixels = deadzoneValues[parseInt(e.target.value)];
+          localStorage.setItem('touchSensitivity', pixels);
         });
       }
     }
@@ -3200,7 +3207,7 @@ class Main extends Phaser.Scene {
     this.zoneRadius = 100; // Radius from touch point to edge
     // Load saved touch sensitivity or use default
     const savedSensitivity = localStorage.getItem('touchSensitivity');
-    this.zoneDeadRadius = savedSensitivity ? parseInt(savedSensitivity) : 28;
+    this.zoneDeadRadius = savedSensitivity ? parseInt(savedSensitivity) : 30;
     
     // We'll use angle-based detection for the 4 directional zones
     // No need to pre-define boundaries, we'll calculate on the fly
@@ -3813,7 +3820,8 @@ class Main extends Phaser.Scene {
       // Reset off-screen shooting counters when entering off-screen
       if(previousLane >= 0 && previousLane < LANES) {
         this.offScreenShotCount = 0;
-        this.offScreenTurnDelay = 600; // 600ms delay to "turn around"
+        // Normal move: 800ms total, leave 220ms for firing
+        this.offScreenTurnDelay = 580; // 800ms - 220ms
       }
     } else {
       this.player.setAlpha(1);
@@ -3938,7 +3946,8 @@ class Main extends Phaser.Scene {
       // Reset off-screen shooting counters when entering off-screen
       if(previousLane >= 0 && previousLane < LANES) {
         this.offScreenShotCount = 0;
-        this.offScreenTurnDelay = 600; // 600ms delay to "turn around"
+        // Normal move: 800ms total, leave 220ms for firing
+        this.offScreenTurnDelay = 580; // 800ms - 220ms
       }
     } else {
       this.player.setAlpha(1);
@@ -4164,6 +4173,23 @@ class Main extends Phaser.Scene {
         PLAYER_CONFIG.offScreen.gracePeriod + 400 : // Extra 400ms for edge dash
         PLAYER_CONFIG.offScreen.gracePeriod;
       this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
+      
+      // Set turn delay based on dash type and rapid fire status
+      if(isDashingFromEdge) {
+        // Outer lane dash: 1200ms total
+        if(this.rapidFire) {
+          // Rapid fire: leave 290ms for firing (~7-8 shots)
+          this.offScreenTurnDelay = 910; // 1200ms - 290ms
+        } else {
+          // Normal: leave 330ms for firing (~3 shots)
+          this.offScreenTurnDelay = 870; // 1200ms - 330ms
+        }
+      } else {
+        // Inner lane dash: 800ms total, same as normal move
+        // Leave 220ms for firing (~2 shots normal, ~5-6 rapid)
+        this.offScreenTurnDelay = 580; // 800ms - 220ms
+      }
+      this.offScreenShotCount = 0; // Reset shot counter
     } else {
       this.player.setAlpha(1);
     }
@@ -4369,6 +4395,23 @@ class Main extends Phaser.Scene {
         PLAYER_CONFIG.offScreen.gracePeriod + 400 : // Extra 400ms for edge dash
         PLAYER_CONFIG.offScreen.gracePeriod;
       this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
+      
+      // Set turn delay based on dash type and rapid fire status
+      if(isDashingFromEdge) {
+        // Outer lane dash: 1200ms total
+        if(this.rapidFire) {
+          // Rapid fire: leave 290ms for firing (~7-8 shots)
+          this.offScreenTurnDelay = 910; // 1200ms - 290ms
+        } else {
+          // Normal: leave 330ms for firing (~3 shots)
+          this.offScreenTurnDelay = 870; // 1200ms - 330ms
+        }
+      } else {
+        // Inner lane dash: 800ms total, same as normal move
+        // Leave 220ms for firing (~2 shots normal, ~5-6 rapid)
+        this.offScreenTurnDelay = 580; // 800ms - 220ms
+      }
+      this.offScreenShotCount = 0; // Reset shot counter
     } else {
       this.player.setAlpha(1);
     }
@@ -5389,10 +5432,10 @@ class Main extends Phaser.Scene {
     const isOffScreen = this.playerLane < 0 || this.playerLane >= LANES;
     if(!HORIZONTAL_SHOOTING && isOffScreen) return; // Original behavior - can't shoot off-screen
     
-    // Enforce turn delay and shot limit when off-screen
+    // Enforce turn delay when off-screen (timing-based shot limit)
     if(HORIZONTAL_SHOOTING && isOffScreen) {
       if(this.offScreenTurnDelay > 0) return; // Still turning around
-      if(this.offScreenShotCount >= 2) return; // Already fired 2 shots
+      // Shot limit is now controlled by the firing window duration
     }
     
     const now=this.time.now; 
