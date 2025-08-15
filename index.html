@@ -3003,10 +3003,36 @@ class Main extends Phaser.Scene {
     gfx.fillStyle(0xff3366,1).fillRect(0,0,enemySize,enemySize).generateTexture('enemyTex',enemySize,enemySize).clear();
     gfx.fillStyle(0xffff00,1).fillTriangle(enemySize/2,0,0,enemySize,enemySize,enemySize).generateTexture('fastEnemyTex',enemySize,enemySize).clear();
     gfx.fillStyle(0xffffff,1).fillRect(0,0,bulletW,bulletH).generateTexture('bulletTex',bulletW,bulletH).clear();
-    // Purple blocker with neon glow effect (scaled)
-    gfx.fillStyle(0xff00ff,0.3).fillRect(0,0,obstacleW,obstacleH); // Outer glow
-    gfx.fillStyle(0xcc66ff,0.6).fillRect(4,2,obstacleW-8,obstacleH-4); // Mid glow  
-    gfx.fillStyle(0xbf40ff,1).fillRect(8,4,obstacleW-16,obstacleH-8);    // Core
+    // Energy shield with poles - all in one texture
+    const poleWidth = Math.floor(obstacleW * 0.15); // Poles are 15% of total width
+    const shieldGap = 2; // Small gap between pole and shield
+    
+    // Dark purple poles on the sides
+    gfx.fillStyle(0xbf40ff, 1); // Solid dark purple
+    gfx.fillRect(0, 0, poleWidth, obstacleH); // Left pole
+    gfx.fillRect(obstacleW - poleWidth, 0, poleWidth, obstacleH); // Right pole
+    
+    // Energy shield barrier in between - lighter and translucent
+    const shieldX = poleWidth + shieldGap;
+    const shieldWidth = obstacleW - (poleWidth * 2) - (shieldGap * 2);
+    
+    // Multi-layer shield effect for depth
+    gfx.fillStyle(0xff99ff, 0.15); // Outermost glow
+    gfx.fillRect(shieldX - 2, 0, shieldWidth + 4, obstacleH);
+    
+    gfx.fillStyle(0xffccff, 0.25); // Middle layer
+    gfx.fillRect(shieldX, 2, shieldWidth, obstacleH - 4);
+    
+    gfx.fillStyle(0xffd4ff, 0.4); // Inner bright core
+    gfx.fillRect(shieldX + 2, 4, shieldWidth - 4, obstacleH - 8);
+    
+    // Add some vertical energy lines for texture
+    gfx.lineStyle(1, 0xffffff, 0.2);
+    for(let i = 0; i < 3; i++) {
+      const lineX = shieldX + shieldGap + (shieldWidth / 4) * (i + 1);
+      gfx.lineBetween(lineX, 2, lineX, obstacleH - 2);
+    }
+    
     gfx.generateTexture('obstacleTex',obstacleW,obstacleH).clear();
     gfx.fillStyle(0x00ff00,1).fillCircle(powerUpSize/2,powerUpSize/2,powerUpSize/2).generateTexture('powerUpTex',powerUpSize,powerUpSize).clear(); // Green power-up
     // Create diamond-shaped drifter
@@ -3025,6 +3051,8 @@ class Main extends Phaser.Scene {
     this.player=this.add.image(this._laneX(this.playerLane), PLAYER_Y, 'playerTex');
     this.player.w = playerSize; // Add collision dimensions (scaled)
     this.player.h = playerSize;
+    this.player.setDepth(500); // Much higher depth to ensure on top
+    console.log('Player created with depth:', this.player.depth);
     
     // Create charge glow effect
     this.chargeGlow = this.add.graphics();
@@ -3148,6 +3176,11 @@ class Main extends Phaser.Scene {
         // Spawn obstacles that block shots
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnObstacle(lane);
+        
+        // Pulse all existing obstacles with electric effect
+        for(let obstacle of this.obstacles) {
+          obstacle.pulseTime = this.time.now;
+        }
       },
       onAcid: ()=>{
         // Spawn power-up for rapid fire
@@ -4868,6 +4901,7 @@ class Main extends Phaser.Scene {
     e.w=e.baseSize; e.h=e.baseSize; 
     e.enemyType = texture; // Track enemy type
     e.setScale(0.1); // Start tiny at horizon
+    e.setDepth(100); // Between shield (10) and poles (200)
     e.trailPoints = []; // Store trail history
     this.enemies.push(e); 
   }
@@ -5205,6 +5239,7 @@ class Main extends Phaser.Scene {
           this.playerLane = 2;
           this.player.x = this._laneX(2);
           this.player.setVisible(true);
+          this.player.setDepth(500); // Ensure player stays on top after respawn
           
           // Reset player states
           this.isJumping = false;
@@ -5320,14 +5355,28 @@ class Main extends Phaser.Scene {
   }
   _spawnObstacle(lane){
     const vanishY = HEIGHT * 0.15;
-    const o = this.add.image(this._laneX(lane, 0), vanishY, 'obstacleTex');
+    const baseX = this._laneX(lane, 0);
+    
+    // Calculate dimensions
+    const obstacleW = Math.floor(80 * (Math.min(WIDTH, HEIGHT) / 800) * (isMobile ? 1.2 : 1.0) * MOBILE_SCALE);
+    const obstacleH = Math.floor(22 * (Math.min(WIDTH, HEIGHT) / 800) * (isMobile ? 1.2 : 1.0) * MOBILE_SCALE);
+    const poleWidth = Math.floor(obstacleW * 0.15);
+    const shieldGap = 2;
+    
+    // For now, just use the original simple obstacle texture
+    // The layering effect doesn't work with containers as I tried
+    const o = this.add.image(baseX, vanishY, 'obstacleTex');
     o.lane = lane;
     o.progress = 0;
-    o.vy = ENEMY_SPEED_BASE * 0.7; // Slower than enemies
+    o.vy = ENEMY_SPEED_BASE * 0.7;
     o.baseSize = Math.floor(60 * MOBILE_SCALE);
-    o.w = o.baseSize; o.h = Math.floor(16 * MOBILE_SCALE);
+    o.w = o.baseSize;
+    o.h = Math.floor(22 * MOBILE_SCALE);
     o.setScale(0.1);
-    o.trailPoints = []; // Initialize trail for obstacles too
+    o.setDepth(150); // Put obstacles in front of enemies for now
+    o.trailPoints = [];
+    o.isObstacle = true;
+    
     this.obstacles.push(o);
   }
   
@@ -5339,6 +5388,7 @@ class Main extends Phaser.Scene {
     p.vy = ENEMY_SPEED_BASE * 1.2;
     p.baseSize = Math.floor(20 * MOBILE_SCALE);
     p.setScale(0.1);
+    p.setDepth(100); // Same depth as enemies - between shield and poles
     this.powerUps.push(p);
   }
   
@@ -5357,6 +5407,7 @@ class Main extends Phaser.Scene {
     d.isDrifter = true;
     d.driftTimer = 0;
     d.setScale(0.1);
+    d.setDepth(100); // Between shield (10) and poles (200)
     d.trailPoints = []; // Initialize trail points
     this.enemies.push(d); // Add to enemies array for collision
   }
@@ -5517,6 +5568,7 @@ class Main extends Phaser.Scene {
     // Shoot from player's current position (accounts for jumping)
     const b=this.add.image(this.player.x, this.player.y, 'bulletTex'); 
     b.lane = this.playerLane;
+    b.setDepth(50); // Above enemies/obstacles but below player
     
     // Set bullet color based on combo level - smooth progression white->green->cyan->purple
     let bulletColor = 0xffffff; // 1x: Pure white (no combo)
@@ -6170,6 +6222,28 @@ class Main extends Phaser.Scene {
       // Update X position along perspective lane + pulse shift
       e.x = this._laneX(e.lane, e.progress) + pulseXShift;
       
+      // Check if enemy should be in front or behind obstacles based on progress
+      // Find the closest obstacle ahead in the same lane
+      let closestObstacleAhead = null;
+      let minDistance = Infinity;
+      
+      for(let obstacle of this.obstacles) {
+        if(Math.floor(obstacle.lane) === Math.floor(e.lane)) {
+          // Only consider obstacles that are ahead or at same position
+          if(obstacle.progress >= e.progress) {
+            const distance = obstacle.progress - e.progress;
+            if(distance < minDistance) {
+              minDistance = distance;
+              closestObstacleAhead = obstacle;
+            }
+          }
+        }
+      }
+      
+      // If there's an obstacle ahead in our lane, be behind it
+      // Otherwise be in front (we've passed all obstacles in our lane)
+      e.setDepth(closestObstacleAhead ? 80 : 180); // 80 = behind obstacles, 180 = in front
+      
       // Add position to trail history
       if(!e.trailPoints) e.trailPoints = [];
       e.trailPoints.push({x: e.x, y: e.y, alpha: 1.0});
@@ -6258,9 +6332,41 @@ class Main extends Phaser.Scene {
       o.y = y;
       o.x = this._laneX(o.lane, o.progress) + pulseXShift;
       const scale = 0.1 + o.progress * 1.2;
-      o.setScale(scale, scale * 0.3); // Flatten vertically
+      o.setScale(scale, scale * 1.2); // Much taller shields
       o.w = o.baseSize * scale;
-      o.h = 16 * scale; // Height for collision
+      o.h = 22 * scale * 1.2; // Adjusted height for collision
+      
+      // Animate the whole obstacle with shimmer effect on the barrier part
+      if (!o.shimmerTime) o.shimmerTime = 0;
+      o.shimmerTime += dt * 0.004; // Slow shimmer
+      let shimmerAlpha = 0.85 + Math.sin(o.shimmerTime + o.progress * 3) * 0.15;
+      
+      // Add electric pulse effect on hi-hat beats
+      if(o.pulseTime) {
+        const timeSincePulse = this.time.now - o.pulseTime;
+        if(timeSincePulse < 200) { // Shorter, sharper pulse for electric effect
+          const pulseProgress = 1 - (timeSincePulse / 200);
+          const pulseMagnitude = Math.sin(pulseProgress * Math.PI);
+          
+          // Scale pulse - make shield "surge" with electricity
+          const pulseScale = 1 + pulseMagnitude * 0.3;
+          o.setScale(scale * pulseScale, scale * 1.2 * pulseScale);
+          
+          // Bright electric flash - purple to white
+          const flashIntensity = pulseMagnitude;
+          const tintR = 191 + (64 * flashIntensity); // 191 -> 255
+          const tintG = 64 + (191 * flashIntensity);  // 64 -> 255  
+          const tintB = 255; // Keep full blue
+          o.setTint(Phaser.Display.Color.GetColor(tintR, tintG, tintB));
+          
+          // Boost alpha for electric surge
+          shimmerAlpha = Math.min(1, shimmerAlpha + pulseMagnitude * 0.3);
+        } else {
+          o.clearTint(); // Reset tint after pulse
+        }
+      }
+      
+      o.setAlpha(shimmerAlpha);
       
       // Check collision with player (can jump over obstacles!)
       // Check when obstacle is near player Y position  
