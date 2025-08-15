@@ -1726,6 +1726,13 @@ document.getElementById('difficultySelector')?.addEventListener('change', (e) =>
   if (DIFFICULTY_PRESETS[diffKey]) {
     currentDifficulty = DIFFICULTY_PRESETS[diffKey];
     document.getElementById('difficultyDisplay').textContent = currentDifficulty.description;
+    
+    // Track difficulty change
+    trackEvent('settings_change', {
+      setting_type: 'difficulty',
+      difficulty_level: diffKey,
+      multiplier: currentDifficulty.multiplier
+    });
   }
 });
 
@@ -1750,8 +1757,19 @@ document.getElementById('genreTrance').addEventListener('click', () => switchGen
 
 function switchGenre(genre) {
   console.log('switchGenre called with:', genre);
+  const previousGenre = currentGenre;
   currentGenre = genre;
   const config = GENRE_CONFIGS[genre];
+  
+  // Track genre change (only if actually changed)
+  if (previousGenre && previousGenre !== genre) {
+    trackEvent('settings_change', {
+      setting_type: 'genre',
+      genre_from: previousGenre,
+      genre_to: genre,
+      bpm: config.bpmDefault
+    });
+  }
   
   // Update BPM slider range and value
   const bpmSlider = document.getElementById('bpmSlider');
@@ -2892,6 +2910,18 @@ class Main extends Phaser.Scene {
     // Initialize vanishing point
     this.vanishX = WIDTH / 2;
     this.vanishY = HEIGHT * 0.15;
+    
+    // Track session start time and metrics
+    this.sessionStartTime = Date.now();
+    this.maxComboReached = 0;
+    
+    // Track game start
+    trackEvent('game_start', {
+      difficulty: currentDifficulty?.name || 'normal',
+      genre: currentGenre || 'techno',
+      grid_enabled: gridEnabled,
+      high_score: sessionHighScore
+    });
     
     // Initialize pause state
     this.isPaused = false;
@@ -5069,6 +5099,37 @@ class Main extends Phaser.Scene {
     this.isShowingGameOver = true;
     this.playerCanControl = false;
     
+    // Track game over event with detailed metrics
+    const scoreBucket = this.score < 100 ? '0-99' : 
+                       this.score < 500 ? '100-499' :
+                       this.score < 1000 ? '500-999' :
+                       this.score < 2500 ? '1000-2499' :
+                       this.score < 5000 ? '2500-4999' : '5000+';
+    
+    const sessionTime = this.sessionStartTime ? Math.floor((Date.now() - this.sessionStartTime) / 1000) : 0;
+    
+    trackEvent('game_over', {
+      score: this.score,
+      score_bucket: scoreBucket,
+      high_score: sessionHighScore,
+      new_high_score: this.score > sessionHighScore,
+      combo_max: this.maxComboReached || this.comboCount,
+      beats_survived: this.beats,
+      session_time: sessionTime,
+      control_type: window.controlType,
+      difficulty: currentDifficulty?.name || 'normal',
+      genre: currentGenre || 'techno',
+      grid_enabled: gridEnabled
+    });
+    
+    // Track specific achievement for scores > 100
+    if (this.score > 100) {
+      trackEvent('achievement_unlocked', {
+        achievement: 'score_over_100',
+        score: this.score
+      });
+    }
+    
     // Darken the screen - very high depth to be above everything
     const overlay = this.add.graphics();
     overlay.fillStyle(0x000000, 0.7);
@@ -5081,6 +5142,13 @@ class Main extends Phaser.Scene {
     if(beatHighScore) {
       sessionHighScore = this.score;
       saveGameData({ highScore: sessionHighScore });
+      
+      // Track new high score separately
+      trackEvent('new_high_score', {
+        score: this.score,
+        previous_high: this.sessionHighScore || 0,
+        improvement: this.score - (this.sessionHighScore || 0)
+      });
     }
     
     // Calculate text sizes based on mobile or desktop
