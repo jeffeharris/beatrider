@@ -5069,11 +5069,12 @@ class Main extends Phaser.Scene {
     this.isShowingGameOver = true;
     this.playerCanControl = false;
     
-    // Darken the screen
+    // Darken the screen - very high depth to be above everything
     const overlay = this.add.graphics();
     overlay.fillStyle(0x000000, 0.7);
     overlay.fillRect(0, 0, WIDTH, HEIGHT);
     overlay.setAlpha(0);
+    overlay.setDepth(20000); // Above everything else
     
     // Check if new high score (before resetting)
     const beatHighScore = this.score > sessionHighScore;
@@ -5095,6 +5096,7 @@ class Main extends Phaser.Scene {
     });
     scoreLabel.setOrigin(0.5);
     scoreLabel.setAlpha(0);
+    scoreLabel.setDepth(20001); // Above overlay
     
     const scoreText = this.add.text(WIDTH/2, HEIGHT/2, this.score.toString(), {
       font: `${bigFontSize} monospace`,
@@ -5103,6 +5105,7 @@ class Main extends Phaser.Scene {
     scoreText.setOrigin(0.5);
     scoreText.setAlpha(0);
     scoreText.setShadow(0, 0, beatHighScore ? '#ffff00' : '#00ffcc', 20);
+    scoreText.setDepth(20001); // Above overlay
     
     // High score message
     let congratsText = null;
@@ -5114,6 +5117,7 @@ class Main extends Phaser.Scene {
       congratsText.setOrigin(0.5);
       congratsText.setAlpha(0);
       congratsText.setShadow(0, 0, '#ff00ff', 15);
+      congratsText.setDepth(20001); // Above overlay
       
       // Pulse animation for new high score
       this.tweens.add({
@@ -5142,13 +5146,38 @@ class Main extends Phaser.Scene {
       });
     }
     
-    // Restart instruction
-    const restartText = this.add.text(WIDTH/2, HEIGHT/2 + 140, 'RESTARTING...', {
+    // Restart instruction with countdown
+    const restartText = this.add.text(WIDTH/2, HEIGHT/2 + 140, 'RESTARTING IN 3...', {
       font: `${smallFontSize} monospace`,
-      fill: '#666'
+      fill: '#00ffcc'  // Brighter cyan color for visibility
     });
     restartText.setOrigin(0.5);
     restartText.setAlpha(0);
+    restartText.setDepth(20001); // Above overlay
+    
+    // Countdown timer
+    let countdown = 3;
+    const countdownTimer = this.time.addEvent({
+      delay: 1000,
+      callback: () => {
+        countdown--;
+        if (countdown > 0) {
+          restartText.setText(`RESTARTING IN ${countdown}...`);
+        } else {
+          restartText.setText(`RESTARTING NOW!`);
+        }
+        // Pulse effect on each countdown
+        this.tweens.add({
+          targets: restartText,
+          scaleX: 1.2,
+          scaleY: 1.2,
+          duration: 100,
+          yoyo: true,
+          ease: 'Power2'
+        });
+      },
+      repeat: 2  // Run 2 more times after initial (3, 2, 1/NOW)
+    });
     
     // Fade in overlay
     this.tweens.add({
@@ -5196,16 +5225,16 @@ class Main extends Phaser.Scene {
       } catch(e) {}
     }
     
-    // Fade in restart text
+    // Fade in restart text - full opacity for visibility
     this.tweens.add({
       targets: restartText,
-      alpha: 0.5,
+      alpha: 1,  // Full opacity instead of 0.5
       duration: 400,
       delay: 1200
     });
     
-    // Respawn after delay
-    this.time.delayedCall(2500, () => {
+    // Respawn right after countdown completes (1.2s delay + 3s countdown)
+    this.time.delayedCall(4300, () => {
       // Fade out game over screen elements
       const highScoreElement = this.children.list.find(child => child && child.getData && child.getData('isHighScoreText'));
       this.tweens.add({
