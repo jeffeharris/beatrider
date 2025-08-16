@@ -3092,6 +3092,34 @@ class Main extends Phaser.Scene {
         strokeThickness: 3,
         align: 'center'
       }).setOrigin(0.5).setDepth(1000);
+      
+      // Skip tutorial button in upper right
+      this.skipTutorialButton = this.add.text(WIDTH - 20, 20, '[SKIP >>]', {
+        font: '20px monospace',
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 3,
+        align: 'right'
+      }).setOrigin(1, 0).setDepth(1001);
+      
+      // Make skip button interactive
+      this.skipTutorialButton.setInteractive({ useHandCursor: true });
+      
+      // Hover effects
+      this.skipTutorialButton.on('pointerover', () => {
+        this.skipTutorialButton.setScale(1.1);
+        this.skipTutorialButton.setFill('#ffff00');
+      });
+      
+      this.skipTutorialButton.on('pointerout', () => {
+        this.skipTutorialButton.setScale(1.0);
+        this.skipTutorialButton.setFill('#ffffff');
+      });
+      
+      // Click to skip tutorial
+      this.skipTutorialButton.on('pointerdown', () => {
+        this.skipTutorial();
+      });
     }
     
     // Start the music automatically when game starts
@@ -6115,6 +6143,35 @@ class Main extends Phaser.Scene {
     }
   }
   
+  skipTutorial() {
+    // Mark tutorial as skipped but not completed
+    // Don't save completion so it will be offered again next time
+    
+    // Show skip message briefly
+    this.tutorialText.setText('SKIPPING TUTORIAL...');
+    this.tutorialProgressText.setText('Starting full game...');
+    
+    // Transition to normal game quickly
+    this.time.delayedCall(500, () => {
+      this.isTutorial = false;
+      this.tutorialText.destroy();
+      this.tutorialProgressText.destroy();
+      this.skipTutorialButton.destroy();
+      
+      // Reset adaptive difficulty to normal
+      this.adaptiveState.isAssisting = false;
+      this.adaptiveState.currentSpawnMultiplier = 1.0;
+      this.adaptiveState.currentSpeedMultiplier = 1.0;
+      this.adaptiveState.assistStartTime = null;
+      
+      // Reset tempo to normal
+      Tone.Transport.bpm.value = 120;
+      
+      // Reset beats counter
+      this.beats = 0;
+    });
+  }
+  
   completeTutorial() {
     // Save completion
     localStorage.setItem('beatrider_tutorial_completed', 'true');
@@ -6128,6 +6185,9 @@ class Main extends Phaser.Scene {
       this.isTutorial = false;
       this.tutorialText.destroy();
       this.tutorialProgressText.destroy();
+      if (this.skipTutorialButton && !this.skipTutorialButton.destroyed) {
+        this.skipTutorialButton.destroy();
+      }
       
       // Reset adaptive difficulty to normal
       this.adaptiveState.isAssisting = false;
