@@ -4869,10 +4869,6 @@ class Main extends Phaser.Scene {
     // Track super jumps for tutorial (only count if charged enough)
     if (this.isTutorial && this.tutorialWave === 5 && chargePercent > 0.3) {
       this.tutorialSuperJumps = (this.tutorialSuperJumps || 0) + 1;
-      console.log('Tutorial: Super jump executed!', { 
-        charge: chargePercent, 
-        count: this.tutorialSuperJumps 
-      });
     }
     
     // Calculate jump height: from 1x (120) to 3x (360) based on charge for more distinction
@@ -5859,8 +5855,8 @@ class Main extends Phaser.Scene {
       case 2: // Arc shot practice - move to shoot over obstacles
         if (this.beats % 6 === 0) {
           this._spawnObstacle(2); // Center lane obstacle
-          // Spawn enemy behind it
-          this.time.delayedCall(300, () => {
+          // Spawn enemy behind it with more spacing
+          this.time.delayedCall(600, () => {
             this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.6, 'enemyTex');
           });
         }
@@ -5912,8 +5908,8 @@ class Main extends Phaser.Scene {
         // First set - teach arc shot
         if (this.beats === 1) {
           this._spawnObstacle(2); // Center lane obstacle
-          // Spawn enemy behind it
-          this.time.delayedCall(500, () => {
+          // Spawn enemy behind it with more spacing
+          this.time.delayedCall(700, () => {
             this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.5, 'enemyTex');
           });
         }
@@ -5921,7 +5917,7 @@ class Main extends Phaser.Scene {
         // Second set - more spacing, different lane
         if (this.beats === 12) {  // Much more spacing
           this._spawnObstacle(3); // Different lane
-          this.time.delayedCall(500, () => {
+          this.time.delayedCall(700, () => {
             this._spawnEnemy(3, ENEMY_SPEED_BASE * 0.5, 'enemyTex');
           });
         }
@@ -7396,10 +7392,7 @@ class Main extends Phaser.Scene {
       this.rapidFireTimer -= dt;
       if(this.rapidFireTimer <= 0){
         this.rapidFire = false;
-        // Only clear tint if player is in bounds (not off-screen)
-        if(this.playerLane >= 0 && this.playerLane < LANES) {
-          this.player.clearTint();
-        }
+        this.player.clearTint();
       }
     }
 
