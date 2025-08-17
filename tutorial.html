@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Beatrider - Tutorial</title>
+  
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body { 
+      background: #000; 
+      color: #0f0; 
+      font: 14px monospace; 
+      text-shadow: 0 0 10px #0f0;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+    #gameContainer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .tutorial-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .instruction-box {
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #0f0;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px;
+      max-width: 400px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.5); }
+      50% { box-shadow: 0 0 40px rgba(0, 255, 0, 0.8); }
+    }
+    .instruction-title {
+      font-size: 20px;
+      color: #0ff;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+    .instruction-text {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .key-hint {
+      display: inline-block;
+      background: #0f0;
+      color: #000;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin: 0 2px;
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+    }
+    .progress-bar {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      height: 30px;
+      border: 1px solid #0f0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 99;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0f0, #0ff);
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+    .step-counter {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #0ff;
+      z-index: 99;
+    }
+    .exit-button {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid #f00;
+      color: #f00;
+      cursor: pointer;
+      z-index: 101;
+      font-family: monospace;
+      text-transform: uppercase;
+    }
+    .exit-button:hover {
+      background: rgba(255, 0, 0, 0.2);
+      box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer"></div>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+  <div class="step-counter" id="stepCounter">Step 1 of 10</div>
+  <button class="exit-button" onclick="exitTutorial()">Exit Tutorial</button>
+  
+  <script>
+    function exitTutorial() {
+      if (confirm('Exit tutorial and return to main game?')) {
+        window.location.href = 'index.html';
+      }
+    }
+
+    class TutorialScene extends Phaser.Scene {
+      constructor() {
+        super({ key: 'Tutorial' });
+        this.steps = [
+          {
+            title: 'Welcome Pilot!',
+            instruction: 'This is your ship. Use <span class="key-hint">←</span> <span class="key-hint">→</span> or <span class="key-hint">A</span> <span class="key-hint">D</span> to move between lanes.',
+            action: 'move',
+            requiredMoves: 3,
+            spawnEnemies: false
+          },
+          {
+            title: 'Basic Combat',
+            instruction: 'Press <span class="key-hint">SPACE</span> to fire your laser. Destroy 3 enemies!',
+            action: 'shoot',
+            requiredKills: 3,
+            spawnEnemies: true,
+            enemyType: 'basic'
+          },
+          {
+            title: 'Jump Training',
+            instruction: 'Press <span class="key-hint">W</span> or <span class="key-hint">↑</span> to jump over obstacles.',
+            action: 'jump',
+            requiredJumps: 2,
+            spawnObstacles: true
+          },
+          {
+            title: 'Arc Shot Mastery',
+            instruction: 'Fire while jumping to shoot over obstacles! Try it 3 times.',
+            action: 'arcshot',
+            requiredArcShots: 3,
+            spawnObstacles: true,
+            spawnEnemies: true,
+            enemyType: 'basic'
+          },
+          {
+            title: 'Super Jump',
+            instruction: 'Hold <span class="key-hint">S</span> or <span class="key-hint">↓</span> to charge, then release to super jump!',
+            action: 'superjump',
+            requiredSuperJumps: 1,
+            spawnObstacles: true
+          },
+          {
+            title: 'Dash Move',
+            instruction: 'Double-tap <span class="key-hint">←</span> or <span class="key-hint">→</span> quickly to dash!',
+            action: 'dash',
+            requiredDashes: 2,
+            spawnEnemies: true,
+            enemyType: 'fast'
+          },
+          {
+            title: 'Off-Screen Recovery',
+            instruction: 'Dash off-screen and quickly return! You have 0.8 seconds.',
+            action: 'offscreen',
+            requiredOffscreenReturns: 1,
+            spawnEnemies: false
+          },
+          {
+            title: 'Enemy Types',
+            instruction: 'Red = slow (10pts), Yellow = fast (25pts), Purple = drifters (50pts)',
+            action: 'enemytypes',
+            requiredKills: 5,
+            spawnEnemies: true,
+            enemyType: 'mixed'
+          },
+          {
+            title: 'Combo System',
+            instruction: 'Kill enemies quickly to build combos! Get a 3x multiplier.',
+            action: 'combo',
+            requiredCombo: 3,
+            spawnEnemies: true,
+            enemyType: 'wave'
+          },
+          {
+            title: 'Final Challenge',
+            instruction: 'Survive for 30 seconds using all your skills!',
+            action: 'survive',
+            surviveTime: 30,
+            spawnEnemies: true,
+            spawnObstacles: true,
+            enemyType: 'mixed'
+          }
+        ];
+        
+        this.currentStep = 0;
+        this.stepProgress = {};
+      }
+
+      preload() {
+        // Create simple graphics for the tutorial
+        this.load.image('spark', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+      }
+
+      create() {
+        const WIDTH = this.scale.width;
+        const HEIGHT = this.scale.height;
+        
+        // Setup perspective variables
+        this.vanishY = HEIGHT * 0.3;
+        this.lanes = [-2, -1, 0, 1, 2];
+        this.currentLane = 0;
+        
+        // Create starfield background
+        this.createStarfield();
+        
+        // Create perspective grid
+        this.createPerspectiveGrid();
+        
+        // Create player ship
+        this.createPlayer();
+        
+        // Setup input
+        this.setupInput();
+        
+        // Groups for game objects
+        this.enemies = this.physics.add.group();
+        this.obstacles = this.physics.add.group();
+        this.lasers = this.physics.add.group();
+        this.powerups = this.physics.add.group();
+        
+        // Tutorial state
+        this.moveCount = 0;
+        this.killCount = 0;
+        this.jumpCount = 0;
+        this.arcShotCount = 0;
+        this.superJumpCount = 0;
+        this.dashCount = 0;
+        this.offscreenReturnCount = 0;
+        this.currentCombo = 0;
+        this.surviveTimer = 0;
+        this.lastDashTime = 0;
+        this.lastMoveTime = 0;
+        
+        // Start first step
+        this.startStep(0);
+        
+        // Setup collisions
+        this.physics.add.overlap(this.lasers, this.enemies, this.hitEnemy, null, this);
+        this.physics.add.overlap(this.player, this.enemies, this.playerHit, null, this);
+        this.physics.add.overlap(this.player, this.obstacles, this.obstacleHit, null, this);
+      }
+
+      createStarfield() {
+        this.stars = [];
+        for (let i = 0; i < 100; i++) {
+          const star = this.add.circle(
+            Phaser.Math.Between(0, this.scale.width),
+            Phaser.Math.Between(0, this.scale.height),
+            Phaser.Math.Between(1, 3),
+            0xffffff,
+            Phaser.Math.FloatBetween(0.3, 1)
+          );
+          star.speed = Phaser.Math.FloatBetween(0.5, 2);
+          this.stars.push(star);
+        }
+      }
+
+      createPerspectiveGrid() {
+        this.gridGraphics = this.add.graphics();
+        this.drawGrid();
+      }
+
+      drawGrid() {
+        const WIDTH = this.scale.width;
+        const HEIGHT = this.scale.height;
+        
+        this.gridGraphics.clear();
+        this.gridGraphics.lineStyle(1, 0x00ff00, 0.3);
+        
+        // Draw perspective lines
+        for (let lane = -3; lane <= 3; lane++) {
+          const startX = WIDTH/2 + lane * 100;
+          const endX = WIDTH/2 + lane * 20;
+          this.gridGraphics.lineBetween(startX, HEIGHT, endX, this.vanishY);
+        }
+        
+        // Draw horizontal lines
+        for (let i = 0; i <= 10; i++) {
+          const progress = i / 10;
+          const y = this.vanishY + (HEIGHT - this.vanishY) * Math.pow(progress, 2.5);
+          const width = 100 + (WIDTH - 100) * progress;
+          const x = WIDTH/2 - width/2;
+          this.gridGraphics.lineBetween(x, y, x + width, y);
+        }
+      }
+
+      createPlayer() {
+        const WIDTH = this.scale.width;
+        const HEIGHT = this.scale.height;
+        
+        this.player = this.add.container(WIDTH/2, HEIGHT - 100);
+        
+        // Create ship body
+        const ship = this.add.graphics();
+        ship.fillStyle(0x00ffff, 1);
+        ship.fillTriangle(0, -20, -15, 10, 15, 10);
+        
+        // Add glow effect
+        const glow = this.add.graphics();
+        glow.lineStyle(2, 0x00ffff, 0.5);
+        glow.strokeTriangle(0, -20, -15, 10, 15, 10);
+        
+        this.player.add([glow, ship]);
+        this.physics.add.existing(this.player);
+        this.player.body.setSize(30, 30);
+      }
+
+      setupInput() {
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.wasd = this.input.keyboard.addKeys('W,A,S,D');
+        this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        
+        // Double-tap detection
+        this.input.keyboard.on('keydown-LEFT', () => this.handleDoubleTap('left'));
+        this.input.keyboard.on('keydown-RIGHT', () => this.handleDoubleTap('right'));
+        this.input.keyboard.on('keydown-A', () => this.handleDoubleTap('left'));
+        this.input.keyboard.on('keydown-D', () => this.handleDoubleTap('right'));
+      }
+
+      handleDoubleTap(direction) {
+        const now = this.time.now;
+        if (this.lastMoveTime && now - this.lastMoveTime < 250 && this.lastMoveDirection === direction) {
+          this.performDash(direction);
+          this.lastMoveTime = 0;
+        } else {
+          this.lastMoveTime = now;
+          this.lastMoveDirection = direction;
+          this.movePlayer(direction);
+        }
+      }
+
+      movePlayer(direction) {
+        const step = this.steps[this.currentStep];
+        if (direction === 'left' && this.currentLane > -2) {
+          this.currentLane--;
+          this.updatePlayerPosition();
+          if (step.action === 'move') {
+            this.moveCount++;
+            this.checkStepProgress();
+          }
+        } else if (direction === 'right' && this.currentLane < 2) {
+          this.currentLane++;
+          this.updatePlayerPosition();
+          if (step.action === 'move') {
+            this.moveCount++;
+            this.checkStepProgress();
+          }
+        }
+      }
+
+      performDash(direction) {
+        const step = this.steps[this.currentStep];
+        const dashDistance = direction === 'left' ? -2 : 2;
+        
+        // Allow dashing off-screen
+        this.currentLane = Phaser.Math.Clamp(this.currentLane + dashDistance, -4, 4);
+        this.updatePlayerPosition();
+        
+        if (step.action === 'dash') {
+          this.dashCount++;
+          this.checkStepProgress();
+        }
+        
+        // Check for off-screen recovery step
+        if (step.action === 'offscreen' && Math.abs(this.currentLane) > 2) {
+          this.time.delayedCall(800, () => {
+            if (Math.abs(this.currentLane) <= 2) {
+              this.offscreenReturnCount++;
+              this.checkStepProgress();
+            }
+          });
+        }
+      }
+
+      updatePlayerPosition() {
+        const WIDTH = this.scale.width;
+        const targetX = WIDTH/2 + this.currentLane * 80;
+        
+        this.tweens.add({
+          targets: this.player,
+          x: targetX,
+          duration: 150,
+          ease: 'Power2'
+        });
+      }
+
+      startStep(stepIndex) {
+        if (stepIndex >= this.steps.length) {
+          this.completeTutorial();
+          return;
+        }
+        
+        this.currentStep = stepIndex;
+        const step = this.steps[stepIndex];
+        
+        // Update UI
+        this.updateProgress();
+        this.showInstruction(step);
+        
+        // Reset counters
+        this.moveCount = 0;
+        this.killCount = 0;
+        this.jumpCount = 0;
+        this.arcShotCount = 0;
+        this.superJumpCount = 0;
+        this.dashCount = 0;
+        this.offscreenReturnCount = 0;
+        this.currentCombo = 0;
+        this.surviveTimer = 0;
+        
+        // Clear existing enemies/obstacles
+        this.enemies.clear(true, true);
+        this.obstacles.clear(true, true);
+        
+        // Setup spawning for this step
+        if (step.spawnEnemies) {
+          this.startEnemySpawning(step.enemyType);
+        }
+        if (step.spawnObstacles) {
+          this.startObstacleSpawning();
+        }
+        if (step.action === 'survive') {
+          this.surviveStartTime = this.time.now;
+        }
+      }
+
+      showInstruction(step) {
+        // Remove existing instruction
+        if (this.instructionBox && this.instructionBox.parentNode) {
+          this.instructionBox.parentNode.removeChild(this.instructionBox);
+        }
+        
+        // Create instruction overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'tutorial-overlay';
+        overlay.innerHTML = `
+          <div class="instruction-box">
+            <div class="instruction-title">${step.title}</div>
+            <div class="instruction-text">${step.instruction}</div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+        this.instructionBox = overlay;
+        
+        // Auto-hide after 5 seconds
+        this.time.delayedCall(5000, () => {
+          if (overlay.parentNode) {
+            overlay.style.opacity = '0.3';
+          }
+        });
+      }
+
+      updateProgress() {
+        const progress = ((this.currentStep + 1) / this.steps.length) * 100;
+        document.getElementById('progressFill').style.width = `${progress}%`;
+        document.getElementById('stepCounter').textContent = `Step ${this.currentStep + 1} of ${this.steps.length}`;
+      }
+
+      checkStepProgress() {
+        const step = this.steps[this.currentStep];
+        let complete = false;
+        
+        switch(step.action) {
+          case 'move':
+            complete = this.moveCount >= step.requiredMoves;
+            break;
+          case 'shoot':
+            complete = this.killCount >= step.requiredKills;
+            break;
+          case 'jump':
+            complete = this.jumpCount >= step.requiredJumps;
+            break;
+          case 'arcshot':
+            complete = this.arcShotCount >= step.requiredArcShots;
+            break;
+          case 'superjump':
+            complete = this.superJumpCount >= step.requiredSuperJumps;
+            break;
+          case 'dash':
+            complete = this.dashCount >= step.requiredDashes;
+            break;
+          case 'offscreen':
+            complete = this.offscreenReturnCount >= step.requiredOffscreenReturns;
+            break;
+          case 'enemytypes':
+            complete = this.killCount >= step.requiredKills;
+            break;
+          case 'combo':
+            complete = this.currentCombo >= step.requiredCombo;
+            break;
+        }
+        
+        if (complete) {
+          this.showSuccess();
+          this.time.delayedCall(2000, () => {
+            this.startStep(this.currentStep + 1);
+          });
+        }
+      }
+
+      showSuccess() {
+        const text = this.add.text(this.scale.width/2, this.scale.height/2, 'EXCELLENT!', {
+          fontSize: '48px',
+          color: '#0ff',
+          stroke: '#000',
+          strokeThickness: 4
+        });
+        text.setOrigin(0.5);
+        text.setDepth(1000);
+        
+        this.tweens.add({
+          targets: text,
+          scale: { from: 0.5, to: 1.5 },
+          alpha: { from: 1, to: 0 },
+          duration: 1500,
+          ease: 'Power2',
+          onComplete: () => text.destroy()
+        });
+      }
+
+      startEnemySpawning(type) {
+        if (this.enemySpawnTimer) {
+          this.enemySpawnTimer.remove();
+        }
+        
+        this.enemySpawnTimer = this.time.addEvent({
+          delay: type === 'wave' ? 500 : 2000,
+          callback: () => this.spawnEnemy(type),
+          loop: true
+        });
+      }
+
+      spawnEnemy(type) {
+        const WIDTH = this.scale.width;
+        const lane = Phaser.Math.Between(-2, 2);
+        const x = WIDTH/2 + lane * 20;
+        
+        let enemyColor, speed, points;
+        
+        if (type === 'mixed') {
+          const roll = Math.random();
+          if (roll < 0.4) {
+            type = 'basic';
+          } else if (roll < 0.7) {
+            type = 'fast';
+          } else {
+            type = 'drifter';
+          }
+        }
+        
+        switch(type) {
+          case 'basic':
+            enemyColor = 0xff0000;
+            speed = 100;
+            points = 10;
+            break;
+          case 'fast':
+            enemyColor = 0xffff00;
+            speed = 200;
+            points = 25;
+            break;
+          case 'drifter':
+            enemyColor = 0xff00ff;
+            speed = 150;
+            points = 50;
+            break;
+          default:
+            enemyColor = 0xff0000;
+            speed = 100;
+            points = 10;
+        }
+        
+        const enemy = this.add.rectangle(x, this.vanishY, 20, 20, enemyColor);
+        enemy.lane = lane;
+        enemy.points = points;
+        enemy.enemyType = type;
+        
+        this.physics.add.existing(enemy);
+        enemy.body.setVelocityY(speed);
+        
+        this.enemies.add(enemy);
+        
+        // Add drift behavior for drifters
+        if (type === 'drifter') {
+          this.tweens.add({
+            targets: enemy,
+            x: x + Phaser.Math.Between(-50, 50),
+            duration: 2000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+          });
+        }
+      }
+
+      startObstacleSpawning() {
+        if (this.obstacleSpawnTimer) {
+          this.obstacleSpawnTimer.remove();
+        }
+        
+        this.obstacleSpawnTimer = this.time.addEvent({
+          delay: 3000,
+          callback: () => this.spawnObstacle(),
+          loop: true
+        });
+      }
+
+      spawnObstacle() {
+        const WIDTH = this.scale.width;
+        const lane = Phaser.Math.Between(-2, 2);
+        const x = WIDTH/2 + lane * 20;
+        
+        const obstacle = this.add.rectangle(x, this.vanishY, 60, 10, 0x00ff00);
+        obstacle.lane = lane;
+        
+        this.physics.add.existing(obstacle);
+        obstacle.body.setVelocityY(120);
+        
+        this.obstacles.add(obstacle);
+      }
+
+      fireLaser() {
+        const laser = this.add.rectangle(this.player.x, this.player.y - 30, 4, 20, 0x00ffff);
+        
+        this.physics.add.existing(laser);
+        laser.body.setVelocityY(-500);
+        
+        this.lasers.add(laser);
+        
+        // Check if jumping (arc shot)
+        if (this.player.isJumping) {
+          laser.isArcShot = true;
+          // Make it curve
+          this.tweens.add({
+            targets: laser,
+            x: laser.x + Phaser.Math.Between(-50, 50),
+            duration: 500,
+            ease: 'Sine.easeOut'
+          });
+          
+          const step = this.steps[this.currentStep];
+          if (step.action === 'arcshot') {
+            this.arcShotCount++;
+            this.checkStepProgress();
+          }
+        }
+      }
+
+      hitEnemy(laser, enemy) {
+        // Create explosion effect
+        const explosion = this.add.circle(enemy.x, enemy.y, 10, 0xffff00);
+        this.tweens.add({
+          targets: explosion,
+          scale: 3,
+          alpha: 0,
+          duration: 300,
+          onComplete: () => explosion.destroy()
+        });
+        
+        laser.destroy();
+        enemy.destroy();
+        
+        this.killCount++;
+        this.currentCombo++;
+        
+        // Reset combo timer
+        if (this.comboTimer) {
+          this.comboTimer.remove();
+        }
+        this.comboTimer = this.time.delayedCall(2000, () => {
+          this.currentCombo = 0;
+        });
+        
+        this.checkStepProgress();
+      }
+
+      playerHit(player, enemy) {
+        // In tutorial, just destroy the enemy and flash the player
+        enemy.destroy();
+        
+        this.tweens.add({
+          targets: this.player,
+          alpha: { from: 0.3, to: 1 },
+          duration: 100,
+          repeat: 3
+        });
+      }
+
+      obstacleHit(player, obstacle) {
+        // Check if jumping
+        if (this.player.isJumping) {
+          return; // No collision while jumping
+        }
+        
+        obstacle.destroy();
+        
+        this.tweens.add({
+          targets: this.player,
+          alpha: { from: 0.3, to: 1 },
+          duration: 100,
+          repeat: 3
+        });
+      }
+
+      update(time, delta) {
+        // Update starfield
+        this.stars.forEach(star => {
+          star.y += star.speed;
+          if (star.y > this.scale.height) {
+            star.y = 0;
+            star.x = Phaser.Math.Between(0, this.scale.width);
+          }
+        });
+        
+        // Handle input
+        if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+          this.fireLaser();
+          const step = this.steps[this.currentStep];
+          if (step.action === 'shoot') {
+            // Will check progress when enemy is hit
+          }
+        }
+        
+        // Jump handling
+        if ((Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.wasd.W)) && !this.player.isJumping) {
+          this.performJump();
+        }
+        
+        // Super jump charging
+        if (this.cursors.down.isDown || this.wasd.S.isDown) {
+          if (!this.chargeStartTime) {
+            this.chargeStartTime = time;
+          }
+          // Show charge indicator
+          if (!this.chargeBar) {
+            this.chargeBar = this.add.rectangle(this.player.x, this.player.y - 40, 0, 5, 0x00ff00);
+          }
+          const chargeTime = time - this.chargeStartTime;
+          this.chargeBar.width = Math.min(chargeTime / 10, 40);
+          this.chargeBar.x = this.player.x;
+        } else if (this.chargeStartTime) {
+          // Release super jump
+          const chargeTime = time - this.chargeStartTime;
+          if (chargeTime > 500) {
+            this.performSuperJump();
+          }
+          this.chargeStartTime = null;
+          if (this.chargeBar) {
+            this.chargeBar.destroy();
+            this.chargeBar = null;
+          }
+        }
+        
+        // Clean up off-screen objects
+        this.enemies.children.entries.forEach(enemy => {
+          if (enemy.y > this.scale.height + 50) {
+            enemy.destroy();
+          }
+        });
+        
+        this.obstacles.children.entries.forEach(obstacle => {
+          if (obstacle.y > this.scale.height + 50) {
+            obstacle.destroy();
+          }
+        });
+        
+        this.lasers.children.entries.forEach(laser => {
+          if (laser.y < -50) {
+            laser.destroy();
+          }
+        });
+        
+        // Check survive timer
+        const step = this.steps[this.currentStep];
+        if (step.action === 'survive') {
+          const elapsed = (time - this.surviveStartTime) / 1000;
+          if (elapsed >= step.surviveTime) {
+            this.checkStepProgress();
+          }
+        }
+      }
+
+      performJump() {
+        if (this.player.isJumping) return;
+        
+        this.player.isJumping = true;
+        
+        this.tweens.add({
+          targets: this.player,
+          y: this.player.y - 60,
+          duration: 300,
+          yoyo: true,
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            this.player.isJumping = false;
+          }
+        });
+        
+        const step = this.steps[this.currentStep];
+        if (step.action === 'jump') {
+          this.jumpCount++;
+          this.checkStepProgress();
+        }
+      }
+
+      performSuperJump() {
+        if (this.player.isJumping) return;
+        
+        this.player.isJumping = true;
+        
+        this.tweens.add({
+          targets: this.player,
+          y: this.player.y - 120,
+          duration: 500,
+          yoyo: true,
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            this.player.isJumping = false;
+          }
+        });
+        
+        const step = this.steps[this.currentStep];
+        if (step.action === 'superjump') {
+          this.superJumpCount++;
+          this.checkStepProgress();
+        }
+      }
+
+      completeTutorial() {
+        // Clean up instruction box
+        if (this.instructionBox && this.instructionBox.parentNode) {
+          this.instructionBox.parentNode.removeChild(this.instructionBox);
+        }
+        
+        // Show completion message
+        const overlay = document.createElement('div');
+        overlay.className = 'tutorial-overlay';
+        overlay.style.pointerEvents = 'auto';
+        overlay.innerHTML = `
+          <div class="instruction-box" style="max-width: 500px;">
+            <div class="instruction-title" style="font-size: 32px; color: #0f0;">TUTORIAL COMPLETE!</div>
+            <div class="instruction-text" style="font-size: 18px; margin: 20px 0;">
+              You've mastered all the controls!<br><br>
+              Ready to face the real challenge?
+            </div>
+            <button onclick="window.location.href='index.html'" style="
+              padding: 15px 30px;
+              background: #0f0;
+              color: #000;
+              border: none;
+              border-radius: 4px;
+              font-size: 18px;
+              font-family: monospace;
+              cursor: pointer;
+              text-transform: uppercase;
+              font-weight: bold;
+              box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+            ">Start Game</button>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+      }
+    }
+
+    // Initialize Phaser
+    const config = {
+      type: Phaser.AUTO,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      parent: 'gameContainer',
+      backgroundColor: '#000',
+      physics: {
+        default: 'arcade',
+        arcade: {
+          gravity: { y: 0 },
+          debug: false
+        }
+      },
+      scene: TutorialScene,
+      scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      }
+    };
+
+    const game = new Phaser.Game(config);
+    
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      game.scale.resize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

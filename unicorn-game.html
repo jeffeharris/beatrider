@@ -17,6 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js"></script>
   <script src="https://unpkg.com/@tonejs/unmute@latest/build/unmute.min.js" data-add-button="true"></script>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+  <script src="character-sprites.js"></script>
   
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-6SQJ9NR8SD"></script>
@@ -976,7 +977,6 @@ const patternBank = {
 
 // State
 let currentBar = 0;
-window.currentBar = 0; // Expose globally for game
 let currentChordIndex = 0;
 let currentProgression = null;
 let acidSequence = [];
@@ -1554,7 +1554,6 @@ function evolve() {
   }
   
   currentBar = (currentBar + 1) % 64;
-  window.currentBar = currentBar;
 }
 
 // Schedule evolution
@@ -1629,7 +1628,6 @@ if (playPauseBtn) {
       if (Tone.Transport.state !== 'started') {
         // Play
         currentBar = 0;
-        window.currentBar = 0;
         currentChordIndex = 0;
         lastSection = '';
         updatePatterns();
@@ -2558,12 +2556,9 @@ class StartupScene extends Phaser.Scene {
       });
     });
     
-    // Check if tutorial has been completed
-    const tutorialCompleted = localStorage.getItem('beatrider_tutorial_completed') === 'true';
-    
     // Press start message - different for mobile
     const startMessage = isMobile ? 'TAP TO START' : 'PRESS SPACE TO START';
-    const startY = (WIDTH > HEIGHT) ? HEIGHT - 100 : HEIGHT - 150; // Move up more for tutorial button
+    const startY = (WIDTH > HEIGHT) ? HEIGHT - 50 : HEIGHT - 100; // Closer to bottom in landscape
     this.startText = this.add.text(WIDTH/2, startY, startMessage, {
       font: 'bold 28px monospace',
       fill: '#ffff00',
@@ -2580,42 +2575,6 @@ class StartupScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1
     });
-    
-    // Tutorial button - place it above the start text, not below
-    const tutorialY = startY - 50;  // Above the start text
-    const tutorialMessage = tutorialCompleted ? '[REPLAY TUTORIAL]' : '[TUTORIAL MODE]';
-    this.tutorialText = this.add.text(WIDTH/2, tutorialY, tutorialMessage, {
-      font: '18px monospace',  // Slightly smaller
-      fill: '#00ff00',
-      stroke: '#00ff00',
-      strokeThickness: 1
-    });
-    this.tutorialText.setOrigin(0.5);
-    // Make the tutorial text interactive with a larger hit area
-    this.tutorialText.setInteractive({ useHandCursor: true });
-    this.tutorialText.setDepth(1000); // Ensure it's on top
-    
-    // Hover effect for tutorial button
-    this.tutorialText.on('pointerover', () => {
-      this.tutorialText.setScale(1.1);
-      this.tutorialText.setFill('#ffffff');
-    });
-    
-    this.tutorialText.on('pointerout', () => {
-      this.tutorialText.setScale(1.0);
-      this.tutorialText.setFill('#00ff00');
-    });
-    
-    // Subtle pulsing for tutorial button if not completed
-    if (!tutorialCompleted) {
-      this.tweens.add({
-        targets: this.tutorialText,
-        alpha: 0.6,
-        duration: 800,
-        yoyo: true,
-        repeat: -1
-      });
-    }
     
     // Retro computer boot sequence text
     const bootLines = [
@@ -2684,47 +2643,30 @@ class StartupScene extends Phaser.Scene {
     }
     
     // Start handler function
-    const startGame = async (tutorialMode = false) => {
+    const startGame = async () => {
       // Start Tone.js from user gesture
       if (typeof Tone !== 'undefined') {
         await Tone.start();
       }
       
-      // Transition to game with optional tutorial mode
+      // Transition to game
       this.cameras.main.fadeOut(500, 0, 0, 0);
       this.time.delayedCall(500, () => {
-        this.scene.start('Main', { tutorialMode: tutorialMode });
+        this.scene.start('Main');
       });
     };
     
-    // Start normal game handler (or tutorial if never completed)
-    const startNormalGame = async () => {
-      // Default to tutorial for first-time players
-      const shouldPlayTutorial = !tutorialCompleted;
-      await startGame(shouldPlayTutorial);
-    };
+    // Listen for space key to start
+    this.input.keyboard.once('keydown-SPACE', startGame);
     
-    // Tutorial button handler - always starts tutorial
-    this.tutorialText.on('pointerdown', async (pointer) => {
-      pointer.event.stopPropagation(); // Stop this click from triggering other handlers
-      await startGame(true);
-    });
+    // Touch/click to start - using multiple event types for better compatibility
+    this.input.on('pointerdown', startGame);
+    this.input.on('pointerup', startGame);  // Some mobile browsers work better with up
     
-    // Listen for space key to start normal game (or tutorial if first time)
-    this.input.keyboard.once('keydown-SPACE', startNormalGame);
-    
-    // Touch/click handler that checks if tutorial was clicked
-    const handleStartClick = async (pointer) => {
-      // Check if click was on tutorial text
-      const bounds = this.tutorialText.getBounds();
-      if (bounds.contains(pointer.x, pointer.y)) {
-        return; // Tutorial text will handle this
-      }
-      await startNormalGame();
-    };
-    
-    // Touch/click to start - using pointerdown for better mobile support
-    this.input.on('pointerdown', handleStartClick);
+    // Also add a fullscreen invisible button as fallback for iOS
+    this.invisibleButton = this.add.rectangle(WIDTH/2, HEIGHT/2, WIDTH, HEIGHT, 0x000000, 0);
+    this.invisibleButton.setInteractive();
+    this.invisibleButton.once('pointerdown', startGame);
   }
   
   drawGrid() {
@@ -2877,16 +2819,19 @@ const sectionPatternMap = {
 class Main extends Phaser.Scene {
   constructor() {
     super({ key: 'Main' });
-    
-    // Break section state
-    this.isBreakSection = false;
-    this.floatingStars = [];
   }
   updateSoundDisplay() {
     const soundNames = ['Triangle', 'Acid', 'Chord', 'Sub', 'Pluck', 'Pew Pew'];
     const display = document.getElementById('soundDisplay');
     if (display) {
       display.textContent = soundNames[gameSounds.currentLaserSound];
+    }
+  }
+  
+  updateCharacterIndicator() {
+    if (this.characterText) {
+      const charName = this.characterManager.currentCharacter === 'unicorn' ? '🦄 Unicorn' : '■ Classic';
+      this.characterText.setText(`[C] ${charName}`);
     }
   }
   
@@ -2969,19 +2914,10 @@ class Main extends Phaser.Scene {
     }
   }
   
-  create(data){
-    // Check if we're in tutorial mode
-    this.isTutorial = data?.tutorialMode || false;
-    this.tutorialWave = 0;
-    this.tutorialText = null;
-    this.tutorialProgress = {
-      shotsHit: 0,
-      movementsMade: 0,
-      jumpsMade: 0,
-      dashesMade: 0,
-      starsCollected: 0
-    };
-    this.tutorialWaveStarted = false;
+  create(){
+    // Initialize character manager
+    this.characterManager = new CharacterManager(this);
+    this.characterManager.initialize(localStorage.getItem('selectedCharacter') || 'unicorn');
     
     // Initialize vanishing point
     this.vanishX = WIDTH / 2;
@@ -2991,25 +2927,12 @@ class Main extends Phaser.Scene {
     this.sessionStartTime = Date.now();
     this.maxComboReached = 0;
     
-    // Initialize game timer for survival tracking
-    this.gameStartTime = this.time.now;
-    
-    // Initialize adaptive difficulty system
-    this.recentDeaths = [];
-    this.adaptiveState = {
-      isAssisting: false,
-      assistStartTime: null,
-      currentSpawnMultiplier: 1.0,
-      currentSpeedMultiplier: 1.0
-    };
-    
     // Track game start
     trackEvent('game_start', {
       difficulty: currentDifficulty?.name || 'normal',
       genre: currentGenre || 'techno',
       grid_enabled: gridEnabled,
-      high_score: sessionHighScore,
-      tutorial_mode: this.isTutorial
+      high_score: sessionHighScore
     });
     
     // Initialize pause state
@@ -3070,63 +2993,10 @@ class Main extends Phaser.Scene {
     // Create starfield background FIRST
     this.createStarfield();
     
-    // Tutorial mode setup
-    if (this.isTutorial) {
-      // Slow down the tempo for tutorial
-      Tone.Transport.bpm.value = 90; // 75% of normal 120 BPM
-      
-      // Create tutorial text overlay
-      this.tutorialText = this.add.text(WIDTH/2, 100, '', {
-        font: 'bold 24px monospace',
-        fill: '#ffff00',
-        stroke: '#000000',
-        strokeThickness: 4,
-        align: 'center'
-      }).setOrigin(0.5).setDepth(1000);
-      
-      // Tutorial progress text
-      this.tutorialProgressText = this.add.text(WIDTH/2, 140, '', {
-        font: '18px monospace',
-        fill: '#00ff00',
-        stroke: '#000000',
-        strokeThickness: 3,
-        align: 'center'
-      }).setOrigin(0.5).setDepth(1000);
-      
-      // Skip tutorial button in upper right
-      this.skipTutorialButton = this.add.text(WIDTH - 20, 20, '[SKIP >>]', {
-        font: '20px monospace',
-        fill: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 3,
-        align: 'right'
-      }).setOrigin(1, 0).setDepth(1001);
-      
-      // Make skip button interactive
-      this.skipTutorialButton.setInteractive({ useHandCursor: true });
-      
-      // Hover effects
-      this.skipTutorialButton.on('pointerover', () => {
-        this.skipTutorialButton.setScale(1.1);
-        this.skipTutorialButton.setFill('#ffff00');
-      });
-      
-      this.skipTutorialButton.on('pointerout', () => {
-        this.skipTutorialButton.setScale(1.0);
-        this.skipTutorialButton.setFill('#ffffff');
-      });
-      
-      // Click to skip tutorial
-      this.skipTutorialButton.on('pointerdown', () => {
-        this.skipTutorial();
-      });
-    }
-    
     // Start the music automatically when game starts
     if (typeof Tone !== 'undefined' && Tone.Transport.state !== 'started') {
       // Tone should already be started from the startup screen
       currentBar = 0;
-      window.currentBar = 0;
       currentChordIndex = 0;
       lastSection = '';
       updatePatterns();
@@ -3171,7 +3041,8 @@ class Main extends Phaser.Scene {
     this.enemyBaseSize = enemySize;
     this.fastEnemyBaseSize = Math.floor(enemySize * 1.25); // Fast enemies 25% larger
     
-    gfx.fillStyle(0x00ffcc,1).fillRect(0,0,playerSize,playerSize).generateTexture('playerTex',playerSize,playerSize).clear();
+    // Create character textures
+    this.characterManager.createTextures(playerSize);
     gfx.fillStyle(0xff3366,1).fillRect(0,0,enemySize,enemySize).generateTexture('enemyTex',enemySize,enemySize).clear();
     gfx.fillStyle(0xffff00,1).fillTriangle(enemySize/2,0,0,enemySize,enemySize,enemySize).generateTexture('fastEnemyTex',enemySize,enemySize).clear();
     gfx.fillStyle(0xffffff,1).fillRect(0,0,bulletW,bulletH).generateTexture('bulletTex',bulletW,bulletH).clear();
@@ -3207,32 +3078,6 @@ class Main extends Phaser.Scene {
     
     gfx.generateTexture('obstacleTex',obstacleW,obstacleH).clear();
     gfx.fillStyle(0x00ff00,1).fillCircle(powerUpSize/2,powerUpSize/2,powerUpSize/2).generateTexture('powerUpTex',powerUpSize,powerUpSize).clear(); // Green power-up
-    
-    // Create star texture for break section collectibles
-    const starSize = Math.floor(40 * MOBILE_SCALE);
-    const spikes = 5;
-    const outerRadius = starSize / 2;
-    const innerRadius = outerRadius * 0.4;
-    
-    gfx.fillStyle(0xffdd00, 1); // Golden yellow
-    gfx.beginPath();
-    
-    for(let i = 0; i < spikes * 2; i++) {
-      const angle = (Math.PI * 2 * i) / (spikes * 2) - Math.PI / 2;
-      const radius = i % 2 === 0 ? outerRadius : innerRadius;
-      const x = starSize/2 + Math.cos(angle) * radius;
-      const y = starSize/2 + Math.sin(angle) * radius;
-      
-      if(i === 0) {
-        gfx.moveTo(x, y);
-      } else {
-        gfx.lineTo(x, y);
-      }
-    }
-    
-    gfx.closePath();
-    gfx.fillPath();
-    gfx.generateTexture('starTex', starSize, starSize).clear();
     // Create diamond-shaped drifter
     const halfSize = enemySize / 2;
     gfx.fillStyle(0xff00ff, 1);
@@ -3246,11 +3091,13 @@ class Main extends Phaser.Scene {
     gfx.generateTexture('drifterTex',enemySize,enemySize).destroy(); // Diamond drifter
 
     this.playerLane=2; 
-    this.player=this.add.image(this._laneX(this.playerLane), PLAYER_Y, 'playerTex');
-    this.player.w = playerSize; // Add collision dimensions (scaled)
-    this.player.h = playerSize;
-    this.player.setDepth(500); // Much higher depth to ensure on top
+    this.player = this.characterManager.createPlayer(this._laneX(this.playerLane), PLAYER_Y, playerSize);
     console.log('Player created with depth:', this.player.depth);
+    
+    // Trigger spawn animation with a small delay so scene is visible
+    this.time.delayedCall(100, () => {
+      this.characterManager.onSpawn(this.player);
+    });
     
     // Create charge glow effect
     this.chargeGlow = this.add.graphics();
@@ -3289,7 +3136,7 @@ class Main extends Phaser.Scene {
     this.lastLeftPress = 0;
     this.lastRightPress = 0;
     this.doubleTapWindow = PLAYER_CONFIG.dash.doubleTapWindow; // ms window for double-tap
-    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC');
+    this.keys=this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC,C');
     this.score=0; 
     this.beats=0;
     // Combo system variables
@@ -3320,6 +3167,13 @@ class Main extends Phaser.Scene {
     this.scoreText.setOrigin(0, 0); // Left align the number after the label
     // Combo display
     this.comboText=this.add.text(10, comboY, '', {font:`${scoreFontSize} monospace`, fill:'#ff00ff'});
+    
+    // Character indicator - position it above combo
+    const charIndicatorY = comboY - (isMobile ? 36 : 24);
+    const charFontSize = isMobile ? '20px' : '14px';
+    this.characterText = this.add.text(10, charIndicatorY, '', {font:`${charFontSize} monospace`, fill:'#00ffff'});
+    this.characterText.setAlpha(0.8);
+    this.updateCharacterIndicator();
     this.comboText.setAlpha(0);
     
     // Combo meter bar
@@ -3344,30 +3198,9 @@ class Main extends Phaser.Scene {
     // GameAPI is triggered by our drums
     window.GameAPI = {
       onBeat: ()=>{ 
-        this.beats++;
-        
-        // Tutorial mode custom spawning
-        if (this.isTutorial) {
-          this.handleTutorialSpawn();
-          // For wave 7 (full game), also continue with normal spawning
-          if (this.tutorialWave < 7) {
-            return;
-          }
-        }
-        
-        // Apply adaptive difficulty spawn chance
-        if (this.adaptiveState.isAssisting) {
-          if (Math.random() > this.adaptiveState.currentSpawnMultiplier) {
-            // Skip this spawn due to adaptive assistance
-            return;
-          }
-        }
-        
-        // Apply adaptive difficulty speed multiplier
-        const baseSpeed = (ENEMY_SPEED_BASE + Math.floor(this.beats/16)*30) * currentDifficulty.speedMult;
-        const speed = baseSpeed * this.adaptiveState.currentSpeedMultiplier;
-        
-        // Always spawn on kick (if not skipped by adaptive difficulty)
+        this.beats++; 
+        const speed=(ENEMY_SPEED_BASE + Math.floor(this.beats/16)*30) * currentDifficulty.speedMult; 
+        // Always spawn on kick
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnEnemy(lane, speed, 'enemyTex'); 
         
@@ -3379,20 +3212,8 @@ class Main extends Phaser.Scene {
         }
       },
       onSnare: ()=>{ 
-        // Skip all tutorial waves except final practice (wave 7)
-        if (this.isTutorial && this.tutorialWave < 7) return;
-        
-        // Apply adaptive difficulty spawn chance
-        if (this.adaptiveState.isAssisting) {
-          if (Math.random() > this.adaptiveState.currentSpawnMultiplier) {
-            // Skip this spawn due to adaptive assistance
-            return;
-          }
-        }
-        
-        // Fast yellow enemies on snare hits - apply adaptive speed
-        const baseSpeed = (ENEMY_SPEED_BASE * 1.5 + Math.floor(this.beats/16)*30) * currentDifficulty.speedMult;
-        const speed = baseSpeed * this.adaptiveState.currentSpeedMultiplier;
+        // Fast yellow enemies on snare hits - always spawn
+        const speed=(ENEMY_SPEED_BASE * 1.5 + Math.floor(this.beats/16)*30) * currentDifficulty.speedMult; 
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnEnemy(lane, speed, 'fastEnemyTex'); 
         
@@ -3404,18 +3225,6 @@ class Main extends Phaser.Scene {
         }
       },
       onHihat: ()=>{
-        // Skip all tutorial waves except final practice (wave 7)
-        if (this.isTutorial && this.tutorialWave < 7) return;
-        
-        // Apply adaptive difficulty spawn chance for obstacles (lower reduction)
-        if (this.adaptiveState.isAssisting) {
-          // Obstacles get 70% of their normal reduction (so 20% * 0.7 = 14% chance)
-          if (Math.random() > this.adaptiveState.currentSpawnMultiplier) {
-            // Skip this spawn due to adaptive assistance
-            return;
-          }
-        }
-        
         // Spawn obstacles that block shots
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnObstacle(lane);
@@ -3426,17 +3235,11 @@ class Main extends Phaser.Scene {
         }
       },
       onAcid: ()=>{
-        // Skip during tutorial
-        if (this.isTutorial && this.tutorialWave < 5) return;
-        
         // Spawn power-up for rapid fire
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnPowerUp(lane);
       },
       onStab: ()=>{
-        // Skip during tutorial
-        if (this.isTutorial) return;
-        
         // Spawn lane-changing enemy
         const lane = Phaser.Math.Between(0,LANES-1);
         this._spawnDrifter(lane);
@@ -3449,15 +3252,8 @@ class Main extends Phaser.Scene {
         }
       },
       onSub: ()=>{
-        // Always pulse the grid for visual effect
+        // Pulse the grid
         this._pulseGrid();
-        
-        // Skip break section logic during tutorial
-        if (this.isTutorial) return;
-        
-        // Track if we're in break section for star spawning
-        const section = getSection(window.currentBar || 0);
-        this.isBreakSection = (section === 'BREAK');
       },
       toggleGrid: ()=>{ 
         // Toggle grid from external button - match G key behavior
@@ -4105,6 +3901,10 @@ class Main extends Phaser.Scene {
       // Add reactive wobble force
       this.wobbleVelocity.x = -cfg.wobble.reactiveForce; // Push wobble opposite to movement
       
+      // Notify character manager of movement
+      const fromX = this.player.x;
+      this.characterManager.onMove(this.player, fromX, targetX);
+      
       // First stretch towards the left with anticipation
       this.tweens.add({
         targets: this.player,
@@ -4230,6 +4030,10 @@ class Main extends Phaser.Scene {
       
       // Add reactive wobble force
       this.wobbleVelocity.x = cfg.wobble.reactiveForce; // Push wobble opposite to movement
+      
+      // Notify character manager of movement
+      const fromX = this.player.x;
+      this.characterManager.onMove(this.player, fromX, targetX);
       
       // First stretch towards the right with anticipation
       this.tweens.add({
@@ -4864,9 +4668,9 @@ class Main extends Phaser.Scene {
   }
   
   checkDashCollision() {
-    // Check collision with obstacles during dash - using progress-based 3D collision
+    // Check collision with obstacles during dash - using Y position like regular collision
     for(let o of this.obstacles) {
-      if(o.progress > 0.94 && o.progress < 0.97 && o.lane === this.playerLane && !this.isJumping && !this.isInvincible) {
+      if(Math.abs(o.y - this.player.y) < PLAYER_CONFIG.collision.yThreshold && o.lane === this.playerLane && !this.isJumping && !this.isInvincible) {
         // Set invincible immediately to prevent multiple deaths
         this.isInvincible = true;
         
@@ -4893,11 +4697,6 @@ class Main extends Phaser.Scene {
   superJump(chargePercent = 1.0) {
     if(this.isJumping) return;
     this.isJumping = true;
-    
-    // Track super jumps for tutorial (only count if charged enough)
-    if (this.isTutorial && this.tutorialWave === 5 && chargePercent > 0.3) {
-      this.tutorialSuperJumps = (this.tutorialSuperJumps || 0) + 1;
-    }
     
     // Calculate jump height: from 1x (120) to 3x (360) based on charge for more distinction
     const minHeight = 120;
@@ -5218,9 +5017,6 @@ class Main extends Phaser.Scene {
     
     this.isPaused = true;
     
-    // Track pause time for accurate game timer
-    this.pauseStartTime = this.time.now;
-    
     // Pause all tweens
     this.tweens.pauseAll();
     
@@ -5287,17 +5083,6 @@ class Main extends Phaser.Scene {
     
     this.isPaused = false;
     
-    // Adjust game start time to account for pause duration
-    if (this.pauseStartTime) {
-      const pauseDuration = this.time.now - this.pauseStartTime;
-      this.gameStartTime += pauseDuration;
-      
-      // Also adjust adaptive difficulty timer if assisting
-      if (this.adaptiveState.isAssisting && this.adaptiveState.assistStartTime) {
-        this.adaptiveState.assistStartTime += pauseDuration;
-      }
-    }
-    
     // Resume all tweens
     this.tweens.resumeAll();
     
@@ -5343,39 +5128,6 @@ class Main extends Phaser.Scene {
     // Set flag to block pause and controls
     this.isShowingGameOver = true;
     this.playerCanControl = false;
-    
-    // Track this death for adaptive difficulty
-    this.recentDeaths.push({
-      score: this.score,
-      timestamp: Date.now()
-    });
-    
-    // Keep only last 3 deaths
-    if (this.recentDeaths.length > 3) {
-      this.recentDeaths.shift();
-    }
-    
-    // Check if player is struggling (all 3 recent deaths < 1000 points)
-    if (this.recentDeaths.length === 3 && 
-        this.recentDeaths.every(death => death.score < 1000)) {
-      // Enable adaptive assistance
-      this.adaptiveState.isAssisting = true;
-      this.adaptiveState.assistStartTime = this.time.now;
-      this.adaptiveState.currentSpawnMultiplier = 0.7;  // 70% spawn rate
-      this.adaptiveState.currentSpeedMultiplier = 0.85; // 85% speed
-      
-      console.log('Adaptive difficulty: Assistance enabled', this.adaptiveState);
-    }
-    
-    // Calculate survival time
-    const survivalTimeMs = this.time.now - this.gameStartTime;
-    const survivalSeconds = Math.floor(survivalTimeMs / 1000);
-    const survivalMinutes = Math.floor(survivalSeconds / 60);
-    const survivalSecondsRemainder = survivalSeconds % 60;
-    const survivalTimeString = `${survivalMinutes}:${survivalSecondsRemainder.toString().padStart(2, '0')}`;
-    
-    // Calculate points per second
-    const pointsPerSecond = survivalSeconds > 0 ? (this.score / survivalSeconds).toFixed(1) : '0.0';
     
     // Track game over event with detailed metrics
     const scoreBucket = this.score < 100 ? '0-99' : 
@@ -5429,19 +5181,14 @@ class Main extends Phaser.Scene {
       });
     }
     
-    // Calculate responsive text sizes based on screen dimensions
-    const screenRef = Math.min(WIDTH, HEIGHT);
+    // Calculate text sizes based on mobile or desktop
     const isMobile = /Android|webOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    
-    // Scale based on screen size with mobile boost
-    const mobileMult = isMobile ? 1.2 : 1.0;
-    const bigFontSize = `${Math.floor(screenRef * 0.09 * mobileMult)}px`;
-    const medFontSize = `${Math.floor(screenRef * 0.05 * mobileMult)}px`;
-    const smallFontSize = `${Math.floor(screenRef * 0.03 * mobileMult)}px`;
-    const tinyFontSize = `${Math.floor(screenRef * 0.025 * mobileMult)}px`;
+    const bigFontSize = isMobile ? '120px' : '72px';
+    const medFontSize = isMobile ? '48px' : '32px';
+    const smallFontSize = isMobile ? '32px' : '20px';
     
     // Score display
-    const scoreLabel = this.add.text(WIDTH/2, HEIGHT/2 - screenRef * 0.08, 'SCORE', {
+    const scoreLabel = this.add.text(WIDTH/2, HEIGHT/2 - 60, 'SCORE', {
       font: `${medFontSize} monospace`,
       fill: '#0f0'
     });
@@ -5461,7 +5208,7 @@ class Main extends Phaser.Scene {
     // High score message
     let congratsText = null;
     if(beatHighScore) {
-      congratsText = this.add.text(WIDTH/2, HEIGHT/2 + screenRef * 0.1, 'NEW HIGH SCORE!', {
+      congratsText = this.add.text(WIDTH/2, HEIGHT/2 + 80, 'NEW HIGH SCORE!', {
         font: `${medFontSize} monospace`,
         fill: '#ff00ff'
       });
@@ -5481,7 +5228,7 @@ class Main extends Phaser.Scene {
         ease: 'Sine.inOut'
       });
     } else {
-      const highScoreText = this.add.text(WIDTH/2, HEIGHT/2 + screenRef * 0.1, `HIGH SCORE: ${sessionHighScore}`, {
+      const highScoreText = this.add.text(WIDTH/2, HEIGHT/2 + 80, `HIGH SCORE: ${sessionHighScore}`, {
         font: `${smallFontSize} monospace`,
         fill: '#ff0'
       });
@@ -5497,28 +5244,8 @@ class Main extends Phaser.Scene {
       });
     }
     
-    // Survival stats - time and points/second
-    const statsY = beatHighScore ? HEIGHT/2 + screenRef * 0.15 : HEIGHT/2 + screenRef * 0.13;
-    const survivalStatsText = this.add.text(WIDTH/2, statsY, 
-      `Survived: ${survivalTimeString}  •  ${pointsPerSecond} pts/sec`, {
-      font: `${tinyFontSize} monospace`,
-      fill: '#00ffcc'
-    });
-    survivalStatsText.setOrigin(0.5);
-    survivalStatsText.setAlpha(0);
-    survivalStatsText.setDepth(20001);
-    survivalStatsText.setData('isSurvivalStats', true); // Mark for cleanup
-    
-    this.tweens.add({
-      targets: survivalStatsText,
-      alpha: 0.9,
-      duration: 600,
-      delay: 1000
-    });
-    
     // Restart instruction with countdown
-    const restartY = HEIGHT/2 + screenRef * 0.2;
-    const restartText = this.add.text(WIDTH/2, restartY, 'RESTARTING IN 3...', {
+    const restartText = this.add.text(WIDTH/2, HEIGHT/2 + 140, 'RESTARTING IN 3...', {
       font: `${smallFontSize} monospace`,
       fill: '#00ffcc'  // Brighter cyan color for visibility
     });
@@ -5601,16 +5328,15 @@ class Main extends Phaser.Scene {
       targets: restartText,
       alpha: 1,  // Full opacity instead of 0.5
       duration: 400,
-      delay: 1200
+      delay: 800  // Reduced from 1200ms
     });
     
-    // Respawn right after countdown completes (1.2s delay + 3s countdown)
-    this.time.delayedCall(4300, () => {
+    // Respawn right after countdown completes (reduced by 1.5s)
+    this.time.delayedCall(2800, () => {  // Was 4300ms, now 2.8s
       // Fade out game over screen elements
       const highScoreElement = this.children.list.find(child => child && child.getData && child.getData('isHighScoreText'));
-      const survivalStatsElement = this.children.list.find(child => child && child.getData && child.getData('isSurvivalStats'));
       this.tweens.add({
-        targets: [overlay, scoreLabel, scoreText, restartText, congratsText, highScoreElement, survivalStatsText].filter(Boolean),
+        targets: [overlay, scoreLabel, scoreText, restartText, congratsText, highScoreElement].filter(Boolean),
         alpha: 0,
         duration: 300,
         onComplete: () => {
@@ -5621,7 +5347,6 @@ class Main extends Phaser.Scene {
           restartText.destroy();
           if(congratsText) congratsText.destroy();
           if(highScoreElement) highScoreElement.destroy();
-          if(survivalStatsText) survivalStatsText.destroy();
           
           // Reset score and combo for new round
           this.score = 0;
@@ -5632,19 +5357,53 @@ class Main extends Phaser.Scene {
           // Reset difficulty progression
           this.beats = 0;
           
-          // Reset game timer for new round
-          this.gameStartTime = this.time.now;
-          
           // Clear any power-ups
           this.rapidFire = false;
           this.rapidFireTimer = 0;
-          this.player.clearTint();
+          this.characterManager.onPowerDown(this.player);
           
           // Reset player to center lane with invincibility
           this.playerLane = 2;
-          this.player.x = this._laneX(2);
+          const respawnX = this._laneX(2);
+          const respawnY = PLAYER_Y;
+          
+          // Reset all unicorn parts to correct positions before spawn animation
+          this.player.x = respawnX;
+          this.player.y = respawnY;
+          if(this.player.unicornHead) {
+            this.player.unicornHead.x = respawnX;
+            this.player.unicornHead.y = respawnY - this.player.h * 0.7;
+          }
+          if(this.player.unicornHorn) {
+            this.player.unicornHorn.x = respawnX;
+            this.player.unicornHorn.y = respawnY - this.player.h * 0.7;
+          }
+          if(this.player.unicornLeftEar) {
+            this.player.unicornLeftEar.x = respawnX - this.player.w * 0.15;
+            this.player.unicornLeftEar.y = respawnY - this.player.h * 0.7;
+          }
+          if(this.player.unicornRightEar) {
+            this.player.unicornRightEar.x = respawnX + this.player.w * 0.15;
+            this.player.unicornRightEar.y = respawnY - this.player.h * 0.7;
+          }
+          if(this.player.unicornLeftFoot) {
+            this.player.unicornLeftFoot.x = respawnX - this.player.w * 0.4;
+            this.player.unicornLeftFoot.y = respawnY - this.player.h * 0.4;
+          }
+          if(this.player.unicornRightFoot) {
+            this.player.unicornRightFoot.x = respawnX + this.player.w * 0.4;
+            this.player.unicornRightFoot.y = respawnY - this.player.h * 0.4;
+          }
+          if(this.player.unicornTail) {
+            this.player.unicornTail.x = respawnX;
+            this.player.unicornTail.y = respawnY + this.player.h * 0.5;
+          }
+          
           this.player.setVisible(true);
           this.player.setDepth(500); // Ensure player stays on top after respawn
+          
+          // Trigger respawn animation
+          this.characterManager.onSpawn(this.player);
           
           // Reset player states
           this.isJumping = false;
@@ -5783,28 +5542,6 @@ class Main extends Phaser.Scene {
     o.isObstacle = true;
     
     this.obstacles.push(o);
-    
-    // If we're in break section, spawn a star above this obstacle
-    // During tutorial wave 6, always spawn stars. After tutorial, only in actual break sections
-    if(this.isBreakSection) {
-      // Always spawn stars during tutorial wave 6, or in normal game breaks
-      if ((this.isTutorial && this.tutorialWave === 6) || !this.isTutorial) {
-        this._spawnFloatingStar(o);
-      }
-    }
-  }
-  
-  _spawnFloatingStar(obstacle) {
-    const star = this.add.image(obstacle.x, obstacle.y - 25, 'starTex');
-    star.attachedObstacle = obstacle;
-    star.setScale(1.0); // Start at normal size, let update handle perspective scaling
-    star.setDepth(160); // Above obstacles
-    star.collected = false;
-    star.rotationSpeed = 0.05; // Spinning speed
-    star.floatOffset = 0;
-    star.floatSpeed = 0.003;
-    
-    this.floatingStars.push(star);
   }
   
   _spawnPowerUp(lane){
@@ -5817,407 +5554,6 @@ class Main extends Phaser.Scene {
     p.setScale(0.1);
     p.setDepth(100); // Same depth as enemies - between shield and poles
     this.powerUps.push(p);
-  }
-  
-  handleTutorialSpawn() {
-    // Only spawn on certain beats for controlled tutorial experience
-    switch(this.tutorialWave) {
-      case 0: // Shooting practice
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('PRESS SPACE TO SHOOT');
-          this.tutorialProgressText.setText('Shoot the approaching enemies');
-          this.tutorialWaveStarted = true;
-          this.shootingShown = false;
-        }
-        
-        // After 1 beat, start spawning enemies
-        if (this.beats >= 1) {
-          if (!this.shootingShown) {
-            this.shootingShown = true;
-            this.tutorialText.setText('ENEMIES APPEAR ON BEAT!');
-          }
-          // Spawn every beat for continuous flow
-          if (this.beats % 1 === 0) {
-            this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.8, 'enemyTex'); // Center lane
-          }
-        }
-        break;
-        
-      case 1: // Movement practice
-        if (!this.tutorialWaveStarted) {
-          // First just show the controls
-          this.tutorialText.setText('PRESS ← → TO MOVE LANES');
-          this.tutorialProgressText.setText('Move left and right');
-          this.tutorialWaveStarted = true;
-          this.tutorialTimer = 10000; // 10 seconds total
-          this.movementShown = false;
-          
-          // Spawn first V formation immediately
-          this.tutorialText.setText('DODGE THE V FORMATION!');
-          this.movementShown = true;
-          
-          // Proper V formation with obstacles - 1 second spacing
-          // Center lane first (point of V)
-          this._spawnObstacle(2);
-          // Inner lanes 1000ms later
-          this.time.delayedCall(1000, () => {
-            this._spawnObstacle(1);
-            this._spawnObstacle(3);
-          });
-          // Outer lanes 1000ms after that (wings)
-          this.time.delayedCall(2000, () => {
-            this._spawnObstacle(0);
-            this._spawnObstacle(4);
-          });
-        }
-        
-        // Second V formation - spawn earlier at beat 4 instead of 6
-        if (this.beats === 4) {
-          // Another V with same 1 second spacing
-          this._spawnObstacle(2);
-          this.time.delayedCall(1000, () => {
-            this._spawnObstacle(1);
-            this._spawnObstacle(3);
-          });
-          this.time.delayedCall(2000, () => {
-            this._spawnObstacle(0);
-            this._spawnObstacle(4);
-          });
-        }
-        break;
-        
-      case 2: // Arc shot practice - move to shoot over obstacles
-        if (this.beats % 6 === 0) {
-          this._spawnObstacle(2); // Center lane obstacle
-          // Spawn enemy behind it with more spacing
-          this.time.delayedCall(600, () => {
-            this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.6, 'enemyTex');
-          });
-        }
-        
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('JUMP + SHOOT = ARC SHOT OVER SHIELDS');
-          this.tutorialProgressText.setText('Hit 2 enemies behind shields');
-          this.tutorialWaveStarted = true;
-        }
-        break;
-        
-      case 3: // Dash practice
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('DOUBLE-TAP → TO DASH');
-          this.tutorialProgressText.setText('Dash through gaps to collect power-ups');
-          this.tutorialWaveStarted = true;
-          
-          // Spawn immediately when entering this wave
-          // Create wall of obstacles with gap
-          this._spawnObstacle(0);
-          this._spawnObstacle(1);
-          // Gap in lane 2
-          this._spawnObstacle(3);
-          this._spawnObstacle(4);
-          
-          // Spawn power-up RIGHT behind the wall
-          this.time.delayedCall(20, () => {
-            this._spawnPowerUp(0); // Power-up on left side, requires dash to reach
-          });
-        }
-        
-        // Second wall after some beats
-        if (this.beats % 8 === 0 && this.beats > 0) {
-          // Create another wall
-          this._spawnObstacle(0);
-          this._spawnObstacle(1);
-          // Gap in lane 2
-          this._spawnObstacle(3);
-          this._spawnObstacle(4);
-          
-          // Power-up behind
-          this.time.delayedCall(20, () => {
-            this._spawnPowerUp(4); // Different lane this time
-          });
-        }
-        break;
-        
-      case 4: // Arc shot practice
-        // First set - teach arc shot
-        if (this.beats === 1) {
-          this._spawnObstacle(2); // Center lane obstacle
-          // Spawn enemy behind it with more spacing
-          this.time.delayedCall(700, () => {
-            this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.5, 'enemyTex');
-          });
-        }
-        
-        // Second set - more spacing, different lane
-        if (this.beats === 12) {  // Much more spacing
-          this._spawnObstacle(3); // Different lane
-          this.time.delayedCall(700, () => {
-            this._spawnEnemy(3, ENEMY_SPEED_BASE * 0.5, 'enemyTex');
-          });
-        }
-        
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('JUMP + SHOOT = ARC SHOT');
-          this.tutorialProgressText.setText('Hit enemy, then move to dodge shield');
-          this.tutorialWaveStarted = true;
-          this.tutorialArcShotCount = 0;
-        }
-        
-        // Update text after first arc shot
-        if (this.tutorialArcShotCount !== (this.tutorialProgress.arcShotsHit || 0)) {
-          this.tutorialArcShotCount = this.tutorialProgress.arcShotsHit || 0;
-          if (this.tutorialArcShotCount === 1) {
-            this.tutorialText.setText('GOOD! NOW MOVE TO DODGE THE SHIELD');
-          }
-        }
-        break;
-        
-      case 5: // Super jump teaching
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('HOLD ↓ TO CHARGE SUPER JUMP');
-          this.tutorialProgressText.setText('Hold down, then release to jump higher!');
-          this.tutorialWaveStarted = true;
-          this.superJumpShown = false;
-          this.tutorialSuperJumps = 0;
-        }
-        
-        // After 2 beats, spawn obstacle to practice jumping over
-        if (this.beats === 2 && !this.superJumpShown) {
-          this.superJumpShown = true;
-          this.tutorialText.setText('CHARGE AND JUMP OVER THE SHIELD!');
-          this._spawnObstacle(2); // Center lane obstacle to jump over
-        }
-        
-        // Spawn another obstacle every 6 beats for practice
-        if (this.beats > 2 && this.beats % 6 === 0) {
-          this._spawnObstacle(Phaser.Math.Between(1, 3));
-        }
-        break;
-        
-      case 6: // Star collection with super jump
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('STARS APPEAR DURING BREAKS!');
-          this.tutorialProgressText.setText('Super jump to collect stars above shields');
-          this.tutorialWaveStarted = true;
-          // Force break section behavior for stars during tutorial
-          this.isBreakSection = true;
-        }
-        
-        // Spawn obstacles with stars
-        if (this.beats % 8 === 0) {
-          this._spawnObstacle(2); // This will auto-spawn a star above it
-        }
-        if (this.beats % 8 === 4) {
-          this._spawnObstacle(Phaser.Math.Between(1, 3));
-        }
-        break;
-        
-      case 7: // Full game preview with adaptive assistance
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('FULL GAME - SURVIVE!');
-          this.tutorialProgressText.setText('Starting at 70% difficulty, will increase gradually');
-          this.tutorialWaveStarted = true;
-          this.tutorialTimer = 30000; // 30 seconds
-          
-          // Enable adaptive assistance at 70% for the start
-          this.adaptiveState.isAssisting = true;
-          this.adaptiveState.assistStartTime = this.time.now;
-          this.adaptiveState.currentSpawnMultiplier = 0.7;  // 70% spawn rate
-          this.adaptiveState.currentSpeedMultiplier = 0.85; // 85% speed
-        }
-        // Wave 7 uses normal game spawning via GameAPI callbacks
-        // No manual spawns needed here
-        break;
-    }
-  }
-  
-  updateTutorialProgress() {
-    if (!this.isTutorial) return;
-    
-    // Check wave completion based on current wave
-    switch(this.tutorialWave) {
-      case 0: // Shooting - need 3 hits
-        this.tutorialProgressText.setText(`Enemies hit: ${this.tutorialProgress.shotsHit}/3`);
-        if (this.tutorialProgress.shotsHit >= 3) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 1: // Movement - survive timer
-        if (this.tutorialTimer) {
-          this.tutorialTimer -= 16; // Approximate frame time
-          const seconds = Math.ceil(this.tutorialTimer / 1000);
-          this.tutorialProgressText.setText(`Dodge for: ${seconds} seconds`);
-          if (this.tutorialTimer <= 0) {
-            this.advanceTutorial();
-          }
-        }
-        break;
-        
-      case 2: // Arc shots - hit enemies behind obstacles
-        this.tutorialProgressText.setText(`Arc shots hit: ${this.tutorialProgress.arcShotsHit || 0}/2`);
-        if ((this.tutorialProgress.arcShotsHit || 0) >= 2) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 3: // Dash - collect power-ups through dashing
-        this.tutorialProgressText.setText(`Power-ups collected: ${this.tutorialProgress.powerUpsCollected || 0}/2`);
-        if ((this.tutorialProgress.powerUpsCollected || 0) >= 2) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 4: // Arc shots - hit enemies behind obstacles
-        this.tutorialProgressText.setText(`Arc shots hit: ${this.tutorialProgress.arcShotsHit || 0}/2`);
-        if ((this.tutorialProgress.arcShotsHit || 0) >= 2) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 5: // Super jump teaching - need to perform 2 super jumps
-        // Update instruction based on charge state
-        if (this.jumpChargeAmount > 0.3) {
-          this.tutorialText.setText('RELEASE TO JUMP!');
-        } else if (this.jumpChargeAmount > 0.1) {
-          this.tutorialText.setText('KEEP HOLDING TO CHARGE MORE!');
-        } else if (this.isChargingJump) {
-          this.tutorialText.setText('CHARGING...');
-        }
-        
-        // Progress is now tracked directly in superJump function
-        this.tutorialProgressText.setText(`Super jumps: ${this.tutorialSuperJumps || 0}/2`);
-        if ((this.tutorialSuperJumps || 0) >= 2) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 6: // Stars - collect 2
-        this.tutorialProgressText.setText(`Stars collected: ${this.tutorialProgress.starsCollected}/2`);
-        if (this.tutorialProgress.starsCollected >= 2) {
-          // Turn off break section mode after completing star tutorial
-          this.isBreakSection = false;
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 7: // Full game - survive timer with adaptive difficulty display
-        if (this.tutorialTimer) {
-          this.tutorialTimer -= 16;
-          const seconds = Math.ceil(this.tutorialTimer / 1000);
-          
-          // Show current difficulty level based on adaptive state
-          const difficultyPercent = Math.round(this.adaptiveState.currentSpawnMultiplier * 100);
-          const speedPercent = Math.round(this.adaptiveState.currentSpeedMultiplier * 100);
-          
-          this.tutorialProgressText.setText(`Practice: ${seconds}s | Difficulty: ${difficultyPercent}% | Speed: ${speedPercent}%`);
-          
-          if (this.tutorialTimer <= 0) {
-            this.completeTutorial();
-          }
-        }
-        break;
-    }
-  }
-  
-  advanceTutorial() {
-    this.tutorialWave++;
-    this.tutorialWaveStarted = false;
-    this.tutorialTimer = null; // Reset any timers
-    
-    // Flash success message
-    const successText = this.add.text(WIDTH/2, HEIGHT/2, 'EXCELLENT!', {
-      font: 'bold 48px monospace',
-      fill: '#00ff00',
-      stroke: '#000000',
-      strokeThickness: 6
-    }).setOrigin(0.5).setDepth(1001);
-    
-    this.tweens.add({
-      targets: successText,
-      scale: 1.5,
-      alpha: 0,
-      duration: 1000,
-      ease: 'Power2',
-      onComplete: () => successText.destroy()
-    });
-    
-    // Check if we've completed all waves (0-6, then 7 completes itself)
-    if (this.tutorialWave >= 7) {
-      // Wave 7 will complete itself via timer
-      // Don't call completeTutorial here
-    }
-  }
-  
-  skipTutorial() {
-    // Mark tutorial as skipped but not completed
-    // Don't save completion so it will be offered again next time
-    
-    // Show skip message briefly
-    this.tutorialText.setText('SKIPPING TUTORIAL...');
-    this.tutorialProgressText.setText('Starting full game...');
-    
-    // Transition to normal game quickly
-    this.time.delayedCall(500, () => {
-      this.isTutorial = false;
-      this.tutorialText.destroy();
-      this.tutorialProgressText.destroy();
-      this.skipTutorialButton.destroy();
-      
-      // Reset adaptive difficulty to normal
-      this.adaptiveState.isAssisting = false;
-      this.adaptiveState.currentSpawnMultiplier = 1.0;
-      this.adaptiveState.currentSpeedMultiplier = 1.0;
-      this.adaptiveState.assistStartTime = null;
-      
-      // Reset tempo to normal
-      Tone.Transport.bpm.value = 120;
-      
-      // Reset beats counter
-      this.beats = 0;
-    });
-  }
-  
-  completeTutorial() {
-    // Save completion
-    localStorage.setItem('beatrider_tutorial_completed', 'true');
-    
-    // Show completion message
-    this.tutorialText.setText('TUTORIAL COMPLETE!');
-    this.tutorialProgressText.setText('Starting full game...');
-    
-    // Transition to normal game after delay
-    this.time.delayedCall(2000, () => {
-      this.isTutorial = false;
-      this.tutorialText.destroy();
-      this.tutorialProgressText.destroy();
-      if (this.skipTutorialButton && !this.skipTutorialButton.destroyed) {
-        this.skipTutorialButton.destroy();
-      }
-      
-      // Reset adaptive difficulty to normal
-      this.adaptiveState.isAssisting = false;
-      this.adaptiveState.currentSpawnMultiplier = 1.0;
-      this.adaptiveState.currentSpeedMultiplier = 1.0;
-      this.adaptiveState.assistStartTime = null;
-      
-      // Reset tempo to normal
-      Tone.Transport.bpm.value = 120;
-      
-      // Reset GameAPI to normal spawning
-      window.GameAPI.onBeat = () => {
-        this.beats++;
-        const speed=(ENEMY_SPEED_BASE + Math.floor(this.beats/16)*30) * currentDifficulty.speedMult;
-        const lane = Phaser.Math.Between(0,LANES-1);
-        this._spawnEnemy(lane, speed, 'enemyTex');
-        
-        for(let enemy of this.enemies) {
-          if(enemy.enemyType === 'enemyTex') {
-            enemy.pulseTime = this.time.now;
-          }
-        }
-      };
-    });
   }
   
   _spawnDrifter(lane){
@@ -6541,33 +5877,6 @@ class Main extends Phaser.Scene {
   }
 
   update(_, dt){
-    // Update tutorial progress if in tutorial mode
-    if (this.isTutorial) {
-      this.updateTutorialProgress();
-    }
-    
-    // Update adaptive difficulty recovery
-    if (this.adaptiveState.isAssisting && !this.isPaused && !this.isShowingGameOver) {
-      const assistDuration = (this.time.now - this.adaptiveState.assistStartTime) / 1000;
-      
-      if (assistDuration > 90) {
-        // After 90 seconds, return to normal
-        this.adaptiveState.isAssisting = false;
-        this.adaptiveState.currentSpawnMultiplier = 1.0;
-        this.adaptiveState.currentSpeedMultiplier = 1.0;
-        console.log('Adaptive difficulty: Returned to normal');
-      } else if (assistDuration > 60) {
-        // 60-90 seconds: 90% spawn, 95% speed
-        this.adaptiveState.currentSpawnMultiplier = 0.9;
-        this.adaptiveState.currentSpeedMultiplier = 0.95;
-      } else if (assistDuration > 30) {
-        // 30-60 seconds: 80% spawn, 90% speed
-        this.adaptiveState.currentSpawnMultiplier = 0.8;
-        this.adaptiveState.currentSpeedMultiplier = 0.9;
-      }
-      // 0-30 seconds: stays at 70% spawn, 85% speed
-    }
-    
     // Handle ESC key for pause (blocked during game over)
     if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
       if (this.isShowingGameOver) return; // Block pause during game over
@@ -6595,6 +5904,40 @@ class Main extends Phaser.Scene {
       updateGridButton();
     }
     
+    // Handle character switching with C key
+    if(Phaser.Input.Keyboard.JustDown(this.keys.C)){
+      // Get current character
+      const currentChar = this.characterManager.currentCharacter;
+      const newChar = currentChar === 'default' ? 'unicorn' : 'default';
+      
+      // Store current position and state
+      const currentX = this.player.x;
+      const currentY = this.player.y;
+      const currentLane = this.playerLane;
+      
+      // Destroy old sprite (handled by character manager)
+      if(this.characterManager.characterSprite.onDestroy) {
+        this.characterManager.characterSprite.onDestroy(this, this.player);
+      }
+      this.player.destroy();
+      
+      // Switch character
+      this.characterManager.switchCharacter(newChar);
+      
+      // Create new sprite
+      const playerSize = Math.floor(HEIGHT * 0.08);
+      this.player = this.characterManager.createPlayer(currentX, currentY, playerSize);
+      
+      // Flash effect for switch
+      this.cameras.main.flash(200, 255, 255, 255);
+      
+      // Update UI indicator
+      this.updateCharacterIndicator();
+      
+      // Save preference
+      localStorage.setItem('selectedCharacter', newChar);
+    }
+    
     // Handle resume from pause with SPACE or touch
     if (this.isPaused) {
       if (this.keys.SPACE.isDown || this.isTouchFiring) {
@@ -6605,20 +5948,17 @@ class Main extends Phaser.Scene {
       return; // Skip all updates when paused
     }
     
+    // Always update character animations (head/tail need to track body position)
+    if(this.player && this.characterManager) {
+      this.characterManager.updateIdle(this.player, this.time.now);
+    }
+    
     // Update idle wobble animation when not moving
     if(!this.isMoving && !this.isJumping && !this.isDashing && this.player) {
       // Breathing/idle animation
       this.idleWobblePhase += dt * 0.003;
       const breathScale = 1 + Math.sin(this.idleWobblePhase) * 0.03;
       const squishScale = 1 - Math.cos(this.idleWobblePhase * 2) * 0.02;
-      
-      // Apply idle animation only if not already being animated
-      if(!this.tweens.isTweening(this.player)) {
-        this.player.setScale(
-          breathScale * (1 + this.wobbleVelocity.x * 0.01),
-          squishScale * (1 + this.wobbleVelocity.y * 0.01)
-        );
-      }
       
       // Update wobble physics
       this.wobbleVelocity.x *= this.wobbleDamping;
@@ -6721,8 +6061,7 @@ class Main extends Phaser.Scene {
     // Handle pulse effect - shift in different directions
     let pulseShift = 0;
     let pulseXShift = 0;
-    // Disable pulse during tutorial to reduce difficulty
-    if(this.pulseActive && !this.isTutorial){
+    if(this.pulseActive){
       this.pulseTimer -= dt;
       if(this.pulseTimer <= 0){
         this.pulseActive = false;
@@ -6927,12 +6266,7 @@ class Main extends Phaser.Scene {
           ease: 'Power2'
         });
         
-        // Restore power-up tint if active
-        if(this.rapidFire) {
-          this.player.setTint(0x00ff00);
-        } else {
-          this.player.clearTint();
-        }
+        // Power-up state is maintained by character manager
         this.player.setAlpha(1); // Restore full opacity
         this.offScreenPulse = false; // Reset audio pulse flag
         // Rubber band snap sound
@@ -6941,8 +6275,7 @@ class Main extends Phaser.Scene {
         } catch(e) {}
       }
     } else {
-      // Clear any warning tint and effects when back in bounds
-      if(!this.rapidFire) this.player.clearTint();
+      // Power-up state is maintained by character manager
       this.offScreenPulse = false; // Reset audio pulse flag
       // Reset camera effects
       this.cameras.main.resetPostPipeline();
@@ -7148,9 +6481,8 @@ class Main extends Phaser.Scene {
       }
       
       // Remove or check collision (can't hit while jumping or stretching)
-      // 3D collision: enemies only collide when near player (0.94-0.97), can step behind them after
       if(e.progress > 1.1){ e.destroy(); this.enemies.splice(i,1); }
-      else if(e.progress > 0.94 && e.progress < 0.97 && !this.isJumping && !this.isStretching && !this.isInvincible && this._aabb(e, this.player)){ 
+      else if(e.progress > 0.9 && !this.isJumping && !this.isStretching && !this.isInvincible && this._aabb(e, this.player)){ 
         // Set invincible immediately to prevent multiple deaths
         this.isInvincible = true;
         
@@ -7172,123 +6504,12 @@ class Main extends Phaser.Scene {
           gameSounds.explosion.triggerAttackRelease("8n", now + 0.02);
         } catch(e) {}
         
-        // Hide player and enemy immediately
-        this.player.setVisible(false);
+        // Trigger death animation instead of just hiding
+        this.characterManager.onDestroy(this.player);
         e.destroy();
         
         // Show game over screen
         this.showGameOverScreen();
-      }
-    }
-    
-    // Update floating stars
-    for(let i=this.floatingStars.length-1; i>=0; i--){
-      const star = this.floatingStars[i];
-      
-      // Check if the attached obstacle still exists and is active
-      const obstacle = star.attachedObstacle;
-      const obstacleExists = obstacle && obstacle.active && this.obstacles.includes(obstacle);
-      
-      if(obstacleExists) {
-        // Follow the obstacle position
-        const scale = 0.1 + obstacle.progress * 1.2;
-        
-        // Floating motion (up and down)
-        star.floatOffset += star.floatSpeed * dt;
-        const floatY = Math.sin(star.floatOffset) * 10;
-        
-        // Position above obstacle with floating offset (scaled with perspective)
-        star.x = obstacle.x;
-        star.y = obstacle.y - (60 * scale) + floatY; // Scale the offset with perspective
-        star.setScale(scale); // Just use obstacle's scale for perspective
-        
-        // Spin the star
-        star.rotation += star.rotationSpeed;
-        
-        // Check collection - player must be jumping and in the same lane
-        // Uses same collision timing as obstacles (0.94-0.97) so you collect the star
-        // at the exact moment you'd hit the obstacle if you weren't jumping
-        if(!star.collected && this.isJumping && obstacle.lane === this.playerLane) {
-          // Same collision window as obstacles
-          if(obstacle.progress > 0.94 && obstacle.progress < 0.97) {
-            // Collect the star!
-            star.collected = true;
-            this.score += 50;
-            this.combo = Math.min(this.combo + 1, 8);
-            this.lastKillTime = this.time.now;
-            this.scoreText.setText(this.score.toString());
-            
-            // Track for tutorial
-            if (this.isTutorial) {
-              this.tutorialProgress.starsCollected++;
-            }
-            
-            // Show combo text
-            if(this.combo > 1) {
-              this.comboText.setText(`${this.combo}x COMBO! +50`);
-              this.comboText.setAlpha(1);
-            }
-            
-            // Instantly hide the star
-            star.visible = false;
-            
-            // Classic coin collection sound - ascending arpeggio
-            try {
-              const coinSound = new Tone.Synth({
-                oscillator: { type: "square" },
-                envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }
-              }).connect(reverb);
-              
-              // Classic coin pickup sound - quick ascending notes
-              const now = Tone.now();
-              coinSound.triggerAttackRelease("B5", "32n", now);
-              coinSound.triggerAttackRelease("E6", "32n", now + 0.03);
-              
-              setTimeout(() => coinSound.dispose(), 300);
-            } catch(e) {
-              console.log('Coin sound failed:', e);
-            }
-            
-            // Create star explosion particles
-            for(let j = 0; j < 8; j++) {
-              const angle = (Math.PI * 2 * j) / 8;
-              const speed = 200 + Math.random() * 100;
-              
-              const particle = this.add.image(star.x, star.y, 'starTex');
-              particle.setScale(0.3);
-              particle.setDepth(999);
-              
-              const destX = star.x + Math.cos(angle) * speed;
-              const destY = star.y + Math.sin(angle) * speed;
-              
-              this.tweens.add({
-                targets: particle,
-                x: destX,
-                y: destY,
-                scale: 0,
-                alpha: 0,
-                rotation: Math.random() * Math.PI * 4,
-                duration: 600,
-                ease: 'Power2',
-                onComplete: () => particle.destroy()
-              });
-            }
-            
-            // Immediately destroy the star and remove from array
-            star.destroy();
-            this.floatingStars.splice(i, 1);
-          }
-        }
-        
-        // Remove star if obstacle is gone off-screen
-        if(obstacle.progress > 1.1) {
-          star.destroy();
-          this.floatingStars.splice(i, 1);
-        }
-      } else {
-        // Obstacle was destroyed or doesn't exist, remove orphaned star
-        star.destroy();
-        this.floatingStars.splice(i, 1);
       }
     }
     
@@ -7337,53 +6558,29 @@ class Main extends Phaser.Scene {
       o.setAlpha(shimmerAlpha);
       
       // Check collision with player (can jump over obstacles!)
-      // 3D collision: obstacles only collide when near player (0.94-0.97), can step behind them after
-      if(o.progress > 0.94 && o.progress < 0.97 && o.lane === this.playerLane) {
-        if (this.isJumping || this.isStretching) {
-          // Successfully jumped over obstacle - track for tutorial
-          if (this.isTutorial && !o.tutorialCounted) {
-            o.tutorialCounted = true; // Only count once per obstacle
-            this.tutorialProgress.jumpsMade++;
-          }
-        } else if (!this.isInvincible) {
-          // Hit obstacle - game over
-          // Set invincible immediately to prevent multiple deaths
-          this.isInvincible = true;
-          
-          // Save highscore before restarting
-          if(this.score > sessionHighScore) {
-            sessionHighScore = this.score;
-          }
-          
-          // Create splat effect for hitting wall
-          this._createSplatEffect(this.player.x, this.player.y);
-          
-          try {
-            // Low impact thud with pitch bend down
-            gameSounds.obstacleHit.triggerAttackRelease("C2", "8n");
-            gameSounds.explosion.triggerAttackRelease("8n");
-          } catch(e) {}
-          
-          // Show game over screen
-          this.showGameOverScreen();
-          
-          // Clean up any stars attached to this obstacle
-          for(let j = this.floatingStars.length - 1; j >= 0; j--) {
-            if(this.floatingStars[j].attachedObstacle === o) {
-              this.floatingStars[j].destroy();
-              this.floatingStars.splice(j, 1);
-            }
-          }
+      // Check when obstacle is near player Y position  
+      if(Math.abs(o.y - this.player.y) < PLAYER_CONFIG.collision.yThreshold && o.lane === this.playerLane && !this.isJumping && !this.isStretching && !this.isInvincible) {
+        // Set invincible immediately to prevent multiple deaths
+        this.isInvincible = true;
+        
+        // Save highscore before restarting
+        if(this.score > sessionHighScore) {
+          sessionHighScore = this.score;
         }
+        
+        // Create splat effect for hitting wall
+        this._createSplatEffect(this.player.x, this.player.y);
+        
+        try {
+          // Low impact thud with pitch bend down
+          gameSounds.obstacleHit.triggerAttackRelease("C2", "8n");
+          gameSounds.explosion.triggerAttackRelease("8n");
+        } catch(e) {}
+        
+        // Show game over screen
+        this.showGameOverScreen();
       }
       else if(o.progress > 1.1){ 
-        // Remove any attached stars before destroying obstacle
-        for(let j = this.floatingStars.length - 1; j >= 0; j--) {
-          if(this.floatingStars[j].attachedObstacle === o) {
-            this.floatingStars[j].destroy();
-            this.floatingStars.splice(j, 1);
-          }
-        }
         o.destroy(); 
         this.obstacles.splice(i,1); 
       }
@@ -7400,21 +6597,17 @@ class Main extends Phaser.Scene {
       p.setScale(scale);
       p.angle += dt * 0.2; // Rotate
       
-      // Check collection - slightly more forgiving than enemy collision
-      if(p.progress > 0.93 && p.progress < 0.98 && p.lane === this.playerLane){
+      // Check collection
+      if(p.progress > 0.9 && p.lane === this.playerLane){
         p.destroy();
         this.powerUps.splice(i,1);
         this.score += 10; // Award 10 points for power-up collection
         this.scoreText.setText(this.score.toString()); // Update score display
-        
-        // Track for tutorial
-        if (this.isTutorial) {
-          this.tutorialProgress.powerUpsCollected = (this.tutorialProgress.powerUpsCollected || 0) + 1;
-        }
-        
         this.rapidFire = true;
         this.rapidFireTimer = 5000; // 5 seconds
-        this.player.setTint(0x00ff00); // Green tint
+        
+        // Use character manager for power-up visualization
+        this.characterManager.onPowerUp(this.player);
         
         // Add jello wobble reaction for power-up
         this.wobbleVelocity.x = (Math.random() - 0.5) * 20;
@@ -7458,7 +6651,8 @@ class Main extends Phaser.Scene {
       this.rapidFireTimer -= dt;
       if(this.rapidFireTimer <= 0){
         this.rapidFire = false;
-        this.player.clearTint();
+        // Use character manager for power-down visualization
+        this.characterManager.onPowerDown(this.player);
       }
     }
 
@@ -7655,16 +6849,6 @@ class Main extends Phaser.Scene {
             
             b.destroy(); this.bullets.splice(i,1);
             e.destroy(); this.enemies.splice(j,1);
-            
-            // Track for tutorial
-            if (this.isTutorial) {
-              this.tutorialProgress.shotsHit++;
-              // Track arc shots specifically
-              if (b.isArcShot) {
-                this.tutorialProgress.arcShotsHit = (this.tutorialProgress.arcShotsHit || 0) + 1;
-              }
-              this.updateTutorialProgress();
-            }
             
             // Differentiated scoring based on enemy type
             let basePoints = 10; // Default for red enemies
