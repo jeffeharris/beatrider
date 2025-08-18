@@ -1721,10 +1721,7 @@ const DIFFICULTY_PRESETS = {
 
 let currentDifficulty = DIFFICULTY_PRESETS.normal;
 
-// Apply saved difficulty if exists
-if (savedData.settings?.difficulty && DIFFICULTY_PRESETS[savedData.settings.difficulty]) {
-  currentDifficulty = DIFFICULTY_PRESETS[savedData.settings.difficulty];
-}
+// Difficulty will be applied after savedData is loaded
 
 // Music preset selector
 document.getElementById('musicPresetSelector')?.addEventListener('change', (e) => {
