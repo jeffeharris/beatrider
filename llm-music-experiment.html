@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Music Generation Experiment</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background: #000;
+      color: #0f0;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    
+    .panel {
+      border: 1px solid #0f0;
+      padding: 15px;
+      background: rgba(0, 255, 0, 0.05);
+    }
+    
+    h1, h2 {
+      text-shadow: 0 0 10px #0f0;
+    }
+    
+    .vibe-input {
+      width: 100%;
+      padding: 10px;
+      background: #111;
+      border: 1px solid #0f0;
+      color: #0f0;
+      font-family: inherit;
+      font-size: 16px;
+      margin: 10px 0;
+    }
+    
+    .preset-btn, .control-btn {
+      background: #111;
+      color: #0f0;
+      border: 1px solid #0f0;
+      padding: 8px 15px;
+      margin: 5px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+    
+    .preset-btn:hover, .control-btn:hover {
+      background: #0f0;
+      color: #000;
+      box-shadow: 0 0 15px #0f0;
+    }
+    
+    .pattern-display {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      background: #111;
+      padding: 10px;
+      border: 1px solid #333;
+      margin: 10px 0;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .pattern-row {
+      display: flex;
+      align-items: center;
+      margin: 2px 0;
+    }
+    
+    .pattern-label {
+      width: 60px;
+      color: #0f0;
+      text-align: right;
+      margin-right: 10px;
+    }
+    
+    .pattern-steps {
+      display: flex;
+      gap: 2px;
+    }
+    
+    .step {
+      width: 20px;
+      height: 20px;
+      background: #222;
+      border: 1px solid #444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    
+    .step.active {
+      background: #0f0;
+      color: #000;
+      box-shadow: 0 0 5px #0f0;
+    }
+    
+    .step.current {
+      border-color: #ff0;
+      border-width: 2px;
+    }
+    
+    .status {
+      padding: 10px;
+      background: #111;
+      border: 1px solid #0f0;
+      margin: 10px 0;
+      min-height: 50px;
+    }
+    
+    .loading {
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .section-indicator {
+      display: inline-block;
+      padding: 5px 10px;
+      margin: 5px;
+      background: #111;
+      border: 1px solid #0f0;
+    }
+    
+    .section-indicator.active {
+      background: #0f0;
+      color: #000;
+    }
+    
+    textarea {
+      width: 100%;
+      height: 200px;
+      background: #111;
+      color: #0f0;
+      border: 1px solid #0f0;
+      font-family: 'Courier New', monospace;
+      padding: 10px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎵 LLM Music Generation Experiment</h1>
+  
+  <div class="container">
+    <div class="panel">
+      <h2>Vibe Description</h2>
+      <input type="text" class="vibe-input" id="vibeInput" 
+             placeholder="Describe your vibe (e.g., 'dark warehouse techno', 'bouncy summer house', 'aggressive dnb')">
+      
+      <div style="margin: 10px 0;">
+        <input type="password" class="vibe-input" id="apiKeyInput" 
+               placeholder="Gemini API Key (get free at makersuite.google.com/app/apikey)" 
+               style="font-size: 14px;">
+        <small style="display: block; margin-top: 5px; color: #666;">
+          Key is stored locally in browser only. Never sent anywhere except Google.
+        </small>
+      </div>
+      
+      <div style="margin: 10px 0;">
+        <label style="color: #0f0;">Model: </label>
+        <select id="modelSelector" class="vibe-input" style="width: auto; display: inline-block;">
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast)</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro (Best)</option>
+        </select>
+        <label style="margin-left: 10px;">
+          <input type="checkbox" id="chunkedGeneration" style="margin-right: 5px;">
+          Chunked (8 bars at a time)
+        </label>
+      </div>
+      
+      <div>
+        <button class="control-btn" id="generateBtn">Generate Patterns</button>
+        <button class="control-btn" id="playBtn">Play/Pause</button>
+        <button class="control-btn" id="stopBtn">Stop</button>
+        <label style="margin-left: 10px;">
+          <input type="checkbox" id="playWhileGenerating" style="margin-right: 5px;">
+          Play while generating
+        </label>
+      </div>
+      
+      <h3>Quick Presets</h3>
+      <button class="preset-btn" data-vibe="minimal detroit techno at 3am">3AM Detroit</button>
+      <button class="preset-btn" data-vibe="aggressive acid techno building to chaos">Acid Storm</button>
+      <button class="preset-btn" data-vibe="bouncy tropical house for a beach party">Beach Party</button>
+      <button class="preset-btn" data-vibe="dark rolling dnb with heavy bass">Dark DnB</button>
+      <button class="preset-btn" data-vibe="euphoric trance with huge breakdowns">Epic Trance</button>
+      <button class="preset-btn" data-vibe="minimal dub techno with space and reverb">Dub Techno</button>
+      
+      <h3>Pattern Modifiers</h3>
+      <button class="control-btn" id="moreEnergyBtn">+20% Energy</button>
+      <button class="control-btn" id="lessEnergyBtn">-20% Energy</button>
+      <button class="control-btn" id="addVariationBtn">Add Variation</button>
+      <button class="control-btn" id="simplifyBtn">Simplify</button>
+      
+      <div class="status" id="status">Ready to generate...</div>
+    </div>
+    
+    <div class="panel">
+      <h2>Pattern Visualization</h2>
+      
+      <div>
+        <span class="section-indicator" id="intro">INTRO</span>
+        <span class="section-indicator" id="build">BUILD</span>
+        <span class="section-indicator" id="main">MAIN</span>
+        <span class="section-indicator" id="break">BREAK</span>
+        <span class="section-indicator" id="drop">DROP</span>
+        <span class="section-indicator" id="outro">OUTRO</span>
+      </div>
+      
+      <div>Bar: <span id="currentBar">0</span> / 64</div>
+      <div>BPM: <span id="currentBpm">130</span></div>
+      
+      <div class="pattern-display" id="patternDisplay">
+        <!-- Patterns will be displayed here -->
+      </div>
+      
+      <h3>Generation Log</h3>
+      <textarea id="generationLog" readonly></textarea>
+    </div>
+  </div>
+
+  <script>
+    // Music engine setup (simplified version of your main engine)
+    const masterLimiter = new Tone.Limiter(-3).toDestination();
+    const sidechain = new Tone.Compressor({
+      threshold: -20,
+      ratio: 8,
+      attack: 0.003,
+      release: 0.1
+    }).connect(masterLimiter);
+    
+    // Basic instruments
+    const kick = new Tone.MembraneSynth({
+      pitchDecay: 0.05,
+      octaves: 10,
+      envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 }
+    }).connect(masterLimiter);
+    
+    const snare = new Tone.NoiseSynth({
+      noise: { type: "white" },
+      envelope: { attack: 0.001, decay: 0.15, sustain: 0 }
+    }).connect(sidechain);
+    
+    const hihat = new Tone.NoiseSynth({
+      noise: { type: "white" },
+      envelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.03 },
+      volume: -10
+    }).connect(sidechain);
+    
+    const acid = new Tone.MonoSynth({
+      oscillator: { type: "sawtooth" },
+      envelope: { attack: 0.003, decay: 0.2, sustain: 0.1, release: 0.1 },
+      filterEnvelope: { attack: 0.003, decay: 0.4, sustain: 0.2, release: 0.2, baseFrequency: 100, octaves: 4 },
+      portamento: 0.05
+    }).connect(sidechain);
+    
+    // State
+    let currentBar = 0;
+    let currentPatterns = null;
+    let sequences = [];
+    let isPlaying = false;
+    
+    // LLM Pattern Generator with Gemini Pro
+    class LLMPatternGenerator {
+      constructor() {
+        // Load API key from localStorage
+        this.apiKey = localStorage.getItem('gemini_api_key') || '';
+        
+        this.vibeKeywords = {
+          // Energy descriptors
+          'aggressive': { energy: 0.9, density: 0.8 },
+          'minimal': { energy: 0.3, density: 0.3 },
+          'bouncy': { energy: 0.7, density: 0.6 },
+          'dark': { energy: 0.5, density: 0.5 },
+          'euphoric': { energy: 0.95, density: 0.85 },
+          'chill': { energy: 0.3, density: 0.4 },
+          'intense': { energy: 0.85, density: 0.75 },
+          
+          // Genre markers
+          'techno': { kick: 'fourOnFloor', bpm: 130 },
+          'house': { kick: 'fourOnFloor', bpm: 125 },
+          'dnb': { kick: 'breakbeat', bpm: 174 },
+          'dubstep': { kick: 'halfTime', bpm: 140 },
+          'trance': { kick: 'fourOnFloor', bpm: 138 },
+          'acid': { acidDensity: 0.8 },
+          'detroit': { swing: 0.1 },
+          'berlin': { minimal: true },
+          'warehouse': { reverb: 0.3 },
+          '3am': { energy: 0.6 },
+          'peak': { energy: 0.95 },
+          'breakdown': { sparse: true }
+        };
+      }
+      
+      async callGeminiPro(prompt, model = 'gemini-2.0-flash') {
+        if (!this.apiKey) {
+          throw new Error('Please enter your Gemini API key');
+        }
+        
+        // Use selected model
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: prompt
+              }]
+            }],
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 8192,
+            }
+          })
+        });
+        
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(`Gemini API error: ${error}`);
+        }
+        
+        const data = await response.json();
+        
+        // Check if we hit token limit
+        if (data.candidates[0].finishReason === 'MAX_TOKENS') {
+          console.warn('Gemini hit token limit - response may be truncated');
+        }
+        
+        return data.candidates[0].content.parts[0].text;
+      }
+      
+      buildPrompt(description) {
+        return `Generate a 64-bar electronic music pattern based on this vibe: "${description}"
+
+You must respond with ONLY valid JSON, no other text or markdown.
+
+Create patterns for a 64-bar track with these sections:
+- Bars 0-7: INTRO (sparse, building anticipation)
+- Bars 8-15: BUILD (increasing energy)
+- Bars 16-31: MAIN (full groove)
+- Bars 32-39: BREAK (stripped back, atmospheric)
+- Bars 40-55: DROP (peak energy)
+- Bars 56-63: OUTRO (winding down)
+
+For each of the 64 bars, generate 16-step binary patterns where 1=hit and 0=rest.
+
+Return JSON in exactly this format:
+{
+  "bpm": 130,
+  "energy": 0.7,
+  "description": "generated description",
+  "patterns": [
+    {
+      "bar": 0,
+      "section": "INTRO",
+      "kick": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+      "snare": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      "hihat": [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+      "acid": [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    }
+  ]
+}
+
+Requirements:
+1. Each pattern array must have exactly 16 elements (only 0 or 1)
+2. Include all 64 bars (0-63)
+3. Kick patterns should match the genre (four-on-floor for house/techno, breakbeats for dnb, half-time for dubstep)
+4. Add drum fills before section changes (bars 7, 15, 31, 39, 55)
+5. Make patterns musically coherent and genre-appropriate
+6. Vary patterns slightly every 2-4 bars to avoid monotony
+7. Ensure the energy builds and releases appropriately
+
+Generate all 64 bars now:`;
+      }
+      
+      parseVibe(description) {
+        const lower = description.toLowerCase();
+        let params = {
+          energy: 0.5,
+          density: 0.5,
+          bpm: 130,
+          kick: 'fourOnFloor',
+          acidDensity: 0.4,
+          variation: 0.3
+        };
+        
+        // Extract parameters from description
+        for (const [keyword, settings] of Object.entries(this.vibeKeywords)) {
+          if (lower.includes(keyword)) {
+            Object.assign(params, settings);
+          }
+        }
+        
+        return params;
+      }
+      
+      generatePattern(type, params, section) {
+        const pattern = new Array(16).fill(0);
+        let density = params.density;
+        
+        // Adjust density by section
+        const sectionMultipliers = {
+          'INTRO': 0.3,
+          'BUILD': 0.6,
+          'MAIN': 1.0,
+          'BREAK': 0.4,
+          'DROP': 1.2,
+          'OUTRO': 0.5
+        };
+        density *= sectionMultipliers[section] || 1.0;
+        
+        if (type === 'kick') {
+          if (params.kick === 'fourOnFloor') {
+            // Four on floor with variations
+            [0, 4, 8, 12].forEach(i => pattern[i] = 1);
+            if (Math.random() < params.variation) {
+              pattern[14] = Math.random() < 0.5 ? 1 : 0; // Extra kick
+            }
+          } else if (params.kick === 'breakbeat') {
+            // D&B pattern
+            pattern[0] = 1;
+            pattern[10] = 1;
+            if (Math.random() < 0.5) pattern[6] = 1;
+          } else if (params.kick === 'halfTime') {
+            // Dubstep pattern
+            pattern[0] = 1;
+            if (Math.random() < 0.3) pattern[11] = 1;
+          }
+        } else if (type === 'snare') {
+          if (params.kick === 'breakbeat') {
+            pattern[4] = 1;
+            pattern[12] = 1;
+            if (Math.random() < params.variation) {
+              pattern[7] = 1;
+              pattern[15] = 1;
+            }
+          } else {
+            // Standard backbeat
+            pattern[4] = 1;
+            pattern[12] = 1;
+            if (Math.random() < params.variation * 0.5) {
+              pattern[15] = 1; // Ghost note
+            }
+          }
+        } else if (type === 'hihat') {
+          // Generate based on density
+          for (let i = 0; i < 16; i++) {
+            if (Math.random() < density) {
+              pattern[i] = 1;
+            }
+          }
+        } else if (type === 'acid') {
+          // Acid pattern with musical sensibility
+          const acidDensity = params.acidDensity || 0.4;
+          for (let i = 0; i < 16; i++) {
+            if (Math.random() < acidDensity * density) {
+              pattern[i] = 1;
+            }
+          }
+          // Ensure at least one note on the downbeat
+          if (!pattern.some(x => x === 1)) {
+            pattern[0] = 1;
+          }
+        }
+        
+        return pattern;
+      }
+      
+      async generateChunked(description, model) {
+        const sections = [
+          { name: 'INTRO', bars: 8, start: 0 },
+          { name: 'BUILD', bars: 8, start: 8 },
+          { name: 'MAIN', bars: 16, start: 16 },
+          { name: 'BREAK', bars: 8, start: 32 },
+          { name: 'DROP', bars: 16, start: 40 },
+          { name: 'OUTRO', bars: 8, start: 56 }
+        ];
+        
+        const allPatterns = [];
+        let bpm = 130;
+        let energy = 0.5;
+        let context = '';
+        
+        for (const section of sections) {
+          // Build context from previous sections
+          if (allPatterns.length > 0) {
+            // Helper to describe pattern musically
+            const describePattern = (pattern) => {
+              const kickHits = pattern.kick.filter(x=>x).length;
+              const snareHits = pattern.snare.filter(x=>x).length;
+              const hihatHits = pattern.hihat.filter(x=>x).length;
+              const acidHits = pattern.acid.filter(x=>x).length;
+              
+              let description = [];
+              
+              // Describe kick pattern
+              if (kickHits === 4 && pattern.kick[0] && pattern.kick[4] && pattern.kick[8] && pattern.kick[12]) {
+                description.push('four-on-floor kick');
+              } else if (kickHits === 1 && pattern.kick[0]) {
+                description.push('minimal kick on downbeat');
+              } else if (kickHits > 8) {
+                description.push('rapid kick fills');
+              } else if (kickHits > 0) {
+                description.push(`syncopated kick (${kickHits} hits)`);
+              }
+              
+              // Describe snare
+              if (snareHits === 2 && pattern.snare[4] && pattern.snare[12]) {
+                description.push('backbeat snare');
+              } else if (snareHits > 8) {
+                description.push('snare roll');
+              } else if (snareHits > 0) {
+                description.push(`sparse snare (${snareHits} hits)`);
+              }
+              
+              // Describe hi-hats
+              if (hihatHits === 16) {
+                description.push('constant 16th hi-hats');
+              } else if (hihatHits > 12) {
+                description.push('dense hi-hats');
+              } else if (hihatHits > 0) {
+                description.push('sparse hi-hats');
+              }
+              
+              // Describe acid
+              if (acidHits > 12) {
+                description.push('busy acid line');
+              } else if (acidHits > 0) {
+                description.push(`acid accents (${acidHits} notes)`);
+              }
+              
+              return description.join(', ') || 'silence';
+            };
+            
+            // Musical descriptions for older bars, full patterns for recent 2
+            const olderBars = allPatterns.slice(-8, -2).map(p => 
+              `Bar ${p.bar} (${p.section}): ${describePattern(p)}`
+            ).join('\n');
+            
+            // Include actual patterns for last 2 bars for precise continuity
+            const recentPatterns = allPatterns.slice(-2);
+            const recentBarsJson = JSON.stringify(recentPatterns, null, 2);
+            
+            context = `\nPrevious sections generated:
+${olderBars}
+
+Last 2 bars (for precise continuity):
+${recentBarsJson}
+
+Continue with ${section.name} section, maintaining musical flow and energy progression.`;
+          }
+          
+          const prompt = `Generate ${section.bars} bars of ${section.name} section for: "${description}"
+${context}
+          
+Return ONLY valid JSON with exactly ${section.bars} bar patterns.
+Each bar needs: kick, snare, hihat, acid as arrays of 16 binary values (0 or 1).
+
+Important: ${
+  section.name === 'BUILD' ? 'Gradually increase energy and tension' :
+  section.name === 'DROP' ? 'Peak energy, all elements active' :
+  section.name === 'BREAK' ? 'Strip back drums, focus on atmosphere' :
+  section.name === 'OUTRO' ? 'Gradually reduce elements' :
+  'Establish the groove'
+}
+
+Format:
+{
+  "bpm": ${bpm},
+  "patterns": [
+    {"bar": ${section.start}, "section": "${section.name}", "kick": [1,0,0,0...], "snare": [0,0,1,0...], "hihat": [...], "acid": [...]}
+  ]
+}`;
+          
+          const response = await this.callGeminiPro(prompt, model);
+          const cleanJson = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const sectionData = JSON.parse(cleanJson);
+          
+          if (sectionData.bpm) bpm = sectionData.bpm;
+          if (sectionData.energy) energy = sectionData.energy;
+          
+          allPatterns.push(...sectionData.patterns);
+          updateLog(`Generated ${section.name} section (${allPatterns.length}/64 bars)`);
+          
+          // If "play while generating" is enabled and we have the first section, start playing
+          if (document.getElementById('playWhileGenerating').checked) {
+            if (section.name === 'INTRO' && !Tone.Transport.state.includes('started')) {
+              // Ensure Tone.js is started (needs to be in user gesture context)
+              await Tone.start();
+              
+              // Start playing with what we have so far
+              const partialSong = {
+                bpm: bpm,
+                energy: energy,
+                description: description,
+                patterns: [...allPatterns]  // Copy current patterns
+              };
+              loadPatterns(partialSong);
+              Tone.Transport.start();
+              updateStatus('Playing INTRO while generating...');
+            } else if (Tone.Transport.state === 'started') {
+              // Update patterns on the fly (will take effect on next bar)
+              currentPatterns = {
+                bpm: bpm,
+                energy: energy,
+                description: description,
+                patterns: [...allPatterns]
+              };
+            }
+          }
+        }
+        
+        return {
+          bpm: bpm,
+          energy: energy,
+          description: description,
+          patterns: allPatterns
+        };
+      }
+      
+      async generate(description) {
+        const log = [`Generating patterns for: "${description}"`];
+        
+        try {
+          // Try to use Gemini Pro first
+          if (this.apiKey) {
+            const model = document.getElementById('modelSelector').value;
+            const useChunked = document.getElementById('chunkedGeneration').checked;
+            
+            log.push(`Using ${model} ${useChunked ? '(chunked)' : '(full)'} for generation...`);
+            updateLog(log.join('\n'));
+            
+            if (useChunked) {
+              return await this.generateChunked(description, model);
+            }
+            
+            const prompt = this.buildPrompt(description);
+            const response = await this.callGeminiPro(prompt, model);
+            
+            // Log raw response for debugging
+            console.log('Raw Gemini response:', response);
+            log.push(`Response length: ${response.length} characters`);
+            
+            // Parse the JSON response
+            let songData;
+            try {
+              // Clean the response - sometimes LLMs add markdown formatting
+              let cleanJson = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+              
+              // If JSON is truncated, try to fix it
+              if (!cleanJson.endsWith('}')) {
+                console.warn('JSON appears truncated, attempting to repair...');
+                
+                // Find the last complete pattern object
+                const lastCompletePattern = cleanJson.lastIndexOf('},');
+                if (lastCompletePattern > 0) {
+                  // Truncate to last complete pattern and close the JSON
+                  cleanJson = cleanJson.substring(0, lastCompletePattern + 1) + ']}';
+                  log.push('JSON was truncated - using partial data');
+                }
+              }
+              
+              // Log cleaned response
+              console.log('Cleaned JSON:', cleanJson.substring(0, 500) + '...');
+              
+              songData = JSON.parse(cleanJson);
+              log.push(`Gemini generated ${songData.patterns.length} bars at ${songData.bpm} BPM`);
+              
+              // If we have fewer than 64 bars, pad with repeated patterns
+              if (songData.patterns.length < 64) {
+                log.push(`Padding from ${songData.patterns.length} to 64 bars`);
+                while (songData.patterns.length < 64) {
+                  // Repeat the last section's patterns
+                  const sourceBar = songData.patterns[songData.patterns.length % 16];
+                  songData.patterns.push({
+                    ...sourceBar,
+                    bar: songData.patterns.length
+                  });
+                }
+              }
+            } catch (parseError) {
+              console.error('Parse error:', parseError);
+              console.error('Failed to parse:', response.substring(0, 1000));
+              log.push('Failed to parse Gemini response, falling back to local generation');
+              throw parseError;
+            }
+            
+            updateLog(log.join('\n'));
+            return songData;
+          }
+        } catch (error) {
+          log.push(`LLM Error: ${error.message}`);
+          log.push('Falling back to local pattern generation...');
+        }
+        
+        // Fallback to local generation
+        const params = this.parseVibe(description);
+        log.push(`Local generation - BPM=${params.bpm}, Energy=${params.energy.toFixed(2)}`);
+        
+        // Generate 64 bars of patterns
+        const patterns = [];
+        const sections = [
+          { name: 'INTRO', bars: 8 },
+          { name: 'BUILD', bars: 8 },
+          { name: 'MAIN', bars: 16 },
+          { name: 'BREAK', bars: 8 },
+          { name: 'DROP', bars: 16 },
+          { name: 'OUTRO', bars: 8 }
+        ];
+        
+        let barCount = 0;
+        for (const section of sections) {
+          for (let i = 0; i < section.bars; i++) {
+            // Add variations every few bars
+            const needsVariation = i % 4 === 3;
+            const localParams = { ...params };
+            if (needsVariation) {
+              localParams.variation = Math.min(1, localParams.variation * 1.5);
+            }
+            
+            // Generate fill before section change
+            const isFill = i === section.bars - 1;
+            
+            patterns.push({
+              bar: barCount++,
+              section: section.name,
+              kick: this.generatePattern('kick', localParams, section.name),
+              snare: isFill ? 
+                [0,0,0,0,1,0,1,0,1,0,1,1,1,1,1,1] : // Fill
+                this.generatePattern('snare', localParams, section.name),
+              hihat: this.generatePattern('hihat', localParams, section.name),
+              acid: this.generatePattern('acid', localParams, section.name)
+            });
+          }
+        }
+        
+        updateLog(log.join('\n'));
+        
+        return {
+          bpm: params.bpm,
+          description: description,
+          params: params,
+          patterns: patterns
+        };
+      }
+      
+      modifyEnergy(patterns, factor) {
+        // Modify pattern density based on energy factor
+        return patterns.map(bar => {
+          const modified = { ...bar };
+          
+          ['kick', 'snare', 'hihat', 'acid'].forEach(track => {
+            modified[track] = bar[track].map(step => {
+              if (step === 0 && Math.random() < factor * 0.1) {
+                return 1; // Add hit
+              } else if (step === 1 && Math.random() < (1 - factor) * 0.1) {
+                return 0; // Remove hit
+              }
+              return step;
+            });
+          });
+          
+          return modified;
+        });
+      }
+      
+      addVariation(patterns) {
+        // Add ghost notes and variations
+        return patterns.map((bar, index) => {
+          if (index % 2 === 1) { // Every other bar
+            const modified = { ...bar };
+            
+            // Randomly flip some steps
+            ['kick', 'snare', 'hihat'].forEach(track => {
+              modified[track] = bar[track].map((step, i) => {
+                if (Math.random() < 0.05) { // 5% chance
+                  return step === 1 ? 0 : 1;
+                }
+                return step;
+              });
+            });
+            
+            return modified;
+          }
+          return bar;
+        });
+      }
+    }
+    
+    const generator = new LLMPatternGenerator();
+    
+    // UI Functions
+    function updateStatus(message, isLoading = false) {
+      const status = document.getElementById('status');
+      status.textContent = message;
+      status.classList.toggle('loading', isLoading);
+    }
+    
+    function updateLog(message) {
+      document.getElementById('generationLog').value = message;
+    }
+    
+    function visualizePattern(patterns) {
+      if (!patterns || patterns.length === 0) return;
+      
+      const display = document.getElementById('patternDisplay');
+      // Ensure we don't go past available patterns
+      const safeBar = currentBar % patterns.length;
+      const currentPattern = patterns[safeBar];
+      
+      if (!currentPattern) return; // Safety check
+      
+      let html = `<div>Bar ${currentBar}: ${currentPattern.section}</div>`;
+      
+      ['kick', 'snare', 'hihat', 'acid'].forEach(track => {
+        html += '<div class="pattern-row">';
+        html += `<div class="pattern-label">${track}:</div>`;
+        html += '<div class="pattern-steps">';
+        
+        currentPattern[track].forEach((step, i) => {
+          // Parse transport position: "bar:quarter:sixteenth"
+          const parts = Tone.Transport.position.split(':');
+          const quarter = parseInt(parts[1]) || 0;
+          const sixteenth = parseInt(parts[2]) || 0;
+          // Calculate absolute position within the 16-step pattern
+          const currentStepIndex = (quarter * 4 + sixteenth) % 16;
+          const isCurrentStep = currentStepIndex === i;
+          html += `<div class="step ${step ? 'active' : ''} ${isCurrentStep ? 'current' : ''}">${step ? '■' : ''}</div>`;
+        });
+        
+        html += '</div></div>';
+      });
+      
+      display.innerHTML = html;
+      
+      // Update section indicators
+      document.querySelectorAll('.section-indicator').forEach(el => {
+        el.classList.toggle('active', el.id.toUpperCase() === currentPattern.section);
+      });
+      
+      document.getElementById('currentBar').textContent = currentBar;
+    }
+    
+    function stopAllSequences() {
+      sequences.forEach(seq => seq.dispose());
+      sequences = [];
+      Tone.Transport.stop();
+      Tone.Transport.position = 0;
+      currentBar = 0;
+    }
+    
+    function loadPatterns(songData) {
+      stopAllSequences();
+      
+      currentPatterns = songData.patterns;
+      Tone.Transport.bpm.value = songData.bpm;
+      document.getElementById('currentBpm').textContent = songData.bpm;
+      
+      // Create sequences for current bar
+      updateSequences();
+      
+      // Schedule bar changes
+      Tone.Transport.scheduleRepeat(() => {
+        currentBar = (currentBar + 1) % 64;
+        updateSequences();
+        visualizePattern(currentPatterns);
+      }, "1m");
+      
+      // Update visualization more frequently for step animation
+      Tone.Transport.scheduleRepeat(() => {
+        visualizePattern(currentPatterns);
+      }, "16n");
+    }
+    
+    function updateSequences() {
+      // Dispose old sequences
+      sequences.forEach(seq => seq.dispose());
+      sequences = [];
+      
+      if (!currentPatterns || !currentPatterns.patterns || currentPatterns.patterns.length === 0) return;
+      
+      // Ensure we loop within available patterns
+      const availableBars = currentPatterns.patterns.length;
+      const safeBar = currentBar % availableBars;
+      const pattern = currentPatterns.patterns[safeBar];
+      
+      if (!pattern || !pattern.kick) return; // Safety check
+      
+      // Create new sequences for current bar
+      const kickSeq = new Tone.Sequence((time, note) => {
+        if (note) kick.triggerAttackRelease("C1", "8n", time);
+      }, pattern.kick, "16n").start(0);
+      
+      const snareSeq = new Tone.Sequence((time, note) => {
+        if (note) snare.triggerAttackRelease("8n", time);
+      }, pattern.snare, "16n").start(0);
+      
+      const hihatSeq = new Tone.Sequence((time, note) => {
+        if (note) hihat.triggerAttackRelease("32n", time);
+      }, pattern.hihat, "16n").start(0);
+      
+      const acidNotes = pattern.acid.map((step, i) => {
+        if (step) {
+          const notes = ["C2", "Eb2", "F2", "G2", "Bb2"];
+          return notes[Math.floor(Math.random() * notes.length)];
+        }
+        return null;
+      });
+      
+      const acidSeq = new Tone.Sequence((time, note) => {
+        if (note) acid.triggerAttackRelease(note, "16n", time);
+      }, acidNotes, "16n").start(0);
+      
+      sequences = [kickSeq, snareSeq, hihatSeq, acidSeq];
+    }
+    
+    // Event Handlers
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+      const vibe = document.getElementById('vibeInput').value || 'techno';
+      
+      // Save API key if provided
+      const apiKeyInput = document.getElementById('apiKeyInput');
+      if (apiKeyInput.value) {
+        localStorage.setItem('gemini_api_key', apiKeyInput.value);
+        generator.apiKey = apiKeyInput.value;
+      }
+      
+      updateStatus(`Generating patterns for: "${vibe}"...`, true);
+      
+      try {
+        const songData = await generator.generate(vibe);
+        loadPatterns(songData);
+        
+        updateStatus(`Generated ${songData.patterns.length} bars at ${songData.bpm} BPM`);
+        visualizePattern(songData.patterns);
+      } catch (error) {
+        updateStatus(`Error: ${error.message}`);
+        console.error('Generation error:', error);
+      }
+    });
+    
+    document.getElementById('playBtn').addEventListener('click', async () => {
+      await Tone.start();
+      
+      if (Tone.Transport.state === 'started') {
+        Tone.Transport.pause();
+        updateStatus('Paused');
+      } else {
+        if (!currentPatterns) {
+          updateStatus('Generate patterns first!');
+          return;
+        }
+        Tone.Transport.start();
+        updateStatus('Playing...');
+      }
+    });
+    
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      stopAllSequences();
+      currentBar = 0;
+      updateStatus('Stopped');
+      visualizePattern(currentPatterns);
+    });
+    
+    // Preset buttons
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('vibeInput').value = btn.dataset.vibe;
+      });
+    });
+    
+    // Pattern modifiers
+    document.getElementById('moreEnergyBtn').addEventListener('click', () => {
+      if (!currentPatterns) return;
+      currentPatterns.patterns = generator.modifyEnergy(currentPatterns.patterns, 1.2);
+      updateSequences();
+      updateStatus('Increased energy by 20%');
+    });
+    
+    document.getElementById('lessEnergyBtn').addEventListener('click', () => {
+      if (!currentPatterns) return;
+      currentPatterns.patterns = generator.modifyEnergy(currentPatterns.patterns, 0.8);
+      updateSequences();
+      updateStatus('Decreased energy by 20%');
+    });
+    
+    document.getElementById('addVariationBtn').addEventListener('click', () => {
+      if (!currentPatterns) return;
+      currentPatterns.patterns = generator.addVariation(currentPatterns.patterns);
+      updateSequences();
+      updateStatus('Added variations to patterns');
+    });
+    
+    document.getElementById('simplifyBtn').addEventListener('click', () => {
+      if (!currentPatterns) return;
+      // Remove every other hit for simplification
+      currentPatterns.patterns = currentPatterns.patterns.map(bar => ({
+        ...bar,
+        hihat: bar.hihat.map((s, i) => i % 2 === 0 ? s : 0),
+        acid: bar.acid.map((s, i) => i % 4 === 0 ? s : 0)
+      }));
+      updateSequences();
+      updateStatus('Simplified patterns');
+    });
+    
+    // Initialize
+    updateStatus('Ready to generate patterns from your vibe description!');
+    
+    // Load saved API key if exists
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) {
+      document.getElementById('apiKeyInput').value = savedKey;
+      generator.apiKey = savedKey;
+      updateStatus('API key loaded. Ready to generate with Gemini Pro!');
+    }
+  </script>
+</body>
+</html>

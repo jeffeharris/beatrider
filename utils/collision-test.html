@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Collision Range Visualizer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: monospace;
+            background: #000;
+            color: #0f0;
+        }
+        canvas {
+            border: 1px solid #0f0;
+            display: block;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        input[type="range"] {
+            width: 300px;
+        }
+        .info {
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <h1>Beatrider Collision Range Test</h1>
+    <canvas id="canvas"></canvas>
+    
+    <div class="controls">
+        <div>
+            <label>Collision Start (progress): <span id="startVal">0.95</span></label><br>
+            <input type="range" id="collisionStart" min="0.5" max="1.0" step="0.005" value="0.95">
+        </div>
+        <div>
+            <label>Collision End (progress): <span id="endVal">0.97</span></label><br>
+            <input type="range" id="collisionEnd" min="0.9" max="1.5" step="0.005" value="0.97">
+        </div>
+        <div>
+            <label>Test Enemy Progress: <span id="enemyVal">0.95</span></label><br>
+            <input type="range" id="enemyProgress" min="0" max="1.5" step="0.01" value="0.95">
+        </div>
+    </div>
+    
+    <div class="info" id="info"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Match game dimensions
+        const WIDTH = 800;
+        const HEIGHT = 600;
+        const LANES = 5;
+        const LANE_W = WIDTH / LANES;
+        
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+        
+        // Game constants
+        const PLAYER_Y = HEIGHT - 60;
+        const vanishY = HEIGHT * 0.15;
+        const vanishX = WIDTH / 2;
+        
+        // Controls
+        const startSlider = document.getElementById('collisionStart');
+        const endSlider = document.getElementById('collisionEnd');
+        const enemySlider = document.getElementById('enemyProgress');
+        
+        startSlider.oninput = () => {
+            document.getElementById('startVal').textContent = startSlider.value;
+            draw();
+        };
+        
+        endSlider.oninput = () => {
+            document.getElementById('endVal').textContent = endSlider.value;
+            draw();
+        };
+        
+        enemySlider.oninput = () => {
+            document.getElementById('enemyVal').textContent = enemySlider.value;
+            draw();
+        };
+        
+        function progressToY(progress) {
+            return vanishY + (HEIGHT - vanishY) * Math.pow(progress, 2.5);
+        }
+        
+        function laneX(lane, progress = 1) {
+            // Map progress to actual Y position for perspective calculation
+            const y = progressToY(progress);
+            // Calculate perspective based on position between vanish point and player
+            const perspectiveFactor = (y - vanishY) / (PLAYER_Y - vanishY);
+            const bottomLaneX = lane * LANE_W + LANE_W / 2;
+            return vanishX + (bottomLaneX - vanishX) * perspectiveFactor;
+        }
+        
+        function draw() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            
+            const collisionStart = parseFloat(startSlider.value);
+            const collisionEnd = parseFloat(endSlider.value);
+            const enemyProgress = parseFloat(enemySlider.value);
+            
+            // Draw perspective grid
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            
+            // Draw lane lines - converging at player Y, not bottom
+            for(let lane = 0; lane <= LANES; lane++) {
+                ctx.beginPath();
+                ctx.moveTo(vanishX, vanishY); // All lanes converge at vanish point
+                // Lane position at player Y
+                const playerLaneX = (lane - 0.5) * LANE_W + LANE_W / 2;
+                ctx.lineTo(playerLaneX, PLAYER_Y);
+                ctx.stroke();
+            }
+            
+            // Draw horizontal lines at different progress values
+            for(let p = 0; p <= 1.2; p += 0.1) {
+                const y = progressToY(p);
+                ctx.strokeStyle = p === 1.0 ? '#0ff' : '#333';
+                ctx.lineWidth = p === 1.0 ? 2 : 1;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(WIDTH, y);
+                ctx.stroke();
+                
+                // Label
+                ctx.fillStyle = p === 1.0 ? '#0ff' : '#666';
+                ctx.font = '10px monospace';
+                ctx.fillText(`p=${p.toFixed(1)}`, 5, y - 2);
+            }
+            
+            // Highlight actual player Y position
+            ctx.strokeStyle = '#0f0';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, PLAYER_Y);
+            ctx.lineTo(WIDTH, PLAYER_Y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#0f0';
+            ctx.font = '10px monospace';
+            ctx.fillText('PLAYER Y', 5, PLAYER_Y - 2);
+            
+            // Draw collision zone
+            const startY = progressToY(collisionStart);
+            const endY = progressToY(collisionEnd);
+            
+            // Fill collision zone
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+            ctx.fillRect(0, startY, WIDTH, endY - startY);
+            
+            // Draw collision zone boundaries
+            ctx.strokeStyle = '#f00';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            
+            ctx.beginPath();
+            ctx.moveTo(0, startY);
+            ctx.lineTo(WIDTH, startY);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(0, endY);
+            ctx.lineTo(WIDTH, endY);
+            ctx.stroke();
+            
+            ctx.setLineDash([]);
+            
+            // Draw player at actual position
+            const playerLaneX = 2 * LANE_W + LANE_W / 2; // Center of lane 2
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(playerLaneX - 15, PLAYER_Y - 15, 30, 30);
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px monospace';
+            ctx.fillText('PLAYER', playerLaneX - 20, PLAYER_Y + 30);
+            
+            // Draw test enemy
+            const enemyY = progressToY(enemyProgress);
+            const enemyX = laneX(2, enemyProgress);
+            const enemyScale = 0.1 + enemyProgress * 1.2; // Match game scaling
+            const enemySize = 20 * enemyScale;
+            
+            const inCollisionRange = enemyProgress >= collisionStart && enemyProgress <= collisionEnd;
+            ctx.fillStyle = inCollisionRange ? '#f00' : '#ff0';
+            ctx.fillRect(enemyX - enemySize/2, enemyY - enemySize/2, enemySize, enemySize);
+            
+            // Draw enemy label
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px monospace';
+            ctx.fillText(`Enemy p=${enemyProgress.toFixed(2)}`, enemyX + enemySize/2 + 5, enemyY);
+            
+            // Update info
+            const info = document.getElementById('info');
+            
+            // Calculate what progress value the player is actually at
+            // Reverse the formula: y = vanishY + (HEIGHT - vanishY) * Math.pow(progress, 2.5)
+            // Solving for progress when y = PLAYER_Y
+            const playerProgressCalc = Math.pow((PLAYER_Y - vanishY) / (HEIGHT - vanishY), 1/2.5);
+            
+            info.innerHTML = `
+                <strong>Current Settings:</strong><br>
+                Collision Range: ${collisionStart.toFixed(3)} to ${collisionEnd.toFixed(3)}<br>
+                Enemy at progress ${enemyProgress.toFixed(2)}: Y=${enemyY.toFixed(0)}px<br>
+                <span style="color: ${inCollisionRange ? '#f00' : '#0f0'}">
+                    ${inCollisionRange ? '⚠️ COLLISION!' : '✓ Safe'}
+                </span><br>
+                <br>
+                <strong>Reference Points:</strong><br>
+                Horizon (p=0.0): Y=${vanishY.toFixed(0)}px<br>
+                Progress=0.9: Y=${progressToY(0.9).toFixed(0)}px<br>
+                <strong style="color: #0f0">Player Progress=${playerProgressCalc.toFixed(3)}: Y=${PLAYER_Y}px</strong><br>
+                Progress=1.0: Y=${progressToY(1.0).toFixed(0)}px (bottom of screen)<br>
+                Progress=1.1: Y=${progressToY(1.1).toFixed(0)}px<br>
+                <br>
+                <strong>Collision Zone Analysis:</strong><br>
+                - Zone starts at Y=${startY.toFixed(0)}px (${Math.abs(startY - PLAYER_Y).toFixed(0)}px ${startY < PLAYER_Y ? 'above' : 'below'} player)<br>
+                - Zone ends at Y=${endY.toFixed(0)}px (${Math.abs(endY - PLAYER_Y).toFixed(0)}px ${endY < PLAYER_Y ? 'above' : 'below'} player)<br>
+                - Zone height: ${Math.abs(endY - startY).toFixed(0)}px<br>
+                - Current game uses: 0.9 to 1.1 (way too early/late!)
+            `;
+        }
+        
+        // Initial draw
+        draw();
+    </script>
+</body>
+</html>

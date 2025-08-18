@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Power-Up Tail Fix Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script src="character-sprites.js"></script>
+  <style>
+    body { margin: 0; padding: 20px; background: #222; color: white; font-family: monospace; }
+    #info { margin: 10px; }
+    button { margin: 5px; padding: 10px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h2>Testing Unicorn Tail Power-Up Fix</h2>
+    <button onclick="testPowerUp()">Activate Power-Up (5 seconds)</button>
+    <button onclick="testShoot()">Test Shoot</button>
+    <div id="status">Status: Ready</div>
+  </div>
+  
+  <script>
+    let scene, player, characterManager;
+    
+    class TestScene extends Phaser.Scene {
+      constructor() {
+        super({ key: 'TestScene' });
+      }
+      
+      create() {
+        scene = this;
+        
+        // Create character manager and unicorn
+        characterManager = new CharacterManager(this);
+        characterManager.initialize('unicorn');
+        characterManager.createTextures(40);
+        
+        // Create player sprite
+        player = characterManager.createPlayer(400, 300, 40);
+        
+        // Set up update loop
+        this.updateEvent = this.time.addEvent({
+          delay: 16,
+          loop: true,
+          callback: () => {
+            characterManager.updateIdle(player, this.time.now);
+          }
+        });
+      }
+    }
+    
+    const config = {
+      type: Phaser.AUTO,
+      width: 800,
+      height: 600,
+      backgroundColor: '#333',
+      scene: TestScene
+    };
+    
+    const game = new Phaser.Game(config);
+    
+    function updateStatus(msg) {
+      document.getElementById('status').innerHTML = `Status: ${msg}`;
+    }
+    
+    function testPowerUp() {
+      if(!player) {
+        updateStatus('Game not ready');
+        return;
+      }
+      
+      updateStatus('Power-up ACTIVATED - tail should be rainbow');
+      characterManager.onPowerUp(player);
+      
+      // Auto power-down after 5 seconds
+      setTimeout(() => {
+        updateStatus('Power-up EXPIRED - tail should return to WHITE');
+        characterManager.onPowerDown(player);
+        
+        // Check tail color after a moment
+        setTimeout(() => {
+          if(player.unicornTail && player.unicornTail.tintTopLeft === 0xffffff) {
+            updateStatus('✓ SUCCESS - Tail is white!');
+          } else if(player.unicornTail) {
+            updateStatus(`✗ FAIL - Tail tint is: 0x${player.unicornTail.tintTopLeft.toString(16)}`);
+          }
+        }, 100);
+      }, 5000);
+    }
+    
+    function testShoot() {
+      if(!player) {
+        updateStatus('Game not ready');
+        return;
+      }
+      characterManager.onShoot(player);
+      updateStatus('Shot fired - horn should flash');
+    }
+  </script>
+</body>
+</html>

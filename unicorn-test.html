@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beatrider - Unicorn Character Test</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #111;
+      color: #0ff;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    #game-container {
+      border: 2px solid #0ff;
+      margin: 20px 0;
+    }
+    
+    .controls {
+      background: rgba(0, 255, 255, 0.1);
+      border: 1px solid #0ff;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 10px;
+      text-align: center;
+    }
+    
+    .character-selector {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    .character-btn {
+      background: #222;
+      border: 2px solid #0ff;
+      color: #0ff;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: monospace;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    
+    .character-btn:hover {
+      background: #0ff;
+      color: #000;
+      box-shadow: 0 0 10px #0ff;
+    }
+    
+    .character-btn.active {
+      background: #0ff;
+      color: #000;
+    }
+    
+    h1 {
+      text-align: center;
+      text-shadow: 0 0 10px #0ff;
+    }
+    
+    .info {
+      max-width: 600px;
+      text-align: center;
+      line-height: 1.5;
+      margin: 20px;
+    }
+    
+    .feature-flag {
+      background: rgba(255, 0, 255, 0.1);
+      border: 1px solid #f0f;
+      padding: 10px;
+      margin: 10px;
+      border-radius: 5px;
+    }
+    
+    .key-hint {
+      opacity: 0.7;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🦄 Beatrider Character Test 🦄</h1>
+  
+  <div class="controls">
+    <h3>Select Character:</h3>
+    <div class="character-selector" id="characterSelector">
+      <!-- Buttons will be added by JavaScript -->
+    </div>
+  </div>
+  
+  <div class="feature-flag">
+    <label>
+      <input type="checkbox" id="featureFlag" checked>
+      Enable Experimental Characters
+    </label>
+  </div>
+  
+  <div id="game-container"></div>
+  
+  <div class="info">
+    <h3>Test Controls:</h3>
+    <p>
+      <strong>Arrow Keys:</strong> Move left/right<br>
+      <strong>Up/W:</strong> Jump<br>
+      <strong>Down/S:</strong> Charge super jump<br>
+      <strong>Space:</strong> Fire<br>
+      <strong>Double tap left/right:</strong> Dash move
+    </p>
+    <p class="key-hint">
+      The unicorn character features a floating head, rainbow trails, and sparkle effects!
+    </p>
+  </div>
+
+  <!-- Load dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script src="character-sprites.js"></script>
+  
+  <script>
+    // Simple test scene to demonstrate character switching
+    class CharacterTestScene extends Phaser.Scene {
+      constructor() {
+        super({ key: 'CharacterTest' });
+        this.characterManager = null;
+      }
+      
+      create() {
+        // Initialize character manager
+        this.characterManager = new CharacterManager(this);
+        
+        // Get selected character from UI
+        const selected = document.querySelector('.character-btn.active')?.dataset.character || 'unicorn';
+        this.characterManager.initialize(selected);
+        
+        // Create textures
+        const playerSize = 30;
+        this.characterManager.createTextures(playerSize);
+        
+        // Create starfield background
+        for(let i = 0; i < 100; i++) {
+          const star = this.add.circle(
+            Math.random() * 800,
+            Math.random() * 400,
+            Math.random() * 2,
+            0xffffff,
+            Math.random()
+          );
+        }
+        
+        // Create ground line
+        this.add.rectangle(400, 350, 800, 2, 0x00ffff);
+        
+        // Create player
+        this.player = this.characterManager.createPlayer(400, 320, playerSize);
+        this.playerX = 400;
+        this.isJumping = false;
+        this.wobbleVelocity = { x: 0, y: 0 };
+        
+        // Simple movement
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.wasd = this.input.keyboard.addKeys('W,A,S,D');
+        this.space = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        
+        // Lane positions
+        this.lanes = [200, 300, 400, 500, 600];
+        this.currentLane = 2;
+        
+        // Bullets array
+        this.bullets = [];
+        
+        // Jump charge
+        this.jumpCharge = 0;
+        this.isCharging = false;
+        
+        // Double tap detection
+        this.lastLeftPress = 0;
+        this.lastRightPress = 0;
+      }
+      
+      update(time, delta) {
+        // Update character idle animation
+        this.characterManager.updateIdle(this.player, time);
+        
+        // Handle movement
+        const left = this.cursors.left.isDown || this.wasd.A.isDown;
+        const right = this.cursors.right.isDown || this.wasd.D.isDown;
+        const up = this.cursors.up.isDown || this.wasd.W.isDown;
+        const down = this.cursors.down.isDown || this.wasd.S.isDown;
+        
+        // Double tap detection for dash
+        if(Phaser.Input.Keyboard.JustDown(this.cursors.left)) {
+          const now = time;
+          if(now - this.lastLeftPress < 250) {
+            this.dash(-2);
+            this.lastLeftPress = 0;
+          } else {
+            this.lastLeftPress = now;
+            this.move(-1);
+          }
+        }
+        
+        if(Phaser.Input.Keyboard.JustDown(this.cursors.right)) {
+          const now = time;
+          if(now - this.lastRightPress < 250) {
+            this.dash(2);
+            this.lastRightPress = 0;
+          } else {
+            this.lastRightPress = now;
+            this.move(1);
+          }
+        }
+        
+        // Jump charge with character animation
+        if(down && !this.isJumping) {
+          this.isCharging = true;
+          this.jumpCharge = Math.min(this.jumpCharge + delta * 0.002, 1);
+          this.characterManager.onCharge(this.player, this.jumpCharge);
+        } else if(this.isCharging && !down) {
+          this.superJump();
+          this.isCharging = false;
+        }
+        
+        // Regular jump
+        if(Phaser.Input.Keyboard.JustDown(this.cursors.up) && !this.isJumping && !this.isCharging) {
+          this.jump();
+        }
+        
+        // Shooting
+        if(Phaser.Input.Keyboard.JustDown(this.space)) {
+          this.shoot();
+        }
+        
+        // Update bullets
+        this.bullets = this.bullets.filter(bullet => {
+          bullet.y -= 5;
+          if(bullet.y < 0) {
+            bullet.destroy();
+            return false;
+          }
+          return true;
+        });
+      }
+      
+      move(direction) {
+        const newLane = Math.max(0, Math.min(4, this.currentLane + direction));
+        if(newLane !== this.currentLane) {
+          const fromX = this.lanes[this.currentLane];
+          const toX = this.lanes[newLane];
+          
+          this.currentLane = newLane;
+          this.characterManager.onMove(this.player, fromX, toX);
+          
+          this.tweens.add({
+            targets: this.player,
+            x: toX,
+            duration: 150,
+            ease: 'Cubic.easeOut'
+          });
+        }
+      }
+      
+      dash(direction) {
+        const newLane = Math.max(0, Math.min(4, this.currentLane + direction));
+        if(newLane !== this.currentLane) {
+          const fromX = this.lanes[this.currentLane];
+          const toX = this.lanes[newLane];
+          
+          this.currentLane = newLane;
+          this.characterManager.onDash(this.player, fromX, toX);
+          
+          this.tweens.add({
+            targets: this.player,
+            x: toX,
+            duration: 100,
+            ease: 'Power2'
+          });
+        }
+      }
+      
+      jump() {
+        if(this.isJumping) return;
+        
+        this.isJumping = true;
+        this.characterManager.onJump(this.player);
+        
+        this.tweens.add({
+          targets: this.player,
+          y: 220,
+          duration: 400,
+          ease: 'Cubic.easeOut',
+          yoyo: true,
+          onComplete: () => {
+            this.isJumping = false;
+            this.player.y = 320;
+            this.characterManager.onLand(this.player);
+          }
+        });
+      }
+      
+      superJump() {
+        if(this.isJumping) return;
+        
+        const jumpHeight = 100 + this.jumpCharge * 150;
+        this.isJumping = true;
+        this.characterManager.onJump(this.player, true); // Pass true for super jump
+        
+        // Create charge particles
+        for(let i = 0; i < this.jumpCharge * 10; i++) {
+          const particle = this.add.circle(
+            this.player.x + (Math.random() - 0.5) * 50,
+            this.player.y,
+            2 + Math.random() * 3,
+            0xff00ff,
+            1
+          );
+          
+          this.tweens.add({
+            targets: particle,
+            y: particle.y - Math.random() * 100,
+            alpha: 0,
+            duration: 800,
+            ease: 'Cubic.easeOut',
+            onComplete: () => particle.destroy()
+          });
+        }
+        
+        this.tweens.add({
+          targets: this.player,
+          y: 320 - jumpHeight,
+          duration: 600,
+          ease: 'Cubic.easeOut',
+          yoyo: true,
+          onComplete: () => {
+            this.isJumping = false;
+            this.player.y = 320;
+            this.characterManager.onLand(this.player, true); // Pass true for super landing
+            this.jumpCharge = 0;
+          }
+        });
+      }
+      
+      shoot() {
+        const bullet = this.add.circle(this.player.x, this.player.y - 20, 3, 0xffffff);
+        this.bullets.push(bullet);
+        
+        // Trigger shoot animation
+        this.characterManager.onShoot(this.player);
+        
+        // Muzzle flash
+        const flash = this.add.circle(this.player.x, this.player.y - 20, 10, 0x00ffff, 0.8);
+        this.tweens.add({
+          targets: flash,
+          alpha: 0,
+          scale: 2,
+          duration: 200,
+          onComplete: () => flash.destroy()
+        });
+      }
+    }
+    
+    // Initialize game
+    const config = {
+      type: Phaser.AUTO,
+      width: 800,
+      height: 400,
+      parent: 'game-container',
+      backgroundColor: '#000033',
+      scene: CharacterTestScene
+    };
+    
+    let game = new Phaser.Game(config);
+    
+    // Setup UI
+    function setupUI() {
+      const selector = document.getElementById('characterSelector');
+      const characters = [
+        { id: 'default', name: 'Classic Square' },
+        { id: 'unicorn', name: '🦄 Cuboid Unicorn' }
+      ];
+      
+      characters.forEach(char => {
+        const btn = document.createElement('button');
+        btn.className = 'character-btn';
+        btn.dataset.character = char.id;
+        btn.textContent = char.name;
+        
+        if(char.id === 'unicorn') {
+          btn.classList.add('active');
+        }
+        
+        btn.onclick = () => {
+          // Update UI
+          document.querySelectorAll('.character-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          
+          // Restart scene with new character
+          game.scene.stop('CharacterTest');
+          game.scene.start('CharacterTest');
+        };
+        
+        selector.appendChild(btn);
+      });
+    }
+    
+    // Feature flag handling
+    document.getElementById('featureFlag').addEventListener('change', (e) => {
+      const unicornBtn = document.querySelector('[data-character="unicorn"]');
+      if(e.target.checked) {
+        unicornBtn.style.display = 'block';
+      } else {
+        unicornBtn.style.display = 'none';
+        // Switch to default if unicorn was selected
+        if(unicornBtn.classList.contains('active')) {
+          document.querySelector('[data-character="default"]').click();
+        }
+      }
+    });
+    
+    setupUI();
+  </script>
+</body>
+</html>
