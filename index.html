@@ -986,14 +986,14 @@ let lastSection = '';
 let isTransitioning = false;
 let riserActive = false;
 
-// Mute states - load saved states or use defaults
-const muteStates = {
-  kick: savedData.settings?.trackMutes?.kick || false,
-  snare: savedData.settings?.trackMutes?.snare || false,
-  hat: savedData.settings?.trackMutes?.hat || false,
-  acid: savedData.settings?.trackMutes?.acid || false,
-  stab: savedData.settings?.trackMutes?.stab || false,
-  sub: savedData.settings?.trackMutes?.sub || false
+// Mute states - will be populated after savedData is loaded
+let muteStates = {
+  kick: false,
+  snare: false,
+  hat: false,
+  acid: false,
+  stab: false,
+  sub: false
 };
 
 // Humanization - adds micro-timing variations
@@ -2495,9 +2495,13 @@ if (savedData.settings) {
   // Grid setting
   gridEnabled = savedData.settings.gridEnabled;
   
+  // Apply saved mute states
+  if (savedData.settings.trackMutes) {
+    Object.assign(muteStates, savedData.settings.trackMutes);
+  }
+  
   // Difficulty will be applied after DIFFICULTY_PRESETS is defined
   // Laser sound will be applied after gameSounds is defined
-  // Track mutes will be applied after muteStates is defined
   // Music settings will be applied after page load
 }
 // Game dimensions initialized based on viewport - adjust for mobile
