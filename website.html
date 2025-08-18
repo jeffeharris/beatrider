@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beatrider</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin: 4rem 0;
+        }
+
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 0.3em;
+            margin-bottom: 0.5rem;
+        }
+
+        .tagline {
+            color: #888;
+            font-size: 0.9rem;
+            letter-spacing: 0.1em;
+        }
+
+        .play-button {
+            display: inline-block;
+            padding: 1rem 3rem;
+            border: 1px solid #fff;
+            color: #fff;
+            text-decoration: none;
+            margin: 3rem 0;
+            transition: all 0.2s;
+            letter-spacing: 0.1em;
+        }
+
+        .play-button:hover {
+            background: #fff;
+            color: #000;
+        }
+
+        nav {
+            display: flex;
+            gap: 3rem;
+            margin: 3rem 0;
+        }
+
+        nav a {
+            color: #888;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        nav a:hover,
+        nav a.active {
+            color: #fff;
+        }
+
+        section {
+            max-width: 600px;
+            width: 100%;
+            margin: 2rem 0;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            font-weight: normal;
+        }
+
+        h3 {
+            margin: 2rem 0 1rem;
+            font-size: 1.1rem;
+            color: #ccc;
+        }
+
+        p {
+            line-height: 1.8;
+            color: #aaa;
+            margin-bottom: 1rem;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            margin: 2rem 0;
+        }
+
+        .control-group {
+            border-left: 1px solid #333;
+            padding-left: 1rem;
+        }
+
+        .control-group h4 {
+            color: #fff;
+            margin-bottom: 1rem;
+            font-weight: normal;
+        }
+
+        .control {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 0.3rem 0;
+            font-size: 0.9rem;
+        }
+
+        .key {
+            color: #fff;
+        }
+
+        .action {
+            color: #888;
+            text-align: right;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            padding: 0.3rem 0;
+            color: #aaa;
+        }
+
+        li::before {
+            content: '— ';
+            color: #555;
+        }
+
+        /* Sprite styles */
+        .enemy-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .enemy-list li {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem 0;
+            color: #aaa;
+        }
+
+        .enemy-list li::before {
+            display: none;
+        }
+
+        .sprite {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .sprite.enemy-red {
+            background: #ff3366;
+        }
+
+        .sprite.enemy-yellow {
+            background: #ffff00;
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+        }
+
+        .sprite.obstacle {
+            background: linear-gradient(90deg, #bf40ff 20%, rgba(255,204,255,0.4) 20%, rgba(255,204,255,0.4) 80%, #bf40ff 80%);
+            height: 16px;
+            width: 24px;
+        }
+
+        .sprite.powerup {
+            background: #00ff00;
+            border-radius: 50%;
+        }
+
+        .sprite.enemy-purple {
+            background: #ff00ff;
+            transform: rotate(45deg);
+            width: 16px;
+            height: 16px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        footer {
+            margin-top: auto;
+            padding-top: 4rem;
+            color: #555;
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2rem; }
+            .controls { grid-template-columns: 1fr; }
+            nav { flex-direction: column; gap: 1rem; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>BEATRIDER</h1>
+        <p class="tagline">LANE SHOOTER × PROCEDURAL TECHNO</p>
+    </header>
+
+    <a href="index.html" class="play-button">PLAY</a>
+
+    <nav>
+        <a href="#" onclick="showSection('guide')" class="nav-link">Guide</a>
+        <a href="#" onclick="showSection('about')" class="nav-link">About</a>
+    </nav>
+
+    <section id="guide-section" class="hidden">
+        <h2>Guide</h2>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h4>Desktop</h4>
+                <div class="control">
+                    <span class="key">←→</span>
+                    <span class="action">move</span>
+                </div>
+                <div class="control">
+                    <span class="key">↑</span>
+                    <span class="action">jump</span>
+                </div>
+                <div class="control">
+                    <span class="key">space</span>
+                    <span class="action">fire</span>
+                </div>
+                <div class="control">
+                    <span class="key">G</span>
+                    <span class="action">grid</span>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>Mobile</h4>
+                <div class="control">
+                    <span class="key">swipe</span>
+                    <span class="action">move</span>
+                </div>
+                <div class="control">
+                    <span class="key">swipe up</span>
+                    <span class="action">jump</span>
+                </div>
+                <div class="control">
+                    <span class="key">tap</span>
+                    <span class="action">fire</span>
+                </div>
+                <div class="control">
+                    <span class="key">hold</span>
+                    <span class="action">auto</span>
+                </div>
+            </div>
+        </div>
+
+        <h3>Enemies spawn to the beat</h3>
+        <ul>
+            <li>Kick → red enemies</li>
+            <li>Snare → yellow fast enemies</li>
+            <li>Hi-hat → blue obstacles</li>
+            <li>Acid → green power-ups</li>
+            <li>Stab → purple drifters</li>
+        </ul>
+
+        <h3>Tips</h3>
+        <ul>
+            <li>Fire while jumping for arc shots</li>
+            <li>Chain kills for 8x combo</li>
+            <li>Double-tap to dash</li>
+            <li>Click squares to mute tracks</li>
+        </ul>
+    </section>
+
+    <section id="about-section" class="hidden">
+        <h2>About</h2>
+        
+        <p>A vibe coding project. One HTML file. No build process.</p>
+        
+        <p>The music drives the game. Every enemy spawns on a beat. Detroit, Berlin, Chicago techno patterns generated in real-time.</p>
+        
+        <p>Built with Phaser.js and Tone.js. Works offline. Runs anywhere.</p>
+
+        <h3>Why?</h3>
+        <p>Sometimes you just want to build something fun without overthinking it.</p>
+    </section>
+
+    <footer>
+        vibe project
+    </footer>
+
+    <script>
+        function showSection(section) {
+            document.getElementById('guide-section').classList.add('hidden');
+            document.getElementById('about-section').classList.add('hidden');
+            
+            if (section) {
+                document.getElementById(section + '-section').classList.remove('hidden');
+            }
+            
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+        }
+    </script>
+</body>
+</html>

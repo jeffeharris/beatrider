@@ -1944,7 +1944,6 @@ document.getElementById('genreDubstep').addEventListener('click', () => switchGe
 document.getElementById('genreTrance').addEventListener('click', () => switchGenre('trance'));
 
 function switchGenre(genre) {
-  console.log('switchGenre called with:', genre);
   const previousGenre = currentGenre;
   currentGenre = genre;
   const config = GENRE_CONFIGS[genre];
@@ -3474,7 +3473,6 @@ class Main extends Phaser.Scene {
     this.player.w = playerSize; // Add collision dimensions (scaled)
     this.player.h = playerSize;
     this.player.setDepth(500); // Much higher depth to ensure on top
-    console.log('Player created with depth:', this.player.depth);
     
     // Create charge glow effect
     this.chargeGlow = this.add.graphics();
@@ -3848,7 +3846,6 @@ class Main extends Phaser.Scene {
         }
         
         if (startZone === 'leftMove' || startZone === 'rightMove') {
-          console.log('STARTED IN MOVEMENT ZONE', { startZone, dx, dy, distance });
           // Trigger immediate movement
           if (startZone === 'leftMove') {
             this.moveLeft();
@@ -3963,7 +3960,6 @@ class Main extends Phaser.Scene {
       
       // Handle zone changes for horizontal movement
       if (newZone !== this.currentZone) {
-        console.log('ZONE CHANGE', { from: this.currentZone, to: newZone, distance, angle: Math.atan2(dy, dx) * 180 / Math.PI });
         
         // Visual feedback for zone change
         if (this.touchIndicator) {
@@ -4007,7 +4003,6 @@ class Main extends Phaser.Scene {
                   // Get current pointer position
                   const activePointer = this.input.activePointer;
                   if (activePointer && activePointer.isDown) {
-                    console.log('RECENTERING after move complete');
                     // Recenter with edge constraints
                     const edgePadding = this.zoneRadius * 0.7; // Allow 30% of zone to go off-screen
                     this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
@@ -4035,7 +4030,6 @@ class Main extends Phaser.Scene {
                   // Get current pointer position
                   const activePointer = this.input.activePointer;
                   if (activePointer && activePointer.isDown) {
-                    console.log('RECENTERING after right move complete');
                     // Recenter with edge constraints
                     const edgePadding = this.zoneRadius * 0.7; // Allow 30% of zone to go off-screen
                     this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
@@ -4101,14 +4095,7 @@ class Main extends Phaser.Scene {
             
           case 'jump':
             // Simple jump zone - just do a regular jump
-            console.log('JUMP ZONE ENTERED', {
-              currentZone: this.currentZone,
-              isJumping: this.isJumping,
-              isChargingJump: this.isChargingJump,
-              willJump: this.currentZone !== 'jump' && !this.isJumping && !this.isChargingJump
-            });
             if (this.currentZone !== 'jump' && !this.isJumping && !this.isChargingJump) {
-              console.log('EXECUTING JUMP');
               this.jump();
             }
             break;
@@ -4118,16 +4105,10 @@ class Main extends Phaser.Scene {
             if (!this.isChargingJump) {
               if (this.isJumping) {
                 // Queue the charge to start when landing
-                console.log('TOUCH: QUEUEING CHARGE FOR LANDING', { 
-                  isJumping: this.isJumping
-                });
                 this.queuedCrouchOnLanding = true;
                 // Don't start charging yet, just track that we're in crouch zone
               } else {
                 // Start charging immediately if on ground
-                console.log('TOUCH: STARTING JUMP CHARGE (ON GROUND)', { 
-                  isJumping: this.isJumping
-                });
                 this.isChargingJump = true;
                 this.chargeGlow.setVisible(true);
                 
@@ -4155,8 +4136,6 @@ class Main extends Phaser.Scene {
             // Also cancel any queued crouch or time-based charge
             this.queuedCrouchOnLanding = false;
             this.usingTimeBasedCharge = false;
-            console.log('TOUCH: CROUCH/QUEUE CANCELLED BY HORIZONTAL MOVE');
-            
             // Stop charge sound
             try {
               gameSounds.jumpCharge.triggerRelease();
@@ -4179,12 +4158,6 @@ class Main extends Phaser.Scene {
           
           const timeSinceLastMove = currentTime - this.lastMoveTime;
           if (timeSinceLastMove > repeatThreshold && !this.isMoving && !this.isDashing) {
-            console.log('AUTO-REPEAT MOVE', { 
-              zone: this.currentZone, 
-              holdTime: this.zoneHoldTimer,
-              timeSinceLastMove
-            });
-            
             if (this.currentZone === 'leftMove') {
               this.moveLeft();
             } else {
@@ -4212,35 +4185,18 @@ class Main extends Phaser.Scene {
       }
       
       // Stop time-based charging
-      console.log('TOUCH: POINTER UP - STOPPING TIME-BASED CHARGE', {
-        wasUsingTimeBasedCharge: this.usingTimeBasedCharge,
-        finalCharge: this.jumpChargeAmount
-      });
       this.usingTimeBasedCharge = false;
       
       // Check if we should execute a charged jump on release
       if (this.isChargingJump && this.jumpChargeAmount > 0) {
         const chargePercent = this.jumpChargeAmount;
-        console.log('TOUCH: RELEASE TO JUMP', { 
-          chargePercent, 
-          isJumping: this.isJumping,
-          jumpQueuedWhileAirborne: this.jumpQueuedWhileAirborne,
-          currentQueuedCharge: this.queuedSuperJumpCharge
-        });
-        
         if (chargePercent > 0.3) {
           // Super jump if charged enough, or queue if airborne
           if (!this.isJumping) {
-            console.log('TOUCH: EXECUTING SUPER JUMP IMMEDIATELY');
             this.superJump(chargePercent);
           } else {
             // Queue the super jump to execute on landing
             this.queuedSuperJumpCharge = chargePercent;
-            console.log('TOUCH: SUPER JUMP QUEUED FOR LANDING', { 
-              charge: this.queuedSuperJumpCharge,
-              playerY: this.player.y,
-              PLAYER_Y: PLAYER_Y
-            });
           }
         } else {
           // Regular jump if barely charged (only if not already jumping)
@@ -4540,14 +4496,8 @@ class Main extends Phaser.Scene {
       yoyo: true,
       onYoyo: () => {
         // Player has reached apex and is starting to fall - allow jumping again
-        console.log('JUMP: REACHED APEX, STARTING DESCENT');
       },
       onComplete: () => {
-        console.log('REGULAR JUMP LANDING', {
-          queuedSuperJumpCharge: this.queuedSuperJumpCharge,
-          queuedCrouchOnLanding: this.queuedCrouchOnLanding,
-          currentZone: this.currentZone
-        });
         this.isJumping = false;
         this.player.y = PLAYER_Y;
         // Animate rotation back to 0 if needed
@@ -4564,7 +4514,6 @@ class Main extends Phaser.Scene {
         
         // Check if we should start charging based on queued crouch
         if (this.queuedCrouchOnLanding && this.currentZone === 'crouch') {
-          console.log('TOUCH: AUTO-STARTING TIME-BASED CHARGE AFTER LANDING');
           this.isChargingJump = true;
           this.chargeGlow.setVisible(true);
           this.queuedCrouchOnLanding = false;
@@ -4574,13 +4523,6 @@ class Main extends Phaser.Scene {
           this.usingTimeBasedCharge = true;
           this.jumpChargeAmount = 0;
           this.maxPullDistance = 0;
-          
-          console.log('TOUCH: INITIALIZED TIME-BASED CHARGE', {
-            touchChargeStartTime: this.touchChargeStartTime,
-            usingTimeBasedCharge: this.usingTimeBasedCharge,
-            maxChargeTime: this.maxChargeTime
-          });
-          
           // Start charge sound
           try {
             gameSounds.jumpCharge.triggerAttack("C2");
@@ -4613,9 +4555,7 @@ class Main extends Phaser.Scene {
         if (this.queuedSuperJumpCharge > 0) {
           const charge = this.queuedSuperJumpCharge;
           this.queuedSuperJumpCharge = 0;
-          console.log('REGULAR JUMP: EXECUTING QUEUED SUPER JUMP', { charge });
           this.time.delayedCall(50, () => {
-            console.log('REGULAR JUMP: DELAYED SUPER JUMP EXECUTING NOW');
             this.superJump(charge);
           });
         }
@@ -4646,19 +4586,6 @@ class Main extends Phaser.Scene {
     
     const startLane = this.playerLane;
     const targetLane = Math.max(-1, this.playerLane - 2);  // Dash 2 lanes total
-    
-    console.log('DASH LEFT START', {
-      startLane,
-      targetLane,
-      lanesMoving: startLane - targetLane,
-      currentPlayerX: this.player.x,
-      startLaneX: this._laneX(startLane),
-      targetLaneX: this._laneX(targetLane),
-      WIDTH,
-      LANES,
-      LANE_W
-    });
-    
     // Can't dash if already at leftmost position  
     if(startLane <= -1) return;  // Allow dashing from lane 0
     
@@ -4769,12 +4696,6 @@ class Main extends Phaser.Scene {
     this.player.x = startX;
     
     // Log what we're about to animate
-    console.log('DASH ANIMATION', {
-      from: startX,
-      to: targetX,
-      playerBefore: this.player.x
-    });
-    
     // Fast dash animation to the target
     this.tweens.add({
       targets: [this.player, trail1, trail2],
@@ -4789,25 +4710,9 @@ class Main extends Phaser.Scene {
         // Ensure visual position matches logical lane
         const expectedX = this._laneX(this.playerLane);
         this.player.x = expectedX;
-        console.log('DASH COMPLETE', {
-          playerLane: this.playerLane,
-          expectedX: expectedX,
-          actualX: this.player.x,
-          lane0X: this._laneX(0),
-          lane1X: this._laneX(1),
-          lane2X: this._laneX(2),
-          lane3X: this._laneX(3),
-          lane4X: this._laneX(4),
-          visualCheck: `Is player.x (${this.player.x}) closer to lane 2 (${this._laneX(2)}) or lane 3 (${this._laneX(3)})?`
-        });
         
         // Log position again after a frame to see if something changes it
         this.time.delayedCall(16, () => {
-          console.log('POSITION CHECK 1 FRAME LATER', {
-            playerX: this.player.x,
-            playerLane: this.playerLane,
-            expectedX: this._laneX(this.playerLane)
-          });
         });
         
         // Store the expected position and check if anything modifies it
@@ -4818,14 +4723,9 @@ class Main extends Phaser.Scene {
           repeat: 200,
           callback: () => {
             if (Math.abs(this.player.x - correctX) > 1) {
-              console.log(`POSITION CHANGED at ${checkCount}ms! Was ${correctX}, now ${this.player.x}`);
               // Log all active tweens
               const activeTweens = this.tweens.getTweensOf(this.player);
               if (activeTweens.length > 0) {
-                console.log('ACTIVE TWEENS:', activeTweens.map(t => ({
-                  targets: t.targets,
-                  props: t.data ? t.data.map(d => d.key) : []
-                })));
               }
               positionChecker.remove();
             }
@@ -4871,16 +4771,6 @@ class Main extends Phaser.Scene {
     
     const startLane = this.playerLane;
     const targetLane = Math.min(LANES, this.playerLane + 2);  // Dash 2 lanes total
-    
-    console.log('DASH RIGHT START', {
-      startLane,
-      targetLane,
-      lanesMoving: targetLane - startLane,
-      currentPlayerX: this.player.x,
-      startLaneX: this._laneX(startLane),
-      targetLaneX: this._laneX(targetLane)
-    });
-    
     // Can't dash if already at rightmost position
     if(startLane >= LANES) return;  // Allow dashing from lane 4 to off-screen
     
@@ -4991,12 +4881,6 @@ class Main extends Phaser.Scene {
     this.player.x = startX;
     
     // Log what we're about to animate
-    console.log('DASH ANIMATION', {
-      from: startX,
-      to: targetX,
-      playerBefore: this.player.x
-    });
-    
     // Fast dash animation to the target
     this.tweens.add({
       targets: [this.player, trail1, trail2],
@@ -5011,25 +4895,9 @@ class Main extends Phaser.Scene {
         // Ensure visual position matches logical lane
         const expectedX = this._laneX(this.playerLane);
         this.player.x = expectedX;
-        console.log('DASH COMPLETE', {
-          playerLane: this.playerLane,
-          expectedX: expectedX,
-          actualX: this.player.x,
-          lane0X: this._laneX(0),
-          lane1X: this._laneX(1),
-          lane2X: this._laneX(2),
-          lane3X: this._laneX(3),
-          lane4X: this._laneX(4),
-          visualCheck: `Is player.x (${this.player.x}) closer to lane 2 (${this._laneX(2)}) or lane 3 (${this._laneX(3)})?`
-        });
         
         // Log position again after a frame to see if something changes it
         this.time.delayedCall(16, () => {
-          console.log('POSITION CHECK 1 FRAME LATER', {
-            playerX: this.player.x,
-            playerLane: this.playerLane,
-            expectedX: this._laneX(this.playerLane)
-          });
         });
         
         // Store the expected position and check if anything modifies it
@@ -5040,14 +4908,9 @@ class Main extends Phaser.Scene {
           repeat: 200,
           callback: () => {
             if (Math.abs(this.player.x - correctX) > 1) {
-              console.log(`POSITION CHANGED at ${checkCount}ms! Was ${correctX}, now ${this.player.x}`);
               // Log all active tweens
               const activeTweens = this.tweens.getTweensOf(this.player);
               if (activeTweens.length > 0) {
-                console.log('ACTIVE TWEENS:', activeTweens.map(t => ({
-                  targets: t.targets,
-                  props: t.data ? t.data.map(d => d.key) : []
-                })));
               }
               positionChecker.remove();
             }
@@ -5233,7 +5096,6 @@ class Main extends Phaser.Scene {
                   ease: 'Quad.easeIn',
                   onComplete: () => {
                     // Allow jumping after first bounce
-                    console.log('SUPER JUMP: FIRST BOUNCE COMPLETE, ENABLING JUMP');
                     this.isJumping = false;
                     this.player.y = PLAYER_Y;
                     
@@ -5251,7 +5113,6 @@ class Main extends Phaser.Scene {
                     
                     // Check if we should start charging based on queued crouch
                     if (this.queuedCrouchOnLanding && this.currentZone === 'crouch') {
-                      console.log('TOUCH: AUTO-STARTING TIME-BASED CHARGE AFTER BOUNCE');
                       this.isChargingJump = true;
                       this.chargeGlow.setVisible(true);
                       this.queuedCrouchOnLanding = false;
@@ -5261,13 +5122,6 @@ class Main extends Phaser.Scene {
                       this.usingTimeBasedCharge = true;
                       this.jumpChargeAmount = 0;
                       this.maxPullDistance = 0;
-                      
-                      console.log('TOUCH: INITIALIZED TIME-BASED CHARGE', {
-                        touchChargeStartTime: this.touchChargeStartTime,
-                        usingTimeBasedCharge: this.usingTimeBasedCharge,
-                        maxChargeTime: this.maxChargeTime
-                      });
-                      
                       // Start charge sound
                       try {
                         gameSounds.jumpCharge.triggerAttack("C2");
@@ -5295,7 +5149,6 @@ class Main extends Phaser.Scene {
                     if (this.queuedSuperJumpCharge > 0) {
                       const charge = this.queuedSuperJumpCharge;
                       this.queuedSuperJumpCharge = 0;
-                      console.log('EXECUTING QUEUED SUPER JUMP AFTER BOUNCE', { charge });
                       this.time.delayedCall(50, () => {
                         this.superJump(charge);
                       });
@@ -5311,9 +5164,6 @@ class Main extends Phaser.Scene {
                       easeParams: [0.2, 0.15],
                       onComplete: () => {
                         // Final settle complete - everything was handled after first bounce
-                        console.log('SUPER JUMP: FINAL SETTLE COMPLETE', {
-                          isJumping: this.isJumping
-                        });
                       }
                     });
                   }
@@ -5586,8 +5436,6 @@ class Main extends Phaser.Scene {
       this.adaptiveState.assistStartTime = this.time.now;
       this.adaptiveState.currentSpawnMultiplier = 0.7;  // 70% spawn rate
       this.adaptiveState.currentSpeedMultiplier = 0.85; // 85% speed
-      
-      console.log('Adaptive difficulty: Assistance enabled', this.adaptiveState);
     }
     
     // Calculate survival time
@@ -6669,14 +6517,6 @@ class Main extends Phaser.Scene {
     
     // Debug logging for arc shot spawn
     if(this.isJumping) {
-      console.log('Arc shot spawn debug:', {
-        playerY: this.player.y,
-        PLAYER_Y: PLAYER_Y,
-        jumpHeight: PLAYER_Y - this.player.y,
-        bulletSpawnY: b.y,
-        bulletProgress: b.progress,
-        isJumping: this.isJumping
-      });
     }
     
     if (HORIZONTAL_SHOOTING && isOffScreen) {
@@ -6778,7 +6618,6 @@ class Main extends Phaser.Scene {
         this.adaptiveState.isAssisting = false;
         this.adaptiveState.currentSpawnMultiplier = 1.0;
         this.adaptiveState.currentSpeedMultiplier = 1.0;
-        console.log('Adaptive difficulty: Returned to normal');
       } else if (assistDuration > 60) {
         // 60-90 seconds: 90% spawn, 95% speed
         this.adaptiveState.currentSpawnMultiplier = 0.9;
@@ -6863,15 +6702,6 @@ class Main extends Phaser.Scene {
       
       // Log every 100ms to avoid spam
       if (Math.floor(elapsed / 100) > Math.floor((elapsed - dt) / 100)) {
-        console.log('TOUCH: TIME-BASED CHARGE UPDATE', {
-          elapsed,
-          jumpChargeAmount: this.jumpChargeAmount,
-          previousCharge,
-          maxChargeTime: this.maxChargeTime,
-          currentZone: this.currentZone,
-          isChargingJump: this.isChargingJump,
-          usingTimeBasedCharge: this.usingTimeBasedCharge
-        });
       }
       
       // Update the glow effect
@@ -7175,10 +7005,6 @@ class Main extends Phaser.Scene {
     // Allow charging even while jumping to queue next super jump
     if(this.playerCanControl && (this.keys.DOWN.isDown || this.keys.S.isDown)){
       if(!this.isCrouching) {
-        console.log('KEYBOARD: STARTING CROUCH', {
-          isJumping: this.isJumping,
-          queuedSuperJumpCharge: this.queuedSuperJumpCharge
-        });
         this.isCrouching = true;
         this.crouchTimer = 0;
         this.chargeGlow.setVisible(true);
@@ -7233,21 +7059,11 @@ class Main extends Phaser.Scene {
       } catch(e) {}
       
       // Execute super jump if on ground, or queue if airborne
-      console.log('KEYBOARD: RELEASE CROUCH', {
-        chargePercent,
-        isJumping: this.isJumping
-      });
       if (!this.isJumping) {
-        console.log('KEYBOARD: EXECUTING SUPER JUMP IMMEDIATELY');
         this.superJump(chargePercent);
       } else {
         // Queue the super jump to execute on landing
         this.queuedSuperJumpCharge = chargePercent;
-        console.log('KEYBOARD: SUPER JUMP QUEUED FOR LANDING', { 
-          charge: this.queuedSuperJumpCharge,
-          playerY: this.player.y,
-          PLAYER_Y: PLAYER_Y
-        });
       }
       this.isCrouching = false;
       this.crouchTimer = 0;
@@ -7469,7 +7285,6 @@ class Main extends Phaser.Scene {
               
               setTimeout(() => coinSound.dispose(), 300);
             } catch(e) {
-              console.log('Coin sound failed:', e);
             }
             
             // Create star explosion particles
@@ -7724,16 +7539,6 @@ class Main extends Phaser.Scene {
           
           // Log first frame of arc shot
           if (!b.arcLogged) {
-            console.log('Arc shot first frame:', {
-              startY: b.startY,
-              currentY: b.y,
-              normalY: normalY,
-              normalStartY: normalStartY,
-              perspectiveOffset: perspectiveOffset,
-              jumpHeight: jumpHeight,
-              distanceTraveled: distanceTraveled,
-              progress: b.progress
-            });
             b.arcLogged = true;
           }
           
@@ -7759,12 +7564,6 @@ class Main extends Phaser.Scene {
               const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should be pointB)
               const nextFrameProgress = b.progress - (Math.abs(b.vy) * dt/1000) / (HEIGHT * 0.8);
               const nextFrameY = vanishY + (HEIGHT - vanishY) * Math.pow(nextFrameProgress, 2.5) - perspectiveOffset;
-              console.log('Boundary check:', {
-                arcEndY,
-                pointB,
-                nextFrameY,
-                difference: nextFrameY - pointB
-              });
               b.boundaryChecked = true;
             }
             
@@ -7773,13 +7572,6 @@ class Main extends Phaser.Scene {
               const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should equal pointB)
               const normalStartProgress = 1.0 - b.safeDistance;
               const normalStartY = vanishY + (HEIGHT - vanishY) * Math.pow(normalStartProgress, 2.5) - perspectiveOffset;
-              console.log('Transition point check:', {
-                arcEndY,
-                pointB,
-                normalStartY,
-                perspectiveOffset,
-                mismatch: normalStartY - arcEndY
-              });
               b.almostTransition = true;
             }
           } else {
@@ -8167,10 +7959,8 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js')
       .then(registration => {
-        console.log('ServiceWorker registered:', registration);
       })
       .catch(error => {
-        console.log('ServiceWorker registration failed:', error);
       });
   });
 }
