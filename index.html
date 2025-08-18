@@ -985,14 +985,14 @@ let lastSection = '';
 let isTransitioning = false;
 let riserActive = false;
 
-// Mute states
+// Mute states - load saved states or use defaults
 const muteStates = {
-  kick: false,
-  snare: false,
-  hat: false,
-  acid: false,
-  stab: false,
-  sub: false
+  kick: savedData.settings?.trackMutes?.kick || false,
+  snare: savedData.settings?.trackMutes?.snare || false,
+  hat: savedData.settings?.trackMutes?.hat || false,
+  acid: savedData.settings?.trackMutes?.acid || false,
+  stab: savedData.settings?.trackMutes?.stab || false,
+  sub: savedData.settings?.trackMutes?.sub || false
 };
 
 // Humanization - adds micro-timing variations
@@ -1649,11 +1649,27 @@ document.getElementById('bpmSlider').addEventListener('input', (e) => {
   const bpm = parseInt(e.target.value);
   Tone.Transport.bpm.value = bpm;
   document.getElementById('bpmDisplay').textContent = bpm;
+  // Mark as custom and save
+  markCustomPreset();
+  saveGameDataDebounced({ 
+    settings: { 
+      musicPreset: 'custom',
+      customMusic: { bpm: bpm }
+    }
+  });
 });
 
 document.getElementById('energySlider').addEventListener('input', (e) => {
   energyLevel = parseInt(e.target.value);
   document.getElementById('energyDisplay').textContent = energyLevel;
+  // Mark as custom and save
+  markCustomPreset();
+  saveGameDataDebounced({ 
+    settings: { 
+      musicPreset: 'custom',
+      customMusic: { energy: energyLevel }
+    }
+  });
 });
 
 document.getElementById('tensionSlider').addEventListener('input', (e) => {
@@ -1663,12 +1679,22 @@ document.getElementById('tensionSlider').addEventListener('input', (e) => {
   if (Tone.Transport.state === 'started') {
     applyTension();
   }
+  // Mark as custom and save
+  markCustomPreset();
+  saveGameDataDebounced({ 
+    settings: { 
+      musicPreset: 'custom',
+      customMusic: { tension: tensionLevel }
+    }
+  });
 });
 
 // Sound selector
 document.getElementById('soundSelector').addEventListener('change', (e) => {
   gameSounds.currentLaserSound = parseInt(e.target.value);
   document.getElementById('soundDisplay').textContent = e.target.options[e.target.selectedIndex].text;
+  // Save laser sound selection
+  saveGameDataDebounced({ settings: { laserSound: gameSounds.currentLaserSound } });
 });
 
 // Music preset definitions
@@ -1691,6 +1717,11 @@ const DIFFICULTY_PRESETS = {
 };
 
 let currentDifficulty = DIFFICULTY_PRESETS.normal;
+
+// Apply saved difficulty if exists
+if (savedData.settings?.difficulty && DIFFICULTY_PRESETS[savedData.settings.difficulty]) {
+  currentDifficulty = DIFFICULTY_PRESETS[savedData.settings.difficulty];
+}
 
 // Music preset selector
 document.getElementById('musicPresetSelector')?.addEventListener('change', (e) => {
@@ -1715,8 +1746,13 @@ document.getElementById('musicPresetSelector')?.addEventListener('change', (e) =
     if (Tone.Transport.state === 'started') {
       applyTension();
     }
+    
+    // Save preset selection
+    saveGameDataDebounced({ settings: { musicPreset: presetKey } });
   } else {
     document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
+    // Save custom preset marker
+    saveGameDataDebounced({ settings: { musicPreset: 'custom' } });
   }
 });
 
@@ -1726,6 +1762,8 @@ document.getElementById('difficultySelector')?.addEventListener('change', (e) =>
   if (DIFFICULTY_PRESETS[diffKey]) {
     currentDifficulty = DIFFICULTY_PRESETS[diffKey];
     document.getElementById('difficultyDisplay').textContent = currentDifficulty.description;
+    // Save difficulty setting
+    saveGameDataDebounced({ settings: { difficulty: diffKey } });
   }
 });
 
@@ -1735,11 +1773,7 @@ const markCustomPreset = () => {
   document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
 };
 
-// Modify existing slider handlers to mark as custom
-const originalBpmHandler = document.getElementById('bpmSlider').oninput;
-document.getElementById('bpmSlider').addEventListener('input', markCustomPreset);
-document.getElementById('energySlider').addEventListener('input', markCustomPreset);
-document.getElementById('tensionSlider').addEventListener('input', markCustomPreset);
+// Note: markCustomPreset is now called within each slider's event handler
 
 // Genre switching handlers
 document.getElementById('genreTechno').addEventListener('click', () => switchGenre('techno'));
@@ -1822,10 +1856,77 @@ function switchGenre(genre) {
   updatePatterns();
 }
 
-// Initial BPM and genre
+// Initial BPM and genre - will be overridden by saved settings if they exist
 Tone.Transport.bpm.value = 132;
 // Set initial genre button highlighting
 switchGenre('techno');
+
+// Apply saved music settings after page loads
+window.addEventListener('load', () => {
+  if (savedData.settings) {
+    // Apply saved music preset or custom values
+    if (savedData.settings.musicPreset === 'custom' && savedData.settings.customMusic) {
+      // Apply custom BPM/energy/tension
+      const custom = savedData.settings.customMusic;
+      if (custom.bpm) {
+        Tone.Transport.bpm.value = custom.bpm;
+        document.getElementById('bpmSlider').value = custom.bpm;
+        document.getElementById('bpmDisplay').textContent = custom.bpm;
+      }
+      if (custom.energy !== undefined) {
+        energyLevel = custom.energy;
+        document.getElementById('energySlider').value = custom.energy;
+        document.getElementById('energyDisplay').textContent = custom.energy;
+      }
+      if (custom.tension !== undefined) {
+        tensionLevel = custom.tension;
+        document.getElementById('tensionSlider').value = custom.tension;
+        document.getElementById('tensionDisplay').textContent = custom.tension;
+      }
+      // Set preset selector to custom
+      document.getElementById('musicPresetSelector').value = '';
+      document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
+    } else if (savedData.settings.musicPreset && MUSIC_PRESETS[savedData.settings.musicPreset]) {
+      // Apply preset
+      const preset = MUSIC_PRESETS[savedData.settings.musicPreset];
+      energyLevel = preset.energy;
+      tensionLevel = preset.tension;
+      document.getElementById('musicPresetSelector').value = savedData.settings.musicPreset;
+      document.getElementById('musicPresetDisplay').textContent = preset.description;
+      document.getElementById('energySlider').value = preset.energy;
+      document.getElementById('energyDisplay').textContent = preset.energy;
+      document.getElementById('tensionSlider').value = preset.tension;
+      document.getElementById('tensionDisplay').textContent = preset.tension;
+    }
+    
+    // Apply saved difficulty UI
+    if (savedData.settings.difficulty) {
+      document.getElementById('difficultySelector').value = savedData.settings.difficulty;
+      document.getElementById('difficultyDisplay').textContent = currentDifficulty.description;
+    }
+    
+    // Apply saved laser sound UI
+    if (savedData.settings.laserSound !== undefined) {
+      document.getElementById('soundSelector').value = savedData.settings.laserSound;
+      const soundNames = ['Triangle', 'Acid', 'Chord', 'Echo', 'Pluck', 'Pew Pew'];
+      document.getElementById('soundDisplay').textContent = soundNames[savedData.settings.laserSound];
+    }
+    
+    // Apply mute states to UI
+    Object.keys(muteStates).forEach(track => {
+      const square = document.getElementById(track + 'Square');
+      if (square) {
+        if (muteStates[track]) {
+          square.classList.remove('active');
+          square.classList.add('muted');
+        } else {
+          square.classList.add('active');
+          square.classList.remove('muted');
+        }
+      }
+    });
+  }
+});
 
 // Track square handlers for minimized controls
 ['kick', 'snare', 'hat', 'acid', 'stab', 'sub'].forEach(track => {
@@ -1843,6 +1944,8 @@ switchGenre('techno');
         square.classList.add('active');
         square.classList.remove('muted');
       }
+      // Save track mute state
+      saveGameDataDebounced({ settings: { trackMutes: { [track]: muteStates[track] } } });
     });
   }
 });
@@ -2094,7 +2197,7 @@ const gameSounds = {
     }).connect(sidechain)
   ],
   
-  currentLaserSound: 0, // Track which sound to use
+  currentLaserSound: savedData.settings?.laserSound || 0, // Load saved laser sound preference
   
   // Explosion - filtered noise burst that sounds like a snare hit
   explosion: new Tone.NoiseSynth({
@@ -2164,7 +2267,7 @@ if (isMobile) {
       const deadzoneLabels = ['Tight', 'Snappy', 'Normal', 'Relaxed', 'Loose', 'Lazy'];
       
       // Load saved sensitivity and convert to slider index
-      const savedPixels = parseInt(localStorage.getItem('touchSensitivity') || '30');
+      const savedPixels = savedData.settings?.touchSensitivity || 30;
       let savedIndex = deadzoneValues.indexOf(savedPixels);
       if (savedIndex === -1) savedIndex = 2; // Default to Normal (30px)
       
@@ -2202,9 +2305,9 @@ if (isMobile) {
         touchSlider.addEventListener('input', updateTouchSensitivity);
         touchSlider.addEventListener('change', (e) => {
           updateTouchSensitivity(e);
-          // Save actual pixel value to localStorage
+          // Save actual pixel value
           const pixels = deadzoneValues[parseInt(e.target.value)];
-          localStorage.setItem('touchSensitivity', pixels);
+          saveGameDataDebounced({ settings: { touchSensitivity: pixels } });
         });
       }
     }
@@ -2219,37 +2322,162 @@ let LANE_W = WIDTH/LANES;
 
 // Storage management
 const STORAGE_KEY = 'beatrider_data';
+const STORAGE_VERSION = 2; // Version number for migrations
+
+// Default settings structure
+const DEFAULT_SETTINGS = {
+  version: STORAGE_VERSION,
+  highScore: 0,
+  settings: {
+    gridEnabled: true,
+    difficulty: 'normal',
+    touchSensitivity: 30,
+    laserSound: 0,
+    musicPreset: 'driving',
+    customMusic: {
+      bpm: 128,
+      energy: 60,
+      tension: 40
+    },
+    trackMutes: {
+      kick: false,
+      snare: false,
+      hat: false,
+      acid: false,
+      stab: false,
+      sub: false
+    }
+  }
+};
+
+// Deep merge helper for nested settings
+function deepMerge(target, source) {
+  const output = { ...target };
+  if (isObject(target) && isObject(source)) {
+    Object.keys(source).forEach(key => {
+      if (isObject(source[key])) {
+        if (!(key in target))
+          output[key] = source[key];
+        else
+          output[key] = deepMerge(target[key], source[key]);
+      } else {
+        output[key] = source[key];
+      }
+    });
+  }
+  return output;
+}
+
+function isObject(item) {
+  return item && typeof item === 'object' && !Array.isArray(item);
+}
+
+// Migrate data from older versions
+function migrateData(data) {
+  // No version or version 1: flat structure to nested
+  if (!data.version || data.version < 2) {
+    const migrated = {
+      version: STORAGE_VERSION,
+      highScore: data.highScore || 0,
+      settings: {
+        gridEnabled: data.gridEnabled !== undefined ? data.gridEnabled : true,
+        difficulty: 'normal',
+        touchSensitivity: 30,
+        laserSound: 0,
+        musicPreset: 'driving',
+        customMusic: {
+          bpm: 128,
+          energy: 60,
+          tension: 40
+        },
+        trackMutes: {
+          kick: false,
+          snare: false,
+          hat: false,
+          acid: false,
+          stab: false,
+          sub: false
+        }
+      }
+    };
+    
+    // Check for legacy touchSensitivity key
+    const legacySensitivity = localStorage.getItem('touchSensitivity');
+    if (legacySensitivity) {
+      migrated.settings.touchSensitivity = parseInt(legacySensitivity) || 30;
+      localStorage.removeItem('touchSensitivity');
+    }
+    
+    return migrated;
+  }
+  
+  return data;
+}
 
 function loadGameData() {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data) {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      const migrated = migrateData(parsed);
+      
+      // Save migrated data if it changed
+      if (migrated.version !== parsed.version) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      }
+      
+      // Merge with defaults to ensure all fields exist
+      return deepMerge(DEFAULT_SETTINGS, migrated);
     }
   } catch (e) {
-    console.warn('Failed to load game data:', e);
+    console.warn('Failed to load game data, using defaults:', e);
   }
-  return {
-    highScore: 0,
-    gridEnabled: true,
-    masterVolume: 0.7
-  };
+  return { ...DEFAULT_SETTINGS }; // Return a copy of defaults
 }
 
 function saveGameData(data) {
   try {
     const current = loadGameData();
-    const updated = { ...current, ...data };
+    const updated = deepMerge(current, data);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.warn('Failed to save game data:', e);
+    // Continue with session-only settings
   }
+}
+
+// Debounced save to prevent excessive writes
+let saveTimer = null;
+let pendingData = {};
+
+function saveGameDataDebounced(data) {
+  // Accumulate changes
+  pendingData = deepMerge(pendingData, data);
+  
+  // Clear existing timer
+  clearTimeout(saveTimer);
+  
+  // Set new timer (100ms delay)
+  saveTimer = setTimeout(() => {
+    saveGameData(pendingData);
+    pendingData = {};
+  }, 100);
 }
 
 // Load saved data
 const savedData = loadGameData();
 let sessionHighScore = savedData.highScore;
-gridEnabled = savedData.gridEnabled;
+
+// Apply saved settings
+if (savedData.settings) {
+  // Grid setting
+  gridEnabled = savedData.settings.gridEnabled;
+  
+  // Difficulty will be applied after DIFFICULTY_PRESETS is defined
+  // Laser sound will be applied after gameSounds is defined
+  // Track mutes will be applied after muteStates is defined
+  // Music settings will be applied after page load
+}
 // Game dimensions initialized based on viewport - adjust for mobile
 let PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobile
 const ENEMY_SPEED_BASE = isMobile ? 150 : 200; // Slower on mobile for easier play
@@ -3207,7 +3435,7 @@ class Main extends Phaser.Scene {
         // Toggle grid from external button - match G key behavior
         this.gridVisible = !this.gridVisible;
         gridEnabled = this.gridVisible;
-        saveGameData({ gridEnabled: gridEnabled });
+        saveGameData({ settings: { gridEnabled: gridEnabled } });
         
         // Track grid toggle
         trackEvent('settings_change', {
@@ -3293,8 +3521,7 @@ class Main extends Phaser.Scene {
     // Zone configuration - based on comfortable thumb reach
     this.zoneRadius = 100; // Radius from touch point to edge
     // Load saved touch sensitivity or use default
-    const savedSensitivity = localStorage.getItem('touchSensitivity');
-    this.zoneDeadRadius = savedSensitivity ? parseInt(savedSensitivity) : 30;
+    this.zoneDeadRadius = savedData.settings?.touchSensitivity || 30;
     
     // We'll use angle-based detection for the 4 directional zones
     // No need to pre-define boundaries, we'll calculate on the fly
@@ -5756,7 +5983,7 @@ class Main extends Phaser.Scene {
     if(Phaser.Input.Keyboard.JustDown(this.keys.G)){
       this.gridVisible = !this.gridVisible;
       gridEnabled = this.gridVisible; // Save to persistent setting
-      saveGameData({ gridEnabled: gridEnabled });
+      saveGameData({ settings: { gridEnabled: gridEnabled } });
       if(!this.gridVisible && this.gridGraphics) {
         this.gridGraphics.clear();
       } else if(this.gridVisible && this.isPaused) {
