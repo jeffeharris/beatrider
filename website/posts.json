@@ -1,0 +1,11 @@
+{
+  "posts": [
+    {
+      "slug": "no-code-experiment",
+      "title": "Arguing Software Into Existence",
+      "date": "2025.08.19",
+      "category": "Experiment",
+      "excerpt": "90% frustration, 10% success, 100% shipped. What happens when you refuse to open an IDE and let AI write everything?"
+    }
+  ]
+}
