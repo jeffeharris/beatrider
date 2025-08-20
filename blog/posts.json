@@ -1,0 +1,11 @@
+{
+  "posts": [
+    {
+      "title": "Arguing Software Into Existence",
+      "slug": "arguing-software-into-existence",
+      "date": "August 19, 2025",
+      "category": "AI Development",
+      "excerpt": "90% frustration, 10% success, 100% shipped. What happens when you refuse to open an IDE and let AI write everything?"
+    }
+  ]
+}

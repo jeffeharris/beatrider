@@ -282,7 +282,7 @@
     <script>
         async function loadBlogPosts() {
             try {
-                const response = await fetch('/website/posts.json');
+                const response = await fetch('/blog/posts.json');
                 const data = await response.json();
                 const posts = data.posts;
                 
