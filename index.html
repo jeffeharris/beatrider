@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Beatrider</title>
+    <!-- Favicon - simple pixelated B in cyan -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23000'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2300ffcc' font-family='monospace' font-size='24' font-weight='bold'>B</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
@@ -512,6 +514,66 @@
             font-size: 0.8rem;
         }
 
+        /* Sticky header */
+        .sticky-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #222;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
+
+        .sticky-header.visible {
+            transform: translateY(0);
+        }
+
+        .sticky-header .logo {
+            font-size: 1.2rem;
+            letter-spacing: 0.2em;
+            color: #fff;
+        }
+
+        .sticky-nav {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .sticky-nav a {
+            color: #888;
+            text-decoration: none;
+            transition: color 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .sticky-nav a:hover {
+            color: #fff;
+        }
+
+        .sticky-play {
+            padding: 0.5rem 1.5rem;
+            border: 1px solid #fff;
+            color: #fff;
+            text-decoration: none;
+            transition: all 0.2s;
+            letter-spacing: 0.1em;
+            font-size: 0.9rem;
+        }
+
+        .sticky-play:hover {
+            background: #fff;
+            color: #000;
+        }
+
         @media (max-width: 768px) {
             h1 { font-size: 2rem; }
             .controls { grid-template-columns: 1fr; }
@@ -522,6 +584,17 @@
     </style>
 </head>
 <body>
+    <!-- Sticky header (hidden initially) -->
+    <div class="sticky-header" id="stickyHeader">
+        <div class="logo">BEATRIDER</div>
+        <div class="sticky-nav">
+            <a href="#" onclick="showSection('blog'); return false;">Blog</a>
+            <a href="#" onclick="showSection('guide'); return false;">Guide</a>
+            <a href="#" onclick="showSection('about'); return false;">About</a>
+            <a href="play/" class="sticky-play">PLAY</a>
+        </div>
+    </div>
+
     <header>
         <h1>BEATRIDER</h1>
         <p class="tagline">LANE SHOOTER × PROCEDURAL TECHNO</p>
@@ -677,6 +750,52 @@
     <script>
         let blogPosts = [];
 
+        // Sticky header scroll handling
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('header');
+            const stickyHeader = document.getElementById('stickyHeader');
+            const headerBottom = header.offsetTop + header.offsetHeight;
+            
+            if (window.scrollY > headerBottom + 100) {
+                stickyHeader.classList.add('visible');
+            } else {
+                stickyHeader.classList.remove('visible');
+            }
+        });
+
+        // Handle direct links to blog posts
+        function handleHashChange() {
+            const hash = window.location.hash.slice(1); // Remove #
+            
+            if (hash.startsWith('blog/')) {
+                // Direct link to a blog post
+                const slug = hash.replace('blog/', '');
+                showSection('blog');
+                
+                // Wait for posts to load if needed
+                if (blogPosts.length === 0) {
+                    loadBlogPosts().then(() => {
+                        loadBlogPost(slug);
+                    });
+                } else {
+                    loadBlogPost(slug);
+                }
+            } else if (hash === 'blog' || hash === 'guide' || hash === 'about') {
+                // Direct link to a section
+                showSection(hash);
+            }
+        }
+
+        // Listen for hash changes
+        window.addEventListener('hashchange', handleHashChange);
+        
+        // Check hash on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (window.location.hash) {
+                handleHashChange();
+            }
+        });
+
         async function loadBlogPosts() {
             try {
                 const response = await fetch('website/posts.json');
@@ -716,6 +835,9 @@
                 document.getElementById('blog-posts').classList.add('hidden');
                 document.getElementById('blog-content').classList.remove('hidden');
                 
+                // Update URL without triggering hashchange
+                history.pushState(null, '', `#blog/${slug}`);
+                
                 // Scroll to top of blog section
                 document.getElementById('blog-section').scrollIntoView({ behavior: 'smooth' });
             } catch (error) {
@@ -727,6 +849,10 @@
         function showBlogList() {
             document.getElementById('blog-posts').classList.remove('hidden');
             document.getElementById('blog-content').classList.add('hidden');
+            
+            // Update URL to just #blog
+            history.pushState(null, '', '#blog');
+            
             return false;
         }
 
@@ -741,6 +867,17 @@
                 // Load blog posts when blog section is shown
                 if (section === 'blog' && blogPosts.length === 0) {
                     loadBlogPosts();
+                }
+                
+                // Scroll to section if using sticky header
+                const stickyHeader = document.getElementById('stickyHeader');
+                if (stickyHeader.classList.contains('visible')) {
+                    const targetSection = document.getElementById(section + '-section');
+                    if (targetSection) {
+                        const offset = stickyHeader.offsetHeight + 20;
+                        const targetPosition = targetSection.offsetTop - offset;
+                        window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+                    }
                 }
             }
             
