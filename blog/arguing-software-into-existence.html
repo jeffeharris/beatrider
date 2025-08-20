@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arguing Software Into Existence - Beatrider</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23000'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2300ffcc' font-family='monospace' font-size='24' font-weight='bold'>B</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 80px 2rem 2rem 2rem; /* Add top padding for fixed header */
+            line-height: 1.8;
+        }
+
+        .container {
+            max-width: 750px;
+            width: 100%;
+        }
+
+        /* Sticky header */
+        .sticky-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #222;
+        }
+
+        .sticky-header .logo {
+            font-size: 1.2rem;
+            letter-spacing: 0.2em;
+            color: #fff;
+            padding-right: 0.2em; /* Compensate for letter-spacing on last character */
+        }
+
+        .sticky-nav {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .sticky-nav a {
+            color: #888;
+            text-decoration: none;
+            transition: color 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .sticky-nav a:hover {
+            color: #fff;
+        }
+
+        .sticky-play {
+            padding: 0.5rem 1.5rem;
+            border: 2px solid #ff00ff;
+            color: #ff00ff;
+            text-decoration: none;
+            transition: all 0.2s;
+            letter-spacing: 0.1em;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            font-weight: bold;
+            background: transparent;
+        }
+
+        .sticky-play:hover {
+            background: #ff00ff;
+            color: #0a0a0a;
+            box-shadow: 0 0 15px #ff00ff;
+            text-decoration: none;
+        }
+
+        .article-meta {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid #222;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            font-weight: normal;
+            letter-spacing: 0.05em;
+            line-height: 1.3;
+        }
+
+        .article-date {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .article-excerpt {
+            color: #aaa;
+            font-style: italic;
+            margin-top: 1rem;
+        }
+
+        article {
+            color: #ccc;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin: 3rem 0 1.5rem;
+            font-weight: normal;
+            color: #fff;
+        }
+
+        h3 {
+            font-size: 1.2rem;
+            margin: 2rem 0 1rem;
+            font-weight: normal;
+            color: #fff;
+        }
+
+        p {
+            margin-bottom: 1.5rem;
+            color: #aaa;
+        }
+
+        strong {
+            color: #fff;
+        }
+
+        em {
+            color: #ccc;
+        }
+
+        a {
+            color: #00ffcc;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        code {
+            background: rgba(0, 255, 204, 0.15);
+            color: #00ffcc;
+            padding: 0.2rem 0.4rem;
+            font-family: 'Courier New', monospace;
+            border: 1px solid rgba(0, 255, 204, 0.3);
+        }
+
+        pre {
+            background: #000;
+            border: 1px solid #333;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        blockquote {
+            border-left: 2px solid #444;
+            padding-left: 1.5rem;
+            margin: 1.5rem 0;
+            color: #888;
+            font-style: italic;
+        }
+
+        ul, ol {
+            margin: 1.5rem 0;
+            padding-left: 2rem;
+            color: #aaa;
+        }
+
+        li {
+            margin: 0.5rem 0;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border: 1px solid #333;
+            padding: 4px;
+            background: #000;
+        }
+
+        .content-image {
+            width: 66%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .unicorn-sketch {
+            width: auto;
+            height: 200px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .image-container {
+            margin: 2rem auto;
+            text-align: center;
+        }
+
+        .image-caption {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Arc shot gallery */
+        .arc-gallery {
+            position: relative;
+            max-width: 500px;
+            margin: 2rem auto;
+            background: #000;
+            border: 1px solid #333;
+            padding: 1rem;
+        }
+
+        .arc-gallery-container {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .arc-gallery-track {
+            display: flex;
+            transition: transform 0.3s ease;
+        }
+
+        .arc-gallery-slide {
+            min-width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .arc-gallery-slide img {
+            width: 100%;
+            height: auto;
+            max-height: 400px;
+            object-fit: contain;
+            cursor: zoom-in;
+        }
+
+        .arc-gallery-caption {
+            margin-top: 0.75rem;
+            font-size: 0.85rem;
+            color: #888;
+            text-align: center;
+        }
+
+        .arc-gallery-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #444;
+            color: #888;
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .arc-gallery-nav:hover {
+            color: #fff;
+            border-color: #666;
+        }
+
+        .arc-gallery-nav.prev {
+            left: 0.5rem;
+        }
+
+        .arc-gallery-nav.next {
+            right: 0.5rem;
+        }
+
+        .arc-gallery-thumbs {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.5);
+            border-top: 1px solid #222;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* Scrollbar styling */
+        .arc-gallery-thumbs::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .arc-gallery-thumbs::-webkit-scrollbar-track {
+            background: #222;
+        }
+
+        .arc-gallery-thumbs::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 3px;
+        }
+
+        .arc-gallery-thumbs::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+
+        .arc-gallery-thumb {
+            flex: 0 0 60px;
+            width: 60px;
+            height: 40px;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s, border-color 0.2s;
+            border: 2px solid transparent;
+            padding: 2px;
+            background: #000;
+        }
+
+        .arc-gallery-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .arc-gallery-thumb.active {
+            opacity: 1;
+            border-color: #888;
+        }
+
+        .arc-gallery-thumb:hover {
+            opacity: 0.8;
+            border-color: #666;
+        }
+
+        /* Modal for full-size image */
+        .image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 2000;
+            padding: 2rem;
+        }
+
+        .image-modal.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .image-modal-content {
+            position: relative;
+            max-width: 90vw;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .image-modal img {
+            max-width: 100%;
+            max-height: calc(85vh - 3rem);
+            object-fit: contain;
+            cursor: zoom-out;
+        }
+
+        .image-modal-caption {
+            margin-top: 1rem;
+            color: #aaa;
+            font-size: 0.9rem;
+            text-align: center;
+            max-width: 600px;
+        }
+
+        .image-modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            color: #888;
+            font-size: 2rem;
+            cursor: pointer;
+            transition: color 0.2s;
+            z-index: 2001;
+        }
+
+        .image-modal-close:hover {
+            color: #fff;
+        }
+
+        .image-modal-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #444;
+            color: #888;
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            font-size: 1.5rem;
+            transition: all 0.2s;
+            z-index: 2001;
+        }
+
+        .image-modal-nav:hover {
+            color: #fff;
+            border-color: #666;
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        .image-modal-nav.prev {
+            left: 2rem;
+        }
+
+        .image-modal-nav.next {
+            right: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .image-modal-nav {
+                padding: 0.75rem 1rem;
+                font-size: 1.2rem;
+            }
+            
+            .image-modal-nav.prev {
+                left: 0.5rem;
+            }
+            
+            .image-modal-nav.next {
+                right: 0.5rem;
+            }
+        }
+
+        .arc-gallery-slide img {
+            cursor: zoom-in;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #333;
+            margin: 3rem 0;
+        }
+
+        footer {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid #222;
+            text-align: center;
+            color: #555;
+            font-size: 0.8rem;
+        }
+
+        .sticky-nav .current-page {
+            color: #00ffcc;
+        }
+
+        @media (max-width: 480px) {
+            .sticky-nav a:not(.sticky-play):not(.current-page) {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 100px 1rem 1rem 1rem; /* More padding for 2-row mobile header */
+            }
+            
+            h1 { 
+                font-size: 1.75rem;
+                line-height: 1.2;
+            }
+            
+            h2 { 
+                font-size: 1.4rem;
+                margin: 2rem 0 1rem;
+            }
+            
+            .sticky-header {
+                padding: 0.75rem 1rem;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            
+            .sticky-header .logo {
+                font-size: 1rem;
+            }
+            
+            .sticky-nav { 
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .sticky-nav a {
+                font-size: 0.75rem;
+            }
+            
+            .sticky-play {
+                padding: 0.4rem 1rem;
+                font-size: 0.75rem;
+                border-width: 2px;
+            }
+            
+            .content-image {
+                width: 100%;
+                max-width: none;
+            }
+            
+            
+            .article-meta {
+                margin-bottom: 2rem;
+                padding-bottom: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sticky header -->
+        <div class="sticky-header">
+            <div class="logo">BEATRIDER</div>
+            <div class="sticky-nav">
+                <a href="/">Home</a>
+                <a href="/blog/" class="current-page">Devlog</a>
+                <a href="/#guide">Guide</a>
+                <a href="/#about">About</a>
+                <a href="/play/" class="sticky-play">PLAY</a>
+            </div>
+        </div>
+
+        <div class="article-meta">
+            <h1>Arguing Software Into Existence</h1>
+            <div class="article-date">August 19, 2025</div>
+            <div class="article-excerpt">90% frustration, 10% success, 100% shipped. What happens when you refuse to open an IDE and let AI write everything?</div>
+        </div>
+
+        <article>
+            <p><em>"Let there be code." And there was code. And it was... complicated.</em></p>
+
+            <figure class="image-container">
+                <img src="/website/images/beatrider-gameplay.gif" alt="Beatrider Gameplay">
+                <figcaption class="image-caption">The final game: 5-lane retro shooter with procedural techno</figcaption>
+            </figure>
+
+            <h2>The Constraint</h2>
+
+            <p>Never open an IDE. Never write code. Build a complete game using only natural language.</p>
+
+            <p>This wasn't about proving AI can replace developers. It was about understanding the limits and experiencing what Sam Altman calls "fast fashion of SaaS" - disposable software built quickly, used, then discarded.</p>
+
+            <div style="display: flex; justify-content: center; margin: 2rem 0;">
+                <blockquote class="twitter-tweet" data-theme="dark"><p lang="en" dir="ltr">entering the fast fashion era of SaaS very soon</p>&mdash; Sam Altman (@sama) <a href="https://twitter.com/sama/status/1952084574366032354?ref_src=twsrc%5Etfw">August 3, 2025</a></blockquote>
+            </div>
+            <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+            <p>The gap between "I have an idea" and "it exists in the world" is shrinking to almost nothing.</p>
+
+            <h2>Day 1: The Spotify API That Never Was</h2>
+
+            <p>Me: "Can we sync enemy spawning to the beats in a user's Spotify songs?"</p>
+
+            <p>Claude Code: "Absolutely! Spotify's Web API provides beat analysis with timing markers..."</p>
+
+            <p>Claude then mocked up beautiful API responses, built an entire working OAuth flow, and created beat detection logic around an <a href="https://developer.spotify.com/documentation/web-api/reference/get-audio-analysis">API that had been deprecated</a> for over a year. Its training data was outdated, but it was so confident I didn't question it for the better part of a day.</p>
+
+            <figure class="image-container">
+                <img src="/website/images/deprecated-api.png" alt="Spotify deprecated API notice" class="content-image">
+                <figcaption class="image-caption">Spotify's beat analysis API - deprecated but Claude didn't know</figcaption>
+            </figure>
+
+            <p><strong>Lesson 1:</strong> AI operates on old data but with complete confidence. As Andrej Karpathy points out, we need tight generate-verify loops. I had generation without verification.</p>
+
+            <p><strong>Lesson 2:</strong> Vibes lead to discovery. This hiccup led me to ask a new question, "Can we generate the beats in the browser". And that led to an incredibly quick implementation of Tone.js, a library I had no familiarity with until this project and is now the backbone of the game/music engine.</p>
+
+            <p>By the end of Day 1 I had a working prototype despite the Spotify side quest.</p>
+
+            <figure class="image-container">
+                <img src="/website/images/music-engine.png" alt="Music Engine Controls" class="content-image">
+                <figcaption class="image-caption">Tone.js music engine with mutable tracks - built in one day</figcaption>
+            </figure>
+
+            <h2>The Amelia Bedelia Problem</h2>
+
+            <p>Working with Claude felt like instructing Amelia Bedelia, it would take my requests extremely literally and I often had to pull it back from over-engineering. I had to intervene and steer the agent many times during the project when it was using complex algorithms to solve simple problems or overlooking parts of the code that had already been written.</p>
+
+            <p>At times, sticking to the constraint of not using an editor became a pain; "Change the font size" likely used more compute than cracking Enigma (I didn't ask Claude to do the math on that).</p>
+
+            <p>The AI can implement complex game mechanics and an in-browser progressively generated music engine in minutes but can't understand that "up" means "toward the top of the screen."</p>
+
+            <p>And, "Draw a line from A to B" became 600 lines of 3D projection math.</p>
+
+            <figure class="image-container">
+                <img src="/website/images/amelia-beclaudia.png" alt="Amelia Bedelia Claude" class="content-image">
+                <figcaption class="image-caption">Claude as Amelia Bedelia - taking everything literally</figcaption>
+            </figure>
+
+            <h2>The Arc Shot Saga</h2>
+
+            <p><strong>What I wanted:</strong> Bullets that arc from player to target when jumping.</p>
+
+            <p><strong>What Claude built:</strong> 600 lines of physics simulation with parabolic trajectories and perspective math.</p>
+
+            <p><strong>The actual solution:</strong> 4 lines of linear interpolation: <code>y = a + (b - a) * t</code></p>
+
+            <p>Claude struggled deeply with spatial reasoning, and probably because I'm unable to adequately describe what I want in a way that a language model can make any sense of. It's trying hard to please but often missing the mark.</p>
+
+            <div class="arc-gallery">
+                <div class="arc-gallery-container">
+                    <div class="arc-gallery-track" id="arcTrack">
+                        <div class="arc-gallery-slide">
+                            <img src="/website/images/arc-shot-01-big-drop.png" alt="Arc shot: big drop" onclick="openModal(0)">
+                            <div class="arc-gallery-caption">Attempt 1: Gravity too strong</div>
+                        </div>
+                        <div class="arc-gallery-slide">
+                            <img src="/website/images/arc-shot-02-big-spike.png" alt="Arc shot: big spike" onclick="openModal(1)">
+                            <div class="arc-gallery-caption">Attempt 2: Now it's a spike</div>
+                        </div>
+                        <div class="arc-gallery-slide">
+                            <img src="/website/images/arc-shot-03-getting closer.png" alt="Arc shot: getting closer" onclick="openModal(2)">
+                            <div class="arc-gallery-caption">Attempt 3: Getting warmer...</div>
+                        </div>
+                    </div>
+                    <button class="arc-gallery-nav prev" onclick="moveGallery(-1)">‹</button>
+                    <button class="arc-gallery-nav next" onclick="moveGallery(1)">›</button>
+                </div>
+                <div class="arc-gallery-thumbs">
+                    <div class="arc-gallery-thumb active" onclick="goToSlide(0)">
+                        <img src="/website/images/arc-shot-01-big-drop.png" alt="Thumbnail 1">
+                    </div>
+                    <div class="arc-gallery-thumb" onclick="goToSlide(1)">
+                        <img src="/website/images/arc-shot-02-big-spike.png" alt="Thumbnail 2">
+                    </div>
+                    <div class="arc-gallery-thumb" onclick="goToSlide(2)">
+                        <img src="/website/images/arc-shot-03-getting closer.png" alt="Thumbnail 3">
+                    </div>
+                </div>
+            </div>
+
+            <p>Even enabling it with Playwright, an MCP server that allowed it to browse and take screenshots of the game, didn't really make a significant improvement for the quick frame rate interactions that we're looking for in a game.</p>
+
+            <h2>Disposable Software as a Feature</h2>
+
+            <p>Beatrider is 8,000 lines in a single HTML file. Unmaintainable spaghetti code.</p>
+
+            <p>The game works. It took 10 days without writing code. Major changes? I'd rebuild in 3 days. This is Altman's "fast fashion" - software cheaper to rebuild than refactor. When was the last time you mended a sweater or patched a pair of jeans?</p>
+
+            <h2>The Unicorn That Broke Everything</h2>
+
+            <p>My son wanted to play as his favorite unicorn blanket.</p>
+
+            <figure class="image-container">
+                <img src="/website/images/unicorn-sketch.png" alt="Unicorn sketch" class="unicorn-sketch">
+                <figcaption class="image-caption">My son's unicorn blanket design request</figcaption>
+            </figure>
+
+            <p>Building the unicorn to my son's delight: 1 hour.</p>
+
+            <figure class="image-container">
+                <img src="/website/images/unicorn-closeup.gif" alt="Unicorn sprite" class="content-image">
+                <figcaption class="image-caption">The pixelated unicorn sprite Claude created</figcaption>
+            </figure>
+
+            <p>Integrating the unicorn into the 8,000-line HTML file: unknown. The code was too tangled for even Claude to merge.</p>
+
+            <p>But here's the thing: <strong>it doesn't matter.</strong></p>
+
+            <figure class="image-container">
+                <img src="/website/images/unicorn-gameplay.gif" alt="Unicorn Gameplay" class="content-image">
+                <figcaption class="image-caption">The unicorn version lives on its own fork - and my son loves it</figcaption>
+            </figure>
+
+            <p>I forked the game and now my son has his own version, hosted on GitHub pages for free that includes the Unicorn. It doesn't have my Google Analytics or game saving settings but he doesn't need that to have fun with his space unicorn.</p>
+
+            <p>Maybe it's not throw away code after all?</p>
+
+            <h2>The Generate-Verify Loop Problem</h2>
+
+            <p>Karpathy nailed it: I had generation without verification. Claude confidently generated solutions I'd accept. Only when testing did I find that:</p>
+
+            <ul>
+                <li>The Spotify API we wanted to use was deprecated last year</li>
+                <li>The physics math solved the wrong problem</li>
+                <li>The spatial reasoning was backwards</li>
+            </ul>
+
+            <p>Claude is an overconfident sycophant that never says "I'm not sure." and rarely checks to verify it understands your requests.</p>
+
+            <h2>Multi-AI Orchestration</h2>
+
+            <p>Most of the agents I used were instances of Claude Code. Controlling the context, attention, and scope for each agent was key to making iterative progress. During the project I used AI agents in several ways:</p>
+
+            <ul>
+                <li>Running a plan > design > implement > validate loop with different agent contexts and personas</li>
+                <li>Planning one feature while fixing bugs in another branch</li>
+                <li>DevOps Agent with Perplexity Comet Assistant configuring GitHub Pages/DNS setup</li>
+                <li>Research for this blog through another Claude Code session in a meta-analysis of Beatrider coding sessions</li>
+            </ul>
+
+            <p>My real job was translation: turning errors and vision into prompts the AI could act on. I was the orchestrator, deciding what to share between AIs, how to frame problems, what to prioritize, and even making some technical and system design calls.</p>
+
+            <h2>90% Frustration, 10% Success</h2>
+
+            <p>Claude's meta-analysis of the project: 90% frustration, 10% success.</p>
+
+            <p>That was an accurate feeling, but I'd conjecture that is normal for software development. The difference? I shipped a working game in 10 days without knowing how to code games.</p>
+
+            <h2>What This Means</h2>
+
+            <ol>
+                <li>Non-developers can ship real products</li>
+                <li>Disposable software becomes normal</li>
+                <li>AI desperately needs spatial reasoning</li>
+                <li>Verification is required in AI code generation</li>
+                <li>Orchestration skills > coding skills</li>
+            </ol>
+
+            <p>Next time? Verify everything. Use screenshots from day one. Accept it's disposable.</p>
+
+            <p>But honestly, the mess is part of the process. Shipped beats perfect.</p>
+
+            <h2>The Bottom Line</h2>
+
+            <p>I built and shipped a game without writing code. It's janky, unmaintainable, and players don't care.</p>
+
+            <p>This isn't the future of all software development. But for prototypes, MVPs, and experiments? For software that needs to exist quickly and serve a specific purpose? This is absolutely the future.</p>
+
+            <p>The question isn't "Can AI replace developers?" It's "What becomes possible when non-developers can ship?"</p>
+
+            <p>This new category of disposable software opens up possibilities like:</p>
+
+            <ul style="list-style: none; padding-left: 0;">
+                <li><em>"I need a tool for this specific wedding next week"</em></li>
+                <li><em>"My team needs a dashboard for just this quarter's project"</em></li>
+                <li><em>"My kid wants to play their game idea TODAY"</em></li>
+            </ul>
+
+            <p>The traditional software response would be "that's not worth building." Now it is, because building costs almost nothing except patience with an overly literal AI assistant.<br>
+            It's not replacing "real" software development any more than TikTok replaced cinema.</p>
+
+            <p>It's just... new. And yeah, kind of fun in its absolute commitment to shipping over perfection.</p>
+
+            <hr>
+
+            <p><em>Beatrider is playable at <a href="https://thebeatrider.com/play/">thebeatrider.com/play</a>. Source code on <a href="https://github.com/jeffeharris/beatrider">GitHub</a>. It's 8,000 lines of AI-generated spaghetti code in a single HTML file. It's also fun.</em></p>
+        </article>
+
+        <footer>
+            <p>vibe project</p>
+        </footer>
+    </div>
+
+    <!-- Image modal -->
+    <div class="image-modal" id="imageModal">
+        <span class="image-modal-close" onclick="closeModal()">&times;</span>
+        <button class="image-modal-nav prev" onclick="navigateModal(-1)">‹</button>
+        <button class="image-modal-nav next" onclick="navigateModal(1)">›</button>
+        <div class="image-modal-content">
+            <img id="modalImage" src="" alt="Full size image" onclick="closeModal()">
+            <div class="image-modal-caption" id="modalCaption"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const totalSlides = 3;
+
+        function moveGallery(direction) {
+            currentSlide += direction;
+            if (currentSlide < 0) currentSlide = totalSlides - 1;
+            if (currentSlide >= totalSlides) currentSlide = 0;
+            updateGallery();
+        }
+
+        function goToSlide(index) {
+            currentSlide = index;
+            updateGallery();
+        }
+
+        function updateGallery() {
+            const track = document.getElementById('arcTrack');
+            track.style.transform = `translateX(-${currentSlide * 100}%)`;
+            
+            document.querySelectorAll('.arc-gallery-thumb').forEach((thumb, index) => {
+                thumb.classList.toggle('active', index === currentSlide);
+            });
+            
+            // Auto-scroll thumbnails to keep active one visible
+            const activeThumb = document.querySelector('.arc-gallery-thumb.active');
+            if (activeThumb) {
+                const container = activeThumb.parentElement;
+                const thumbLeft = activeThumb.offsetLeft;
+                const thumbWidth = activeThumb.offsetWidth;
+                const containerScroll = container.scrollLeft;
+                const containerWidth = container.clientWidth;
+                
+                // Scroll if thumb is out of view
+                if (thumbLeft < containerScroll) {
+                    container.scrollLeft = thumbLeft - 10;
+                } else if (thumbLeft + thumbWidth > containerScroll + containerWidth) {
+                    container.scrollLeft = thumbLeft + thumbWidth - containerWidth + 10;
+                }
+            }
+        }
+
+        // Add keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') moveGallery(-1);
+            if (e.key === 'ArrowRight') moveGallery(1);
+        });
+
+        // Add swipe support for mobile
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        const gallery = document.querySelector('.arc-gallery-container');
+        if (gallery) {
+            gallery.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+            });
+
+            gallery.addEventListener('touchend', (e) => {
+                touchEndX = e.changedTouches[0].screenX;
+                handleSwipe();
+            });
+        }
+
+        function handleSwipe() {
+            if (touchEndX < touchStartX - 50) moveGallery(1); // Swipe left
+            if (touchEndX > touchStartX + 50) moveGallery(-1); // Swipe right
+        }
+
+        // Modal functions
+        let modalCurrentSlide = 0;
+        const galleryImages = [
+            { src: '/website/images/arc-shot-01-big-drop.png', caption: 'Attempt 1: Gravity too strong' },
+            { src: '/website/images/arc-shot-02-big-spike.png', caption: 'Attempt 2: Now it\'s a spike' },
+            { src: '/website/images/arc-shot-03-getting closer.png', caption: 'Attempt 3: Getting warmer...' }
+        ];
+
+        function openModal(slideIndex) {
+            modalCurrentSlide = slideIndex;
+            const modal = document.getElementById('imageModal');
+            modal.classList.add('active');
+            updateModalContent();
+            document.body.style.overflow = 'hidden';
+        }
+
+        function updateModalContent() {
+            const modalImg = document.getElementById('modalImage');
+            const modalCaption = document.getElementById('modalCaption');
+            modalImg.src = galleryImages[modalCurrentSlide].src;
+            modalCaption.textContent = galleryImages[modalCurrentSlide].caption;
+        }
+
+        function navigateModal(direction) {
+            modalCurrentSlide += direction;
+            if (modalCurrentSlide < 0) modalCurrentSlide = galleryImages.length - 1;
+            if (modalCurrentSlide >= galleryImages.length) modalCurrentSlide = 0;
+            updateModalContent();
+            event.stopPropagation();
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Keyboard navigation for modal
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('imageModal');
+            if (modal.classList.contains('active')) {
+                if (e.key === 'Escape') closeModal();
+                if (e.key === 'ArrowLeft') navigateModal(-1);
+                if (e.key === 'ArrowRight') navigateModal(1);
+            } else {
+                // Regular gallery navigation when modal is closed
+                if (e.key === 'ArrowLeft') moveGallery(-1);
+                if (e.key === 'ArrowRight') moveGallery(1);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -6,7 +6,6 @@
     <title>Beatrider</title>
     <!-- Favicon - simple pixelated B in cyan -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23000'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2300ffcc' font-family='monospace' font-size='24' font-weight='bold'>B</text></svg>">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -23,6 +22,16 @@
             flex-direction: column;
             align-items: center;
             padding: 2rem;
+        }
+        
+        a {
+            color: #ff00ff;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            color: #ff66ff;
+            text-decoration: underline;
         }
 
         header {
@@ -45,17 +54,22 @@
         .play-button {
             display: inline-block;
             padding: 1rem 3rem;
-            border: 1px solid #fff;
-            color: #fff;
+            border: 2px solid #ff00ff;
+            color: #ff00ff;
             text-decoration: none;
             margin: 3rem 0;
             transition: all 0.2s;
             letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-weight: bold;
+            background: transparent;
         }
 
         .play-button:hover {
-            background: #fff;
-            color: #000;
+            background: #ff00ff;
+            color: #0a0a0a;
+            box-shadow: 0 0 20px #ff00ff;
+            text-decoration: none;
         }
 
         nav {
@@ -76,7 +90,7 @@
         }
 
         section {
-            max-width: 600px;
+            max-width: 750px;
             width: 100%;
             margin: 2rem 0;
         }
@@ -561,17 +575,22 @@
 
         .sticky-play {
             padding: 0.5rem 1.5rem;
-            border: 1px solid #fff;
-            color: #fff;
+            border: 2px solid #ff00ff;
+            color: #ff00ff;
             text-decoration: none;
             transition: all 0.2s;
             letter-spacing: 0.1em;
             font-size: 0.9rem;
+            text-transform: uppercase;
+            font-weight: bold;
+            background: transparent;
         }
 
         .sticky-play:hover {
-            background: #fff;
-            color: #000;
+            background: #ff00ff;
+            color: #0a0a0a;
+            box-shadow: 0 0 15px #ff00ff;
+            text-decoration: none;
         }
 
         @media (max-width: 768px) {
@@ -588,7 +607,7 @@
     <div class="sticky-header" id="stickyHeader">
         <div class="logo">BEATRIDER</div>
         <div class="sticky-nav">
-            <a href="#" onclick="showSection('blog'); return false;">Blog</a>
+            <a href="/blog/">Devlog</a>
             <a href="#" onclick="showSection('guide'); return false;">Guide</a>
             <a href="#" onclick="showSection('about'); return false;">About</a>
             <a href="play/" class="sticky-play">PLAY</a>
@@ -603,7 +622,7 @@
     <a href="play/" class="play-button">PLAY</a>
 
     <nav>
-        <a href="#" onclick="showSection('blog')" class="nav-link">Blog</a>
+        <a href="/blog/" class="nav-link">Devlog</a>
         <a href="#" onclick="showSection('guide')" class="nav-link">Guide</a>
         <a href="#" onclick="showSection('about')" class="nav-link">About</a>
     </nav>
@@ -717,18 +736,6 @@
         </ul>
     </section>
 
-    <section id="blog-section" class="hidden">
-        <h2>Blog</h2>
-        <div id="blog-posts">
-            <!-- Posts will be loaded here -->
-        </div>
-        <div id="blog-content" class="hidden">
-            <a href="#" onclick="showBlogList()" style="color: #888; text-decoration: none; margin-bottom: 2rem; display: inline-block;">← Back to posts</a>
-            <article id="blog-article">
-                <!-- Article content will be loaded here -->
-            </article>
-        </div>
-    </section>
 
     <section id="about-section" class="hidden">
         <h2>About</h2>
@@ -741,6 +748,9 @@
 
         <h3>Why?</h3>
         <p>Sometimes you just want to build something fun without overthinking it.</p>
+        
+        <h3>Who?</h3>
+        <p>Built by Jeff Harris, a product strategy consultant exploring AI-assisted development. <a href="https://jeffharrisconsulting.com" target="_blank">jeffharrisconsulting.com</a> | <a href="https://linkedin.com/in/jeffeharris" target="_blank">LinkedIn</a></p>
     </section>
 
     <footer>
@@ -748,8 +758,6 @@
     </footer>
 
     <script>
-        let blogPosts = [];
-
         // Sticky header scroll handling
         window.addEventListener('scroll', () => {
             const header = document.querySelector('header');
@@ -763,24 +771,11 @@
             }
         });
 
-        // Handle direct links to blog posts
+        // Handle direct links to sections
         function handleHashChange() {
             const hash = window.location.hash.slice(1); // Remove #
             
-            if (hash.startsWith('blog/')) {
-                // Direct link to a blog post
-                const slug = hash.replace('blog/', '');
-                showSection('blog');
-                
-                // Wait for posts to load if needed
-                if (blogPosts.length === 0) {
-                    loadBlogPosts().then(() => {
-                        loadBlogPost(slug);
-                    });
-                } else {
-                    loadBlogPost(slug);
-                }
-            } else if (hash === 'blog' || hash === 'guide' || hash === 'about') {
+            if (hash === 'guide' || hash === 'about') {
                 // Direct link to a section
                 showSection(hash);
             }
@@ -796,78 +791,12 @@
             }
         });
 
-        async function loadBlogPosts() {
-            try {
-                const response = await fetch('website/posts.json');
-                const data = await response.json();
-                blogPosts = data.posts;
-                renderBlogList();
-            } catch (error) {
-                console.error('Error loading posts:', error);
-                document.getElementById('blog-posts').innerHTML = '<p>Error loading blog posts.</p>';
-            }
-        }
-
-        function renderBlogList() {
-            const container = document.getElementById('blog-posts');
-            container.innerHTML = blogPosts.map(post => `
-                <article>
-                    <div class="post-meta">
-                        <span class="post-date">${post.date}</span>
-                        <span class="post-category">${post.category}</span>
-                    </div>
-                    <h3 class="post-title">${post.title}</h3>
-                    <div class="post-content">
-                        <p>${post.excerpt}</p>
-                    </div>
-                    <a href="#" onclick="loadBlogPost('${post.slug}'); return false;" class="read-more">Continue reading</a>
-                </article>
-            `).join('');
-        }
-
-        async function loadBlogPost(slug) {
-            try {
-                const response = await fetch(`website/blog/${slug}.md`);
-                const markdown = await response.text();
-                const html = marked.parse(markdown);
-                
-                document.getElementById('blog-article').innerHTML = html;
-                document.getElementById('blog-posts').classList.add('hidden');
-                document.getElementById('blog-content').classList.remove('hidden');
-                
-                // Update URL without triggering hashchange
-                history.pushState(null, '', `#blog/${slug}`);
-                
-                // Scroll to top of blog section
-                document.getElementById('blog-section').scrollIntoView({ behavior: 'smooth' });
-            } catch (error) {
-                console.error('Error loading post:', error);
-                document.getElementById('blog-article').innerHTML = '<p>Error loading blog post.</p>';
-            }
-        }
-
-        function showBlogList() {
-            document.getElementById('blog-posts').classList.remove('hidden');
-            document.getElementById('blog-content').classList.add('hidden');
-            
-            // Update URL to just #blog
-            history.pushState(null, '', '#blog');
-            
-            return false;
-        }
-
         function showSection(section) {
-            document.getElementById('blog-section').classList.add('hidden');
             document.getElementById('guide-section').classList.add('hidden');
             document.getElementById('about-section').classList.add('hidden');
             
             if (section) {
                 document.getElementById(section + '-section').classList.remove('hidden');
-                
-                // Load blog posts when blog section is shown
-                if (section === 'blog' && blogPosts.length === 0) {
-                    loadBlogPosts();
-                }
                 
                 // Scroll to section if using sticky header
                 const stickyHeader = document.getElementById('stickyHeader');
@@ -879,11 +808,6 @@
                         window.scrollTo({ top: targetPosition, behavior: 'smooth' });
                     }
                 }
-            }
-            
-            // Reset blog view to list when navigating to blog
-            if (section === 'blog') {
-                showBlogList();
             }
             
             document.querySelectorAll('.nav-link').forEach(link => {

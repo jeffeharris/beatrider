@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Devlog - Beatrider</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23000'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2300ffcc' font-family='monospace' font-size='24' font-weight='bold'>B</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 80px 2rem 2rem 2rem;
+            line-height: 1.8;
+        }
+
+        /* Sticky header */
+        .sticky-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #222;
+        }
+
+        .sticky-header .logo {
+            font-size: 1.2rem;
+            letter-spacing: 0.2em;
+            color: #fff;
+            padding-right: 0.2em; /* Compensate for letter-spacing on last character */
+        }
+
+        .sticky-nav {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .sticky-nav a {
+            color: #888;
+            text-decoration: none;
+            transition: color 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .sticky-nav a:hover {
+            color: #fff;
+        }
+
+        .sticky-nav .current-page {
+            color: #00ffcc;
+        }
+
+        .sticky-play {
+            padding: 0.5rem 1.5rem;
+            border: 2px solid #ff00ff;
+            color: #ff00ff;
+            text-decoration: none;
+            transition: all 0.2s;
+            letter-spacing: 0.1em;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            font-weight: bold;
+            background: transparent;
+        }
+
+        .sticky-play:hover {
+            background: #ff00ff;
+            color: #0a0a0a;
+            box-shadow: 0 0 15px #ff00ff;
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 750px;
+            width: 100%;
+        }
+
+        .page-header {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid #222;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            font-weight: normal;
+            letter-spacing: 0.05em;
+        }
+
+        .page-subtitle {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        /* Blog post list */
+        .blog-posts {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .blog-post {
+            padding: 2rem 0;
+            border-bottom: 1px solid #222;
+        }
+
+        .blog-post:last-child {
+            border-bottom: none;
+        }
+
+        .post-meta {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .post-date {
+            color: #888;
+        }
+
+        .post-category {
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .post-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: normal;
+            line-height: 1.3;
+        }
+
+        .post-title a {
+            color: #fff;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .post-title a:hover {
+            color: #00ffcc;
+        }
+
+        .post-excerpt {
+            color: #aaa;
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
+        }
+
+        .read-more {
+            display: inline-block;
+            color: #888;
+            text-decoration: none;
+            transition: color 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .read-more:hover {
+            color: #fff;
+        }
+
+        .read-more::after {
+            content: ' →';
+        }
+
+        footer {
+            margin-top: auto;
+            padding-top: 4rem;
+            color: #555;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 100px 1rem 1rem 1rem;
+            }
+
+            .sticky-header {
+                padding: 0.75rem 1rem;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            
+            .sticky-header .logo {
+                font-size: 1rem;
+            }
+            
+            .sticky-nav { 
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .sticky-nav a {
+                font-size: 0.75rem;
+            }
+            
+            .sticky-play {
+                padding: 0.4rem 1rem;
+                font-size: 0.75rem;
+                border-width: 2px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .post-title {
+                font-size: 1.25rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .sticky-nav a:not(.sticky-play):not(.current-page) {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sticky header -->
+    <div class="sticky-header">
+        <div class="logo">BEATRIDER</div>
+        <div class="sticky-nav">
+            <a href="/">Home</a>
+            <a href="/blog/" class="current-page">Devlog</a>
+            <a href="/#guide">Guide</a>
+            <a href="/#about">About</a>
+            <a href="/play/" class="sticky-play">PLAY</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Devlog</h1>
+            <p class="page-subtitle">Development notes on AI-assisted coding, game design, and procedural music</p>
+        </div>
+
+        <div class="blog-posts" id="blogPosts">
+            <!-- Posts will be loaded here -->
+        </div>
+    </div>
+
+    <footer>
+        <p>vibe project</p>
+    </footer>
+
+    <script>
+        async function loadBlogPosts() {
+            try {
+                const response = await fetch('/website/posts.json');
+                const data = await response.json();
+                const posts = data.posts;
+                
+                const container = document.getElementById('blogPosts');
+                container.innerHTML = posts.map(post => `
+                    <article class="blog-post">
+                        <div class="post-meta">
+                            <span class="post-date">${post.date}</span>
+                            <span class="post-category">${post.category}</span>
+                        </div>
+                        <h2 class="post-title">
+                            <a href="/blog/${post.slug}.html">${post.title}</a>
+                        </h2>
+                        <p class="post-excerpt">${post.excerpt}</p>
+                        <a href="/blog/${post.slug}.html" class="read-more">Continue reading</a>
+                    </article>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading posts:', error);
+                document.getElementById('blogPosts').innerHTML = '<p>Error loading blog posts.</p>';
+            }
+        }
+
+        // Load posts on page load
+        loadBlogPosts();
+    </script>
+</body>
+</html>
