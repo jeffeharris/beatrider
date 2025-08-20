@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 1200px;
+            height: 630px;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* Game-like grid background */
+        .game-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            opacity: 0.2;
+            background: linear-gradient(180deg, transparent 0%, rgba(0,255,204,0.1) 100%);
+        }
+        
+        .lane {
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            background: #00ffcc;
+            opacity: 0.3;
+        }
+        
+        .lane-1 { left: 30%; }
+        .lane-2 { left: 40%; }
+        .lane-3 { left: 50%; }
+        .lane-4 { left: 60%; }
+        .lane-5 { left: 70%; }
+        
+        .logo {
+            font-size: 80px;
+            letter-spacing: 0.3em;
+            font-weight: bold;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, #00ffcc 0%, #ff00ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+        }
+        
+        .cta {
+            font-size: 48px;
+            color: #00ffcc;
+            margin-bottom: 30px;
+            animation: glow 2s ease-in-out infinite;
+        }
+        
+        @keyframes glow {
+            0%, 100% { text-shadow: 0 0 10px rgba(0,255,204,0.5); }
+            50% { text-shadow: 0 0 20px rgba(0,255,204,0.8); }
+        }
+        
+        .controls {
+            display: flex;
+            gap: 40px;
+            font-size: 24px;
+            color: #888;
+        }
+        
+        .control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .key {
+            padding: 8px 12px;
+            border: 2px solid #00ffcc;
+            border-radius: 4px;
+            color: #00ffcc;
+            font-weight: bold;
+        }
+        
+        /* Animated elements */
+        .note {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #ff00ff;
+            border-radius: 50%;
+            animation: fall 3s linear infinite;
+        }
+        
+        @keyframes fall {
+            from {
+                transform: translateY(-100px);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            to {
+                transform: translateY(700px);
+                opacity: 0;
+            }
+        }
+        
+        .note-1 { left: 30%; animation-delay: 0s; }
+        .note-2 { left: 40%; animation-delay: 0.5s; background: #00ffcc; }
+        .note-3 { left: 50%; animation-delay: 1s; }
+        .note-4 { left: 60%; animation-delay: 1.5s; background: #00ffcc; }
+        .note-5 { left: 70%; animation-delay: 2s; }
+    </style>
+</head>
+<body>
+    <div class="game-grid">
+        <div class="lane lane-1"></div>
+        <div class="lane lane-2"></div>
+        <div class="lane lane-3"></div>
+        <div class="lane lane-4"></div>
+        <div class="lane lane-5"></div>
+    </div>
+    
+    <div class="note note-1"></div>
+    <div class="note note-2"></div>
+    <div class="note note-3"></div>
+    <div class="note note-4"></div>
+    <div class="note note-5"></div>
+    
+    <div class="container">
+        <h1 class="logo">BEATRIDER</h1>
+        <p class="cta">PLAY NOW</p>
+        <div class="controls">
+            <div class="control">
+                <span class="key">←</span>
+                <span class="key">→</span>
+                <span class="key">↑</span>
+                <span class="key">↓</span>
+            </div>
+            <div class="control">
+                <span>WASD or swipe on mobile</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
