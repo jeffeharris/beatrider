@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Arc Shot Code Comparison</title>
+    <style>
+        body {
+            background: #0a0a0a;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        
+        .chart-container {
+            text-align: center;
+            background: #0a0a0a;
+            padding: 40px;
+        }
+        
+        .pie-chart {
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            background: conic-gradient(
+                #ff3366 0deg 357.6deg,  /* 99.3% - Claude's 600 lines */
+                #00ffcc 357.6deg 360deg  /* 0.7% - Actual 4 lines */
+            );
+            margin: 0 auto 30px;
+            position: relative;
+            box-shadow: 0 0 30px rgba(255, 51, 102, 0.3);
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 30px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+        }
+        
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #333;
+        }
+        
+        .claude-color {
+            background: #ff3366;
+        }
+        
+        .actual-color {
+            background: #00ffcc;
+        }
+        
+        h2 {
+            font-size: 28px;
+            margin-bottom: 30px;
+            color: #fff;
+            font-weight: normal;
+        }
+        
+        .percentage {
+            font-size: 14px;
+            color: #888;
+            margin-left: 5px;
+        }
+        
+        .tiny-slice {
+            position: absolute;
+            right: -30px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            color: #00ffcc;
+        }
+        
+        .tiny-slice::before {
+            content: '←';
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chart-container">
+        <h2>Arc Shot Implementation: Lines of Code</h2>
+        <div class="pie-chart">
+            <div class="tiny-slice">0.7%</div>
+        </div>
+        <div class="legend">
+            <div class="legend-item">
+                <div class="color-box claude-color"></div>
+                <span>Claude's Solution: 600 lines <span class="percentage">(99.3%)</span></span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box actual-color"></div>
+                <span>Actual Solution: 4 lines <span class="percentage">(0.7%)</span></span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
