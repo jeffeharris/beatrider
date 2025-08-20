@@ -2,17 +2,17 @@
 
 Lane-based rhythm shooter with procedural techno. Built with AI in 10 days.
 
-![Beatrider Gameplay](blog/images/beatrider-gameplay.gif)
+![Beatrider Gameplay](devlog/images/beatrider-gameplay.gif)
 
 **🎮 Play:** https://thebeatrider.com/play/
 
-**📖 Devlog:** https://thebeatrider.com/blog/
+**📖 Devlog:** https://thebeatrider.com/devlog/
 
 ## What is this?
 
 8,000 lines of spaghetti code in a single HTML file. No build process. The music drives the game - enemies spawn on beats, different drums trigger different enemies. 
 
-Built with Phaser.js, Tone.js, and Claude. Read the full story: [Arguing Software Into Existence](https://thebeatrider.com/blog/arguing-software-into-existence.html)
+Built with Phaser.js, Tone.js, and Claude. Read the full story: [Arguing Software Into Existence](https://thebeatrider.com/devlog/arguing-software-into-existence.html)
 
 ## Quick Start
 

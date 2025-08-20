@@ -14,7 +14,7 @@
         gtag('js', new Date());
         gtag('config', 'G-6SQJ9NR8SD', {
             page_title: 'Devlog Index',
-            page_path: '/blog/'
+            page_path: '/devlog/'
         });
     </script>
     <style>
@@ -257,7 +257,7 @@
         <div class="logo">BEATRIDER</div>
         <div class="sticky-nav">
             <a href="/">Home</a>
-            <a href="/blog/" class="current-page">Devlog</a>
+            <a href="/devlog/" class="current-page">Devlog</a>
             <a href="/#guide">Guide</a>
             <a href="/#about">About</a>
             <a href="/play/" class="sticky-play">PLAY</a>
@@ -282,7 +282,7 @@
     <script>
         async function loadBlogPosts() {
             try {
-                const response = await fetch('/blog/posts.json');
+                const response = await fetch('/devlog/posts.json');
                 const data = await response.json();
                 const posts = data.posts;
                 
@@ -294,10 +294,10 @@
                             <span class="post-category">${post.category}</span>
                         </div>
                         <h2 class="post-title">
-                            <a href="/blog/${post.slug}.html">${post.title}</a>
+                            <a href="/devlog/${post.slug}.html">${post.title}</a>
                         </h2>
                         <p class="post-excerpt">${post.excerpt}</p>
-                        <a href="/blog/${post.slug}.html" class="read-more">Continue reading</a>
+                        <a href="/devlog/${post.slug}.html" class="read-more">Continue reading</a>
                     </article>
                 `).join('');
             } catch (error) {
