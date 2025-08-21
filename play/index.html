@@ -2967,11 +2967,10 @@ class StartupScene extends Phaser.Scene {
       });
     };
     
-    // Start normal game handler (or tutorial if never completed)
+    // Start normal game handler (always start regular game, tutorial is optional)
     const startNormalGame = async () => {
-      // Default to tutorial for first-time players
-      const shouldPlayTutorial = !tutorialCompleted;
-      await startGame(shouldPlayTutorial);
+      // Always start regular game - tutorial is optional via clicking the tutorial text
+      await startGame(false);
     };
     
     // Tutorial button handler - always starts tutorial
@@ -5389,6 +5388,137 @@ class Main extends Phaser.Scene {
     this.pauseInstructionText.setOrigin(0.5);
     this.pauseInstructionText.setDepth(10001);
     
+    // Add feedback UI in upper right corner (moved down to avoid SKIP button)
+    const feedbackContainer = this.add.container(WIDTH - 100, 100);
+    feedbackContainer.setDepth(10002);
+    this.pauseFeedbackContainer = feedbackContainer; // Store for cleanup
+    
+    // "Having fun?" text
+    const feedbackQuestion = this.add.text(0, 0, 'Having fun?', {
+      font: `${smallFontSize * 0.5}px monospace`,
+      fill: '#888'
+    });
+    feedbackQuestion.setOrigin(0.5);
+    feedbackContainer.add(feedbackQuestion);
+    
+    // Thumbs up button
+    const thumbsUp = this.add.text(-25, 25, '👍', {
+      font: `${smallFontSize * 0.8}px monospace`,
+      fill: '#fff'
+    });
+    thumbsUp.setOrigin(0.5);
+    thumbsUp.setInteractive({ useHandCursor: true });
+    thumbsUp.setAlpha(0.6);
+    feedbackContainer.add(thumbsUp);
+    
+    // Thumbs down button
+    const thumbsDown = this.add.text(25, 25, '👎', {
+      font: `${smallFontSize * 0.8}px monospace`,
+      fill: '#fff'
+    });
+    thumbsDown.setOrigin(0.5);
+    thumbsDown.setInteractive({ useHandCursor: true });
+    thumbsDown.setAlpha(0.6);
+    feedbackContainer.add(thumbsDown);
+    
+    // Hover effects
+    thumbsUp.on('pointerover', () => {
+      thumbsUp.setAlpha(1);
+      thumbsUp.setScale(1.1);
+    });
+    thumbsUp.on('pointerout', () => {
+      thumbsUp.setAlpha(0.6);
+      thumbsUp.setScale(1);
+    });
+    
+    thumbsDown.on('pointerover', () => {
+      thumbsDown.setAlpha(1);
+      thumbsDown.setScale(1.1);
+    });
+    thumbsDown.on('pointerout', () => {
+      thumbsDown.setAlpha(0.6);
+      thumbsDown.setScale(1);
+    });
+    
+    // Handle feedback clicks - both lead to same result
+    const handleFeedback = (feedbackType) => {
+      // Prevent resume while handling feedback
+      this.isHandlingFeedback = true;
+      
+      // Clear flag after a short delay to allow normal resume later
+      this.time.delayedCall(500, () => {
+        this.isHandlingFeedback = false;
+      });
+      
+      // Track feedback
+      trackEvent('pause_feedback_given', {
+        type: feedbackType,
+        score: this.score,
+        survival_time: Math.floor((this.time.now - this.gameStartTime) / 1000)
+      });
+      
+      // Hide thumbs and question
+      feedbackQuestion.setVisible(false);
+      thumbsUp.setVisible(false);
+      thumbsDown.setVisible(false);
+      
+      // Show thanks and link (moved down a bit more for spacing)
+      const thanksText = this.add.text(0, 0, feedbackType === 'positive' ? 'Thanks! 💜' : 'Thanks!', {
+        font: `${smallFontSize * 0.5}px monospace`,
+        fill: feedbackType === 'positive' ? '#0f0' : '#0ff'
+      });
+      thanksText.setOrigin(0.5);
+      feedbackContainer.add(thanksText);
+      
+      const shareLink = this.add.text(0, 25, '[Share more]', {
+        font: `${smallFontSize * 0.6}px monospace`,
+        fill: '#0ff'
+      });
+      shareLink.setOrigin(0.5);
+      shareLink.setInteractive({ useHandCursor: true });
+      feedbackContainer.add(shareLink);
+      
+      shareLink.on('pointerover', () => {
+        shareLink.setStyle({ fill: '#fff' });
+      });
+      shareLink.on('pointerout', () => {
+        shareLink.setStyle({ fill: '#666' });
+      });
+      
+      shareLink.on('pointerdown', (pointer) => {
+        this.isHandlingFeedback = true; // Also set flag here
+        
+        trackEvent('feedback_form_opened_from_pause', {
+          initial_feedback: feedbackType,
+          score: this.score
+        });
+        
+        // Open Google Form in new tab
+        window.open('https://docs.google.com/forms/d/e/1FAIpQLSeHzYiQAqJ_1VR6PAXgsBdJxkYte-UcwBlC1w83dJ0gopqBNQ/viewform', '_blank');
+        
+        shareLink.setText('[Form opened]');
+        shareLink.setStyle({ fill: '#0f0' });
+        
+        // Clear flag after a short delay
+        this.time.delayedCall(500, () => {
+          this.isHandlingFeedback = false;
+        });
+        
+        if (pointer && pointer.event) {
+          pointer.event.stopPropagation();
+        }
+      });
+    };
+    
+    thumbsUp.on('pointerdown', (pointer) => {
+      handleFeedback('positive');
+      pointer.event.stopPropagation();
+    });
+    thumbsDown.on('pointerdown', (pointer) => {
+      handleFeedback('negative');
+      pointer.event.stopPropagation();
+    });
+    
     // Pause music
     if (Tone.Transport.state === 'started') {
       Tone.Transport.pause();
@@ -5406,6 +5536,7 @@ class Main extends Phaser.Scene {
     if (!this.isPaused) return;
     
     this.isPaused = false;
+    this.isHandlingFeedback = false; // Reset feedback flag
     
     // Adjust game start time to account for pause duration
     if (this.pauseStartTime) {
@@ -5444,6 +5575,10 @@ class Main extends Phaser.Scene {
     if (this.pauseInstructionText) {
       this.pauseInstructionText.destroy();
       this.pauseInstructionText = null;
+    }
+    if (this.pauseFeedbackContainer) {
+      this.pauseFeedbackContainer.destroy();
+      this.pauseFeedbackContainer = null;
     }
     
     // Resume music if it was playing
@@ -5634,183 +5769,9 @@ class Main extends Phaser.Scene {
       delay: 1000
     });
     
-    // Simple feedback UI - just thumbs up/down
-    const feedbackY = HEIGHT/2 + screenRef * 0.17;
     
-    // Feedback container for proper cleanup
-    const feedbackContainer = this.add.container(WIDTH/2, feedbackY);
-    feedbackContainer.setDepth(20001);
-    feedbackContainer.setAlpha(0);
-    feedbackContainer.setData('isFeedbackUI', true);
-    
-    // Check if we've already asked for feedback recently (within last 5 games)
-    const lastFeedbackGame = parseInt(localStorage.getItem('lastFeedbackGame') || '0');
-    const gamesPlayed = parseInt(localStorage.getItem('gamesPlayed') || '0');
-    const newGamesPlayed = gamesPlayed + 1;
-    localStorage.setItem('gamesPlayed', newGamesPlayed.toString());
-    
-    // Only show feedback UI every 5 games and if score > 100 (decent play session)
-    const shouldShowFeedback = (newGamesPlayed - lastFeedbackGame >= 5 || lastFeedbackGame === 0) && this.score > 100;
-    
-    if (shouldShowFeedback) {
-      // Question text
-      const feedbackQuestion = this.add.text(0, 0, 'Having fun?', {
-        font: `${tinyFontSize} monospace`,
-        fill: '#888'
-      });
-      feedbackQuestion.setOrigin(0.5);
-      feedbackContainer.add(feedbackQuestion);
-      
-      // Thumbs up button
-      const thumbsUp = this.add.text(-30, 20, '👍', {
-        font: `${medFontSize} monospace`,
-        fill: '#fff'
-      });
-      thumbsUp.setOrigin(0.5);
-      thumbsUp.setInteractive({ useHandCursor: true });
-      thumbsUp.setAlpha(0.5);
-      feedbackContainer.add(thumbsUp);
-      
-      // Thumbs down button
-      const thumbsDown = this.add.text(30, 20, '👎', {
-        font: `${medFontSize} monospace`,
-        fill: '#fff'
-      });
-      thumbsDown.setOrigin(0.5);
-      thumbsDown.setInteractive({ useHandCursor: true });
-      thumbsDown.setAlpha(0.5);
-      feedbackContainer.add(thumbsDown);
-      
-      // Hover effects
-      thumbsUp.on('pointerover', () => {
-        thumbsUp.setAlpha(1);
-        thumbsUp.setScale(1.1);
-      });
-      thumbsUp.on('pointerout', () => {
-        thumbsUp.setAlpha(0.5);
-        thumbsUp.setScale(1);
-      });
-      
-      thumbsDown.on('pointerover', () => {
-        thumbsDown.setAlpha(1);
-        thumbsDown.setScale(1.1);
-      });
-      thumbsDown.on('pointerout', () => {
-        thumbsDown.setAlpha(0.5);
-        thumbsDown.setScale(1);
-      });
-      
-      // Handle thumbs up click - simple version
-      thumbsUp.on('pointerdown', () => {
-        // Track positive feedback
-        trackEvent('feedback_given', {
-          type: 'positive',
-          score: this.score,
-          games_played: newGamesPlayed,
-          survival_time: Math.floor((this.time.now - this.gameStartTime) / 1000)
-        });
-        
-        // Remember we asked for feedback
-        localStorage.setItem('lastFeedbackGame', newGamesPlayed.toString());
-        
-        // Hide feedback UI
-        feedbackContainer.setVisible(false);
-        
-        // Show simple thanks
-        const thanksText = this.add.text(WIDTH/2, feedbackY + 5, 'Thanks! 💜', {
-          font: `${tinyFontSize} monospace`,
-          fill: '#0f0'
-        });
-        thanksText.setOrigin(0.5);
-        thanksText.setDepth(20001);
-        thanksText.setData('isThanksUI', true);
-        
-        // Fade in thanks message
-        thanksText.setAlpha(0);
-        this.tweens.add({
-          targets: thanksText,
-          alpha: 1,
-          duration: 400
-        });
-      });
-      
-      // Handle thumbs down click - simple with Google Form link
-      thumbsDown.on('pointerdown', () => {
-        // Track negative feedback
-        trackEvent('feedback_given', {
-          type: 'negative',
-          score: this.score,
-          games_played: newGamesPlayed,
-          survival_time: Math.floor((this.time.now - this.gameStartTime) / 1000)
-        });
-        
-        // Remember we asked for feedback
-        localStorage.setItem('lastFeedbackGame', newGamesPlayed.toString());
-        
-        // Hide initial feedback UI
-        feedbackContainer.setVisible(false);
-        
-        // Show feedback link
-        const formContainer = this.add.container(WIDTH/2, feedbackY);
-        formContainer.setDepth(20001);
-        formContainer.setData('isFormUI', true);
-        
-        const thanksText = this.add.text(0, 0, 'Thanks for the feedback!', {
-          font: `${tinyFontSize} monospace`,
-          fill: '#0ff'
-        });
-        thanksText.setOrigin(0.5);
-        formContainer.add(thanksText);
-        
-        // Google Form link - you'll need to create this form and update the URL
-        const formLink = this.add.text(0, 18, '[Share details]', {
-          font: `${tinyFontSize} monospace`,
-          fill: '#666'
-        });
-        formLink.setOrigin(0.5);
-        formLink.setInteractive({ useHandCursor: true });
-        formContainer.add(formLink);
-        
-        formLink.on('pointerover', () => {
-          formLink.setStyle({ fill: '#fff' });
-        });
-        formLink.on('pointerout', () => {
-          formLink.setStyle({ fill: '#666' });
-        });
-        
-        formLink.on('pointerdown', () => {
-          // Track form link click
-          trackEvent('feedback_form_opened', {
-            score: this.score
-          });
-          
-          // Open Google Form in new tab
-          window.open('https://docs.google.com/forms/d/e/1FAIpQLSeHzYiQAqJ_1VR6PAXgsBdJxkYte-UcwBlC1w83dJ0gopqBNQ/viewform', '_blank');
-          
-          formLink.setText('[Form opened]');
-          formLink.setStyle({ fill: '#0f0' });
-        });
-        
-        // Fade in form container
-        formContainer.setAlpha(0);
-        this.tweens.add({
-          targets: formContainer,
-          alpha: 1,
-          duration: 400
-        });
-      });
-      
-      // Fade in feedback UI
-      this.tweens.add({
-        targets: feedbackContainer,
-        alpha: 1,
-        duration: 600,
-        delay: 1200
-      });
-    }
-    
-    // Restart instruction with countdown - adjust Y position if feedback is shown
-    const restartY = shouldShowFeedback ? HEIGHT/2 + screenRef * 0.23 : HEIGHT/2 + screenRef * 0.2;
+    // Restart instruction with countdown
+    const restartY = statsY + screenRef * 0.06;
     const restartText = this.add.text(WIDTH/2, restartY, 'RESTARTING IN 3...', {
       font: `${smallFontSize} monospace`,
       fill: '#00ffcc'  // Brighter cyan color for visibility
@@ -5902,13 +5863,10 @@ class Main extends Phaser.Scene {
       // Fade out game over screen elements
       const highScoreElement = this.children.list.find(child => child && child.getData && child.getData('isHighScoreText'));
       const survivalStatsElement = this.children.list.find(child => child && child.getData && child.getData('isSurvivalStats'));
-      const feedbackElement = this.children.list.find(child => child && child.getData && child.getData('isFeedbackUI'));
-      const thanksElement = this.children.list.find(child => child && child.getData && child.getData('isThanksUI'));
-      const formElement = this.children.list.find(child => child && child.getData && child.getData('isFormUI'));
       
       this.tweens.add({
         targets: [overlay, scoreLabel, scoreText, restartText, congratsText, highScoreElement, 
-                 survivalStatsText, feedbackElement, thanksElement, formElement].filter(Boolean),
+                 survivalStatsText].filter(Boolean),
         alpha: 0,
         duration: 300,
         onComplete: () => {
@@ -5920,9 +5878,6 @@ class Main extends Phaser.Scene {
           if(congratsText) congratsText.destroy();
           if(highScoreElement) highScoreElement.destroy();
           if(survivalStatsText) survivalStatsText.destroy();
-          if(feedbackElement) feedbackElement.destroy();
-          if(thanksElement) thanksElement.destroy();
-          if(formElement) formElement.destroy();
           
           // Reset score and combo for new round
           this.score = 0;
@@ -6889,7 +6844,7 @@ class Main extends Phaser.Scene {
     
     // Handle resume from pause with SPACE or touch
     if (this.isPaused) {
-      if (this.keys.SPACE.isDown || this.isTouchFiring) {
+      if ((this.keys.SPACE.isDown || this.isTouchFiring) && !this.isHandlingFeedback) {
         this.resumeGame();
         // Small delay to prevent immediate firing after resume
         this.fireBlockTime = this.time.now + 100;
