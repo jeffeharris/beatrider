@@ -33,7 +33,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   
   <script src="https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js"></script>
-  <script src="https://unpkg.com/@tonejs/unmute@latest/build/unmute.min.js" data-add-button="true"></script>
+  <!-- Removed unmute.js as it's causing 404 and not needed -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   
   <!-- Google Analytics -->
@@ -807,28 +807,22 @@ let sessionHighScore = savedData.highScore;
 // Configure Tone.js for better Mac compatibility
 // Set up audio context with optimal settings for Mac
 if (typeof Tone !== 'undefined') {
-  // Set latencyHint for better performance on Mac
-  // 'interactive' provides low latency with reasonable CPU usage
-  Tone.context.latencyHint = 'interactive';
+  // Detect if we're on Mac for specific optimizations
+  const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
 
-  // Increase lookAhead time to prevent buffer underruns
-  Tone.context.lookAhead = 0.1;
+  // Set latencyHint based on platform
+  // 'playback' has higher latency but better performance on Mac
+  // 'interactive' for other platforms
+  Tone.context.latencyHint = isMac ? 'playback' : 'interactive';
 
-  // Set update interval for smoother scheduling
-  Tone.context.updateInterval = 0.025;
+  // Adjust lookAhead time - lower for Mac to reduce CPU usage
+  Tone.context.lookAhead = isMac ? 0.05 : 0.1;
 
-  // Ensure the context is running (Mac sometimes suspends it)
-  if (Tone.context.state === 'suspended') {
-    Tone.context.resume();
-  }
+  // Set update interval - slightly higher on Mac for better performance
+  Tone.context.updateInterval = isMac ? 0.04 : 0.025;
 
-  // Add event listener to handle context state changes
-  Tone.context.addEventListener('statechange', () => {
-    if (Tone.context.state === 'suspended') {
-      console.log('Audio context suspended, attempting to resume...');
-      Tone.context.resume();
-    }
-  });
+  // Don't auto-resume - this causes the "must be resumed after user gesture" error
+  // Audio will start when user clicks to play the game
 }
 
 // Master chain with sidechain compression
@@ -8223,23 +8217,8 @@ const game = new Phaser.Game({
   }
 });
 
-// Ensure audio context is resumed when using Canvas mode on Mac
-if (useCanvas && typeof Tone !== 'undefined') {
-  // Canvas mode on Mac needs explicit audio context resume
-  setTimeout(async () => {
-    try {
-      if (Tone.context.state === 'suspended') {
-        console.log('Resuming audio context for Canvas mode...');
-        await Tone.context.resume();
-      }
-      // Also ensure Transport is ready
-      await Tone.start();
-      console.log('Audio context state:', Tone.context.state);
-    } catch (e) {
-      console.error('Error initializing audio:', e);
-    }
-  }, 100);
-}
+// Don't start audio here - wait for user interaction
+// Audio will be initialized when the user clicks to start the game
 
 // Wait for game to be fully initialized before setting up resize handlers
 setTimeout(() => {
