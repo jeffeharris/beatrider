@@ -2996,12 +2996,34 @@ class StartupScene extends Phaser.Scene {
       // Start Tone.js from user gesture with Mac-specific handling
       if (typeof Tone !== 'undefined') {
         try {
+          // Force audio context creation if needed
+          if (!Tone.context) {
+            console.log('Creating new audio context...');
+            Tone.context = new AudioContext();
+          }
+
           // Ensure context is properly initialized
           await Tone.start();
 
           // Double-check context is running (Mac-specific issue)
           if (Tone.context.state === 'suspended') {
+            console.log('Audio context suspended, resuming...');
             await Tone.context.resume();
+          }
+
+          // Extra check for Canvas mode
+          const isCanvasMode = game.renderer.type === Phaser.CANVAS;
+          if (isCanvasMode) {
+            console.log('Canvas mode detected, ensuring audio is active...');
+            // Try multiple times to ensure audio starts
+            for (let i = 0; i < 3; i++) {
+              if (Tone.context.state !== 'running') {
+                await new Promise(resolve => setTimeout(resolve, 50));
+                await Tone.context.resume();
+              } else {
+                break;
+              }
+            }
           }
 
           // Small delay to ensure audio system is ready on Mac
@@ -8200,6 +8222,24 @@ const game = new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH
   }
 });
+
+// Ensure audio context is resumed when using Canvas mode on Mac
+if (useCanvas && typeof Tone !== 'undefined') {
+  // Canvas mode on Mac needs explicit audio context resume
+  setTimeout(async () => {
+    try {
+      if (Tone.context.state === 'suspended') {
+        console.log('Resuming audio context for Canvas mode...');
+        await Tone.context.resume();
+      }
+      // Also ensure Transport is ready
+      await Tone.start();
+      console.log('Audio context state:', Tone.context.state);
+    } catch (e) {
+      console.error('Error initializing audio:', e);
+    }
+  }, 100);
+}
 
 // Wait for game to be fully initialized before setting up resize handlers
 setTimeout(() => {
