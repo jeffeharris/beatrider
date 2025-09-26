@@ -803,6 +803,34 @@ let sessionHighScore = savedData.highScore;
 // ============================================
 // AUDIO SETUP
 // ============================================
+
+// Configure Tone.js for better Mac compatibility
+// Set up audio context with optimal settings for Mac
+if (typeof Tone !== 'undefined') {
+  // Set latencyHint for better performance on Mac
+  // 'interactive' provides low latency with reasonable CPU usage
+  Tone.context.latencyHint = 'interactive';
+
+  // Increase lookAhead time to prevent buffer underruns
+  Tone.context.lookAhead = 0.1;
+
+  // Set update interval for smoother scheduling
+  Tone.context.updateInterval = 0.025;
+
+  // Ensure the context is running (Mac sometimes suspends it)
+  if (Tone.context.state === 'suspended') {
+    Tone.context.resume();
+  }
+
+  // Add event listener to handle context state changes
+  Tone.context.addEventListener('statechange', () => {
+    if (Tone.context.state === 'suspended') {
+      console.log('Audio context suspended, attempting to resume...');
+      Tone.context.resume();
+    }
+  });
+}
+
 // Master chain with sidechain compression
 const masterLimiter = new Tone.Limiter(-3).toDestination();
 
@@ -1789,8 +1817,18 @@ function updateGridButton() {
 const playPauseBtn = document.getElementById('playPauseBtn');
 if (playPauseBtn) {
   playPauseBtn.addEventListener('click', async () => {
-    await Tone.start();
-    
+    // Ensure proper audio context initialization
+    try {
+      await Tone.start();
+
+      // Mac-specific: ensure context is truly running
+      if (Tone.context.state === 'suspended') {
+        await Tone.context.resume();
+      }
+    } catch (error) {
+      console.error('Error initializing audio:', error);
+    }
+
     // Check if game is running and handle game pause
     const gameScene = window.gameScene;
     if (gameScene && gameScene.scene.isActive()) {
@@ -2955,11 +2993,31 @@ class StartupScene extends Phaser.Scene {
     
     // Start handler function
     const startGame = async (tutorialMode = false) => {
-      // Start Tone.js from user gesture
+      // Start Tone.js from user gesture with Mac-specific handling
       if (typeof Tone !== 'undefined') {
-        await Tone.start();
+        try {
+          // Ensure context is properly initialized
+          await Tone.start();
+
+          // Double-check context is running (Mac-specific issue)
+          if (Tone.context.state === 'suspended') {
+            await Tone.context.resume();
+          }
+
+          // Small delay to ensure audio system is ready on Mac
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+        } catch (error) {
+          console.error('Error starting audio:', error);
+          // Try to recover
+          try {
+            await Tone.context.resume();
+          } catch (resumeError) {
+            console.error('Could not resume audio context:', resumeError);
+          }
+        }
       }
-      
+
       // Transition to game with optional tutorial mode
       this.cameras.main.fadeOut(500, 0, 0, 0);
       this.time.delayedCall(500, () => {
@@ -3393,16 +3451,38 @@ class Main extends Phaser.Scene {
     
     // Start the music automatically when game starts
     if (typeof Tone !== 'undefined' && Tone.Transport.state !== 'started') {
-      // Tone should already be started from the startup screen
-      currentBar = 0;
-      window.currentBar = 0;
-      currentChordIndex = 0;
-      lastSection = '';
-      updatePatterns();
-      Tone.Transport.start();
-      if (document.getElementById('status')) {
-        document.getElementById('status').textContent = 'PLAYING';
-      }
+      // Ensure audio context is running before starting transport
+      const startMusic = async () => {
+        try {
+          // Make sure context is running
+          if (Tone.context.state === 'suspended') {
+            await Tone.context.resume();
+          }
+
+          // Reset music state
+          currentBar = 0;
+          window.currentBar = 0;
+          currentChordIndex = 0;
+          lastSection = '';
+          updatePatterns();
+
+          // Add a small delay before starting transport for Mac
+          await new Promise(resolve => setTimeout(resolve, 50));
+
+          // Start transport with immediate time to avoid scheduling issues
+          Tone.Transport.start('+0.1');
+
+          if (document.getElementById('status')) {
+            document.getElementById('status').textContent = 'PLAYING';
+          }
+        } catch (error) {
+          console.error('Error starting music:', error);
+          // Fallback: try to start anyway
+          Tone.Transport.start();
+        }
+      };
+
+      startMusic();
       uiState.isPlaying = true;
       updatePlayPauseButton();
     }
