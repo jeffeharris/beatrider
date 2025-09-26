@@ -807,15 +807,19 @@ let sessionHighScore = savedData.highScore;
 // Configure Tone.js for better Mac compatibility
 // Set up audio context with optimal settings for Mac
 if (typeof Tone !== 'undefined') {
-  // Set latencyHint for better performance on Mac
-  // 'interactive' provides low latency with reasonable CPU usage
-  Tone.context.latencyHint = 'interactive';
+  // Detect if we're on Mac for specific optimizations
+  const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
 
-  // Increase lookAhead time to prevent buffer underruns
-  Tone.context.lookAhead = 0.1;
+  // Set latencyHint based on platform
+  // 'playback' has higher latency but better performance on Mac
+  // 'interactive' for other platforms
+  Tone.context.latencyHint = isMac ? 'playback' : 'interactive';
 
-  // Set update interval for smoother scheduling
-  Tone.context.updateInterval = 0.025;
+  // Adjust lookAhead time - lower for Mac to reduce CPU usage
+  Tone.context.lookAhead = isMac ? 0.05 : 0.1;
+
+  // Set update interval - slightly higher on Mac for better performance
+  Tone.context.updateInterval = isMac ? 0.04 : 0.025;
 
   // Ensure the context is running (Mac sometimes suspends it)
   if (Tone.context.state === 'suspended') {
@@ -3230,8 +3234,12 @@ class Main extends Phaser.Scene {
       []  // Near stars (fast)
     ];
     
+    // Detect Mac for performance optimization
+    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+
     const starColors = [0x666666, 0x999999, 0xbbbbbb];
-    const starCounts = [100, 50, 25];
+    // Reduce star count on Mac for better performance
+    const starCounts = isMac ? [50, 25, 12] : [100, 50, 25];
     const starSizes = [1, 1.5, 2];
     
     this.starGraphics = this.add.graphics();
@@ -3255,6 +3263,14 @@ class Main extends Phaser.Scene {
   
   updateStarfield(dt) {
     if (!this.starGraphics) return; // Safety check
+
+    // Skip starfield updates on Mac to improve performance (update every other frame)
+    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+    if (isMac) {
+      this.starfieldFrameCounter = (this.starfieldFrameCounter || 0) + 1;
+      if (this.starfieldFrameCounter % 2 !== 0) return;
+    }
+
     this.starGraphics.clear();
     const vanishY = HEIGHT * 0.15;
     const vanishX = WIDTH / 2;
@@ -8166,11 +8182,31 @@ class Main extends Phaser.Scene {
   }
 }
 
+// Detect if we're on Mac/Safari for performance optimizations
+const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
 // Initialize Phaser game with proper scale configuration
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'gameContainer',
   scene: [StartupScene, Main],
+
+  // Performance optimizations
+  fps: {
+    target: 60,
+    forceSetTimeOut: isMac && isSafari // Use setTimeout on Mac Safari for more consistent frame timing
+  },
+
+  render: {
+    antialias: false, // Disable antialiasing for better performance
+    pixelArt: false,
+    clearBeforeRender: true,
+    preserveDrawingBuffer: false,
+    premultipliedAlpha: true,
+    powerPreference: 'high-performance' // Request high-performance GPU on Mac
+  },
+
   scale: {
     mode: Phaser.Scale.RESIZE,
     parent: 'gameContainer',
