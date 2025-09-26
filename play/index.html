@@ -8166,11 +8166,32 @@ class Main extends Phaser.Scene {
   }
 }
 
+// Detect Mac browsers which have WebGL performance issues
+const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
+const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+const isChrome = /Chrome/.test(navigator.userAgent);
+
+// Force Canvas on Mac browsers due to WebGL performance issues
+const useCanvas = isMac && (isSafari || isChrome);
+
+// Log which renderer we're using
+console.log('Platform:', isMac ? 'Mac' : 'Other', '| Browser:', isSafari ? 'Safari' : isChrome ? 'Chrome' : 'Other');
+console.log('Renderer:', useCanvas ? 'Canvas (Mac optimization)' : 'WebGL/Auto');
+
 // Initialize Phaser game with proper scale configuration
 const game = new Phaser.Game({
-  type: Phaser.AUTO,
+  // Force Canvas mode on Mac browsers for better performance (WebGL has issues)
+  type: useCanvas ? Phaser.CANVAS : Phaser.AUTO,
   parent: 'gameContainer',
   scene: [StartupScene, Main],
+
+  // Add performance preference for high-performance GPU when using WebGL
+  render: {
+    powerPreference: 'high-performance',
+    antialias: false,
+    pixelArt: false
+  },
+
   scale: {
     mode: Phaser.Scale.RESIZE,
     parent: 'gameContainer',
