@@ -33,7 +33,8 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   
   <script src="https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js"></script>
-  <!-- Removed unmute.js as it's causing 404 and not needed -->
+  <!-- unmute.js for iOS audio unlocking - uses correct CDN URL -->
+  <script src="https://unpkg.com/unmute" data-add-button="true"></script>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   
   <!-- Google Analytics -->
@@ -823,6 +824,54 @@ if (typeof Tone !== 'undefined') {
 
   // Don't auto-resume - this causes the "must be resumed after user gesture" error
   // Audio will start when user clicks to play the game
+}
+
+// iOS Audio Unlock Fallback
+// This handles iOS audio requirements if unmute.js fails to load
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+let iosAudioUnlocked = false;
+
+async function unlockIOSAudio() {
+  if (iosAudioUnlocked) return;
+
+  try {
+    // Method 1: Use Tone.start() which handles most cases
+    if (typeof Tone !== 'undefined') {
+      await Tone.start();
+
+      // Ensure context is running
+      if (Tone.context.state !== 'running') {
+        await Tone.context.resume();
+      }
+    }
+
+    // Method 2: Play a silent buffer to unlock iOS audio
+    // This helps with the mute switch behavior
+    if (isIOS && typeof Tone !== 'undefined') {
+      const silentBuffer = Tone.context.createBuffer(1, 1, 22050);
+      const source = Tone.context.createBufferSource();
+      source.buffer = silentBuffer;
+      source.connect(Tone.context.destination);
+      source.start(0);
+      source.stop(0.001);
+    }
+
+    iosAudioUnlocked = true;
+    console.log('iOS audio unlocked successfully');
+  } catch (e) {
+    console.warn('iOS audio unlock warning:', e);
+  }
+}
+
+// Add early touch listener for iOS to unlock audio ASAP
+if (isIOS) {
+  const earlyUnlock = () => {
+    unlockIOSAudio();
+    document.removeEventListener('touchstart', earlyUnlock);
+    document.removeEventListener('touchend', earlyUnlock);
+  };
+  document.addEventListener('touchstart', earlyUnlock, { passive: true });
+  document.addEventListener('touchend', earlyUnlock, { passive: true });
 }
 
 // Master chain with sidechain compression
@@ -1811,6 +1860,11 @@ function updateGridButton() {
 const playPauseBtn = document.getElementById('playPauseBtn');
 if (playPauseBtn) {
   playPauseBtn.addEventListener('click', async () => {
+    // iOS audio unlock - critical for iPhone/iPad
+    if (typeof unlockIOSAudio === 'function') {
+      await unlockIOSAudio();
+    }
+
     // Ensure proper audio context initialization
     try {
       await Tone.start();
@@ -2987,6 +3041,11 @@ class StartupScene extends Phaser.Scene {
     
     // Start handler function
     const startGame = async (tutorialMode = false) => {
+      // iOS audio unlock - critical for iPhone/iPad
+      if (typeof unlockIOSAudio === 'function') {
+        await unlockIOSAudio();
+      }
+
       // Start Tone.js from user gesture with Mac-specific handling
       if (typeof Tone !== 'undefined') {
         try {
