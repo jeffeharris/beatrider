@@ -33,8 +33,8 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   
   <script src="https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js"></script>
-  <!-- unmute.js for iOS audio unlocking - uses correct CDN URL -->
-  <script src="https://unpkg.com/unmute" data-add-button="true"></script>
+  <!-- unmute.js for iOS audio unlocking - correct package name and path -->
+  <script src="https://unpkg.com/unmute@0.1.0/build/unmute.js" data-add-button="true"></script>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   
   <!-- Google Analytics -->
@@ -826,51 +826,79 @@ if (typeof Tone !== 'undefined') {
   // Audio will start when user clicks to play the game
 }
 
-// iOS Audio Unlock Fallback
-// This handles iOS audio requirements if unmute.js fails to load
+// iOS Audio Unlock - comprehensive fallback for iOS Safari
+// iOS requires audio to be "unlocked" via user gesture before WebAudio works
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
 let iosAudioUnlocked = false;
+
+// Silent audio data URI (tiny valid MP3) - most reliable iOS unlock method
+const SILENT_AUDIO_DATA = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV////////////////////////////////////////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQDgAAAAAAAAAGw/+M4xAALAAqIAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
 
 async function unlockIOSAudio() {
   if (iosAudioUnlocked) return;
 
-  try {
-    // Method 1: Use Tone.start() which handles most cases
-    if (typeof Tone !== 'undefined') {
-      await Tone.start();
+  console.log('Attempting iOS audio unlock...');
 
-      // Ensure context is running
-      if (Tone.context.state !== 'running') {
-        await Tone.context.resume();
+  try {
+    // Method 1: HTML5 Audio element with silent MP3 (most reliable for iOS)
+    if (isIOS || isSafari) {
+      const silentAudio = new Audio(SILENT_AUDIO_DATA);
+      silentAudio.setAttribute('playsinline', '');
+      silentAudio.volume = 0.01;
+      try {
+        await silentAudio.play();
+        silentAudio.pause();
+        silentAudio.remove();
+        console.log('HTML5 Audio unlock successful');
+      } catch (e) {
+        console.log('HTML5 Audio unlock skipped:', e.message);
       }
     }
 
-    // Method 2: Play a silent buffer to unlock iOS audio
-    // This helps with the mute switch behavior
+    // Method 2: Tone.js context resume
     if (typeof Tone !== 'undefined') {
-      const silentBuffer = Tone.context.createBuffer(1, 1, 22050);
-      const source = Tone.context.createBufferSource();
-      source.buffer = silentBuffer;
-      source.connect(Tone.context.destination);
-      source.start(0);
+      await Tone.start();
+      console.log('Tone.start() called, state:', Tone.context.state);
+
+      // Force resume if still suspended
+      if (Tone.context.state === 'suspended') {
+        await Tone.context.resume();
+        console.log('Context resumed, state:', Tone.context.state);
+      }
+
+      // Method 3: Play silent oscillator through WebAudio
+      if (Tone.context.state === 'running') {
+        const osc = Tone.context.createOscillator();
+        const gain = Tone.context.createGain();
+        gain.gain.value = 0;
+        osc.connect(gain);
+        gain.connect(Tone.context.destination);
+        osc.start(0);
+        osc.stop(0.001);
+        console.log('Silent oscillator played');
+      }
     }
 
     iosAudioUnlocked = true;
-    console.log('iOS audio unlocked successfully');
+    console.log('iOS audio unlock complete, context state:', Tone?.context?.state);
   } catch (e) {
-    console.warn('iOS audio unlock warning:', e);
+    console.warn('iOS audio unlock error:', e);
   }
 }
 
-// Add early touch listener for iOS to unlock audio ASAP
-if (isIOS) {
-  const earlyUnlock = () => {
-    unlockIOSAudio();
-    document.removeEventListener('touchstart', earlyUnlock);
-    document.removeEventListener('touchend', earlyUnlock);
+// Add touch/click listeners for iOS to unlock audio on first interaction
+if (isIOS || isSafari) {
+  const earlyUnlock = (e) => {
+    // Only unlock on actual user gestures
+    if (e.isTrusted) {
+      unlockIOSAudio();
+    }
   };
-  document.addEventListener('touchstart', earlyUnlock, { passive: true });
-  document.addEventListener('touchend', earlyUnlock, { passive: true });
+  // Use multiple event types for best coverage
+  ['touchstart', 'touchend', 'click', 'keydown'].forEach(event => {
+    document.addEventListener(event, earlyUnlock, { passive: true, once: true });
+  });
 }
 
 // Master chain with sidechain compression
