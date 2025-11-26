@@ -847,13 +847,12 @@ async function unlockIOSAudio() {
 
     // Method 2: Play a silent buffer to unlock iOS audio
     // This helps with the mute switch behavior
-    if (isIOS && typeof Tone !== 'undefined') {
+    if (typeof Tone !== 'undefined') {
       const silentBuffer = Tone.context.createBuffer(1, 1, 22050);
       const source = Tone.context.createBufferSource();
       source.buffer = silentBuffer;
       source.connect(Tone.context.destination);
       source.start(0);
-      source.stop(0.001);
     }
 
     iosAudioUnlocked = true;
