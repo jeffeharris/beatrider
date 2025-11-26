@@ -1062,42 +1062,52 @@ function getChordProgression(section) {
   return Math.random() > 0.5 ? chordProgressions.variation1 : chordProgressions.variation2;
 }
 
-// Genre configurations with appropriate BPM ranges and pattern sets
+// Genre configurations with appropriate BPM ranges, pattern sets, and swing amounts
 const GENRE_CONFIGS = {
   techno: {
     name: 'Techno/Acid',
     bpmMin: 120,
     bpmMax: 150,
     bpmDefault: 132,
-    patterns: ['detroit', 'berlin', 'chicago', 'fourOnFloor', 'syncopated']
+    patterns: ['detroit', 'berlin', 'chicago', 'fourOnFloor', 'syncopated'],
+    swing: 0.02,  // Techno: very straight, minimal swing
+    hihatPattern: 'groovy'
   },
   dnb: {
     name: 'Drum & Bass',
     bpmMin: 160,
     bpmMax: 180,
     bpmDefault: 174,
-    patterns: ['dnb_basic', 'dnb_amen', 'dnb_jump', 'dnb_roll']
+    patterns: ['dnb_basic', 'dnb_amen', 'dnb_jump', 'dnb_roll'],
+    swing: 0.08,  // D&B: slight shuffle on hats
+    hihatPattern: 'dnb_shuffle'
   },
   tropical: {
     name: 'Tropical/Kygo',
     bpmMin: 100,
     bpmMax: 115,
     bpmDefault: 110,
-    patterns: ['kygo_basic', 'kygo_bounce', 'kygo_minimal', 'kygo_clap']
+    patterns: ['kygo_basic', 'kygo_bounce', 'kygo_minimal', 'kygo_clap'],
+    swing: 0.15,  // Tropical: noticeable laid-back swing
+    hihatPattern: 'tropical_shaker'
   },
   dubstep: {
     name: 'Dubstep',
     bpmMin: 138,
     bpmMax: 145,
     bpmDefault: 140,
-    patterns: ['dubstep_basic', 'dubstep_half', 'dubstep_roll']
+    patterns: ['dubstep_basic', 'dubstep_half', 'dubstep_roll'],
+    swing: 0.0,   // Dubstep: completely straight
+    hihatPattern: 'dubstep_sparse'
   },
   trance: {
     name: 'Trance',
     bpmMin: 135,
     bpmMax: 145,
     bpmDefault: 138,
-    patterns: ['trance_kick', 'trance_build', 'trance_uplifting']
+    patterns: ['trance_kick', 'trance_build', 'trance_uplifting'],
+    swing: 0.0,   // Trance: straight, driving feel
+    hihatPattern: 'trance_driving'
   }
 };
 
@@ -1105,56 +1115,72 @@ const GENRE_CONFIGS = {
 let currentGenre = 'techno';
 
 // Pattern bank with classic techno/acid patterns
+// Values: 0 = off, 0.1-0.4 = ghost note, 0.5-0.8 = normal, 0.9-1.0 = accented
 const patternBank = {
   kick: {
-    fourOnFloor: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
-    halfTime: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
-    syncopated: [1,0,0,0, 1,0,0,1, 0,0,1,0, 1,0,0,0],
-    minimal: [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
-    // Classic 909 kick patterns
-    detroit: [1,0,0,1, 1,0,0,0, 1,0,1,0, 1,0,0,0],  // Detroit techno style
-    berlin: [1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,0,0],   // Berlin minimal
-    chicago: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,1,0],  // Chicago acid house
-    fill: [1,0,1,0, 1,0,1,1, 1,1,1,0, 1,1,1,1],
+    fourOnFloor: [1.0,0,0,0, 0.95,0,0,0, 1.0,0,0,0, 0.9,0,0,0],
+    halfTime: [1.0,0,0,0, 0,0,0,0, 0.95,0,0,0, 0,0,0,0],
+    syncopated: [1.0,0,0,0, 0.9,0,0,0.6, 0,0,0.7,0, 0.95,0,0,0],
+    minimal: [1.0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+    // Classic 909 kick patterns with velocity groove
+    detroit: [1.0,0,0,0.5, 0.9,0,0,0, 0.95,0,0.6,0, 0.85,0,0,0],  // Detroit techno style
+    berlin: [1.0,0,0,0, 0.9,0,0.5,0, 0.95,0,0,0, 0.85,0,0,0],   // Berlin minimal
+    chicago: [1.0,0,0,0, 0.95,0,0,0, 1.0,0,0,0, 0.9,0,0.6,0],  // Chicago acid house
+    fill: [1.0,0,0.7,0, 0.9,0,0.75,0.8, 0.85,0.9,0.95,0, 1.0,0.9,0.95,1.0],
     // Drum & Bass patterns (breakbeat style)
-    dnb_basic: [1,0,0,0, 0,0,1,0, 0,0,1,0, 0,0,0,0],  // Basic D&B kick
-    dnb_amen: [1,0,0,1, 0,0,1,0, 0,1,0,0, 1,0,0,0],   // Amen-inspired
-    dnb_jump: [1,0,0,0, 0,0,0,1, 0,0,1,0, 0,0,0,1],    // Jump-up style
+    dnb_basic: [1.0,0,0,0, 0,0,0.8,0, 0,0,0.75,0, 0,0,0,0],  // Basic D&B kick
+    dnb_amen: [1.0,0,0,0.6, 0,0,0.85,0, 0,0.5,0,0, 0.9,0,0,0],   // Amen-inspired
+    dnb_jump: [1.0,0,0,0, 0,0,0,0.7, 0,0,0.85,0, 0,0,0,0.65],    // Jump-up style
     // Tropical/Kygo patterns (dembow/reggaeton influenced)
-    kygo_basic: [1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0],  // Basic tropical house
-    kygo_bounce: [1,0,0,0, 0,1,0,0, 1,0,0,0, 0,1,0,0], // Bouncy Kygo style
-    kygo_minimal: [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0], // Sparse tropical
+    kygo_basic: [1.0,0,0,0.6, 0,0,0.7,0, 0.9,0,0,0.55, 0,0,0.65,0],  // Basic tropical house
+    kygo_bounce: [1.0,0,0,0, 0,0.6,0,0, 0.9,0,0,0, 0,0.55,0,0], // Bouncy Kygo style
+    kygo_minimal: [1.0,0,0,0, 0,0,0,0, 0,0,0.7,0, 0,0,0,0], // Sparse tropical
     // Dubstep patterns (half-time feel at 140 BPM)
-    dubstep_basic: [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0], // Classic dubstep
-    dubstep_half: [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],  // Ultra minimal
-    dubstep_roll: [1,0,0,0, 0,0,1,0, 0,0,1,0, 0,0,1,0],  // Rolling subs
+    dubstep_basic: [1.0,0,0,0, 0,0,0,0, 0,0,0.8,0, 0,0,0,0], // Classic dubstep
+    dubstep_half: [1.0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],  // Ultra minimal
+    dubstep_roll: [1.0,0,0,0, 0,0,0.7,0, 0,0,0.75,0, 0,0,0.8,0],  // Rolling subs
     // Trance patterns (driving four-on-floor)
-    trance_kick: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],   // Classic trance
-    trance_build: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],  // Build-up pattern
-    trance_uplifting: [1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1] // Uplifting variation
+    trance_kick: [1.0,0,0,0, 0.95,0,0,0, 1.0,0,0,0, 0.9,0,0,0],   // Classic trance
+    trance_build: [1.0,0,0.7,0, 0.9,0,0.75,0, 0.95,0,0.8,0, 0.85,0,0.85,0],  // Build-up pattern
+    trance_uplifting: [1.0,0,0,0.5, 0.95,0,0,0.45, 1.0,0,0,0.5, 0.9,0,0,0.4] // Uplifting variation
   },
   snare: {
-    backbeat: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
-    ghost: [0,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0],
-    detroit: [0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0],  // Off-beat snare
-    fill: [0,0,0,0, 1,0,1,0, 1,0,1,1, 1,1,1,1],
-    minimal: [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0],
-    // Drum & Bass snare patterns (heavy on 2 and 4)
-    dnb_basic: [0,0,1,0, 1,0,0,0, 0,1,0,0, 1,0,0,0],   // Classic D&B snare
-    dnb_amen: [0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,1,0],    // Amen break style
-    dnb_roll: [0,0,1,0, 1,0,1,1, 0,0,1,0, 1,1,1,1],    // Rolling snares
+    // Values: 0.2-0.4 = ghost notes, 0.9-1.0 = main hits
+    backbeat: [0,0,0,0, 1.0,0,0,0, 0,0,0,0, 0.95,0,0,0],
+    ghost: [0,0,0.25,0, 1.0,0,0,0.3, 0,0,0.2,0, 0.95,0,0,0.25],
+    detroit: [0,0,0,0, 1.0,0,0,0.3, 0,0,0.8,0, 0.9,0,0,0],  // Off-beat snare
+    fill: [0,0,0.4,0, 0.9,0,0.7,0, 0.8,0,0.85,0.9, 0.95,0.9,0.95,1.0],
+    minimal: [0,0,0,0, 0,0,0,0, 0,0,0,0, 0.9,0,0,0],
+    // Drum & Bass snare patterns with ghost notes
+    dnb_basic: [0,0,0.9,0, 1.0,0,0,0.3, 0,0.35,0,0, 0.95,0,0,0.25],   // Classic D&B snare
+    dnb_amen: [0,0,0.9,0, 1.0,0,0,0.4, 0,0,0.85,0, 0.95,0,0.7,0.3],    // Amen break style
+    dnb_roll: [0,0,0.85,0, 1.0,0,0.7,0.75, 0,0,0.9,0, 0.95,0.8,0.85,0.9],    // Rolling snares
     // Tropical/Kygo snare patterns (lighter, more sparse)
-    kygo_clap: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],   // Simple clap on 2&4
-    kygo_snap: [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0],   // Finger snaps
-    kygo_rim: [0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,1,0],    // Rimshot pattern
+    kygo_clap: [0,0,0,0, 1.0,0,0,0, 0,0,0,0, 0.9,0,0,0],   // Simple clap on 2&4
+    kygo_snap: [0,0,0,0, 0,0,0.7,0, 0,0,0,0, 0,0,0.65,0],   // Finger snaps
+    kygo_rim: [0,0,0,0, 0.95,0,0,0, 0,0,0,0, 0,0,0.8,0],    // Rimshot pattern
     // Dubstep snare patterns (heavy on the 3)
-    dubstep_basic: [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0], // Classic dubstep snare
-    dubstep_trap: [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,1,0],  // Trap-influenced
-    dubstep_roll: [0,0,0,0, 0,0,0,0, 1,0,1,1, 0,0,0,0],  // Snare rolls
+    dubstep_basic: [0,0,0,0, 0,0,0,0, 1.0,0,0,0, 0,0,0,0], // Classic dubstep snare
+    dubstep_trap: [0,0,0,0, 0,0,0,0, 1.0,0,0,0, 0,0,0.7,0],  // Trap-influenced
+    dubstep_roll: [0,0,0,0, 0,0,0,0, 1.0,0,0.8,0.85, 0,0,0,0],  // Snare rolls
     // Trance snare patterns (uplifting, driving)
-    trance_clap: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],   // Standard clap
-    trance_build: [0,0,0,0, 1,0,0,1, 0,0,1,0, 1,0,1,1],  // Building energy
-    trance_uplift: [0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0]  // Uplifting pattern
+    trance_clap: [0,0,0,0, 1.0,0,0,0, 0,0,0,0, 0.95,0,0,0],   // Standard clap
+    trance_build: [0,0,0,0, 1.0,0,0,0.35, 0,0,0.7,0, 0.9,0,0.75,0.8],  // Building energy
+    trance_uplift: [0,0,0,0, 1.0,0,0,0, 0,0,0.7,0, 0.9,0,0,0]  // Uplifting pattern
+  },
+  // Hi-hat patterns: 0 = off, 1 = closed, 2 = open, decimals for velocity (e.g., 1.8 = closed soft, 2.0 = open full)
+  hihat: {
+    straight8: [1.0,0,1.0,0, 1.0,0,1.0,0, 1.0,0,1.0,0, 1.0,0,1.0,0],
+    straight16: [1.0,0.6,1.0,0.6, 1.0,0.6,1.0,0.6, 1.0,0.6,1.0,0.6, 1.0,0.6,1.0,0.6],
+    offbeat: [0,0,1.0,0, 0,0,2.0,0, 0,0,1.0,0, 0,0,2.0,0],
+    groovy: [1.0,0,0.7,0, 1.0,0,2.0,0, 1.0,0,0.7,0, 1.0,0,2.0,0],
+    dnb_shuffle: [1.0,0,2.0,0.7, 1.0,0,2.0,0.7, 1.0,0,2.0,0.7, 1.0,0,2.0,0.7],
+    dnb_ride: [1.0,0.5,1.0,0.5, 1.0,0.5,1.0,0.5, 1.0,0.5,1.0,0.5, 1.0,0.5,1.0,0.5],
+    tropical_sparse: [1.0,0,0,0, 1.0,0,0,0, 1.0,0,0,0, 1.0,0,0,0],
+    tropical_shaker: [0,0.6,0,0.6, 0,0.6,0,0.6, 0,0.6,0,0.6, 0,0.6,0,0.6],
+    dubstep_sparse: [0,0,1.0,0, 0,0,0,0, 0,0,1.0,0, 0,0,0,0],
+    trance_driving: [1.0,0,0.8,0, 1.0,0,0.8,0, 1.0,0,0.8,0, 1.0,0,0.8,0],
+    buildup: [1.0,0.5,1.0,0.6, 1.0,0.7,1.0,0.75, 1.0,0.8,1.0,0.85, 1.0,0.9,1.0,0.95]
   },
   // Classic acid bassline patterns (rhythm only, notes added later)
   acid: {
@@ -1199,6 +1225,36 @@ const muteStates = {
 function humanize(time, amount = 0.01) {
   // Add random timing offset between -amount and +amount seconds
   return time + (Math.random() - 0.5) * amount * 2;
+}
+
+// Swing - delays every other 16th note for groove
+// swingAmount: 0 = straight, 0.33 = full triplet swing
+function applySwing(stepIndex, time, swingAmount = 0) {
+  if (swingAmount === 0) return time;
+  // Swing affects odd-numbered 16th notes (1, 3, 5, 7, etc.)
+  if (stepIndex % 2 === 1) {
+    const sixteenthDuration = Tone.Time("16n").toSeconds();
+    return time + (sixteenthDuration * swingAmount);
+  }
+  return time;
+}
+
+// Fill detection - returns fill type based on bar position
+function shouldPlayFill(bar, section) {
+  const barInPhrase = bar % 16;
+  // Big fill at end of 8-bar and 16-bar phrases
+  if (barInPhrase === 7 || barInPhrase === 15) {
+    return 'full';
+  }
+  // Mini variation at end of 4-bar phrases
+  if (barInPhrase === 3 || barInPhrase === 11) {
+    return 'mini';
+  }
+  // Extra intensity before drops
+  if (section === 'BUILD' && barInPhrase >= 6) {
+    return 'mini';
+  }
+  return null;
 }
 
 // Visual feedback
@@ -1273,12 +1329,12 @@ function generateMelodicAcidSequence(chordInfo, section, previousSequence = []) 
   return sequence;
 }
 
-// Generate drum fill
+// Generate drum fill with velocity crescendo
 function generateDrumFill() {
   return {
     kick: patternBank.kick.fill,
     snare: patternBank.snare.fill,
-    hihat: new Array(16).fill(1) // Rapid hi-hats
+    hihat: patternBank.hihat.buildup // Crescendo hi-hats
   };
 }
 
@@ -1358,38 +1414,39 @@ function generatePatterns(section, bar, energy) {
       patterns.snare = patternBank.snare.minimal;
     }
     
-    // Hi-hat patterns based on genre
-    if (currentGenre === 'dnb') {
+    // Hi-hat patterns from patternBank based on genre
+    const genreConfig = GENRE_CONFIGS[currentGenre];
+    const fillType = shouldPlayFill(bar, section);
+
+    if (fillType === 'full') {
+      // Use buildup pattern for fills
+      patterns.hihat = patternBank.hihat.buildup;
+    } else if (currentGenre === 'dnb') {
       // D&B has rapid, intricate hi-hats
       if (tensionLevel > 70) {
-        patterns.hihat = new Array(16).fill(1); // Constant ride at high tension
+        patterns.hihat = patternBank.hihat.dnb_ride;
       } else {
-        patterns.hihat = [1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1]; // D&B shuffle
+        patterns.hihat = patternBank.hihat.dnb_shuffle;
       }
     } else if (currentGenre === 'tropical') {
       // Tropical has sparse, laid-back hi-hats
       if (section === 'DROP') {
-        patterns.hihat = [0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1]; // Shaker pattern
+        patterns.hihat = patternBank.hihat.tropical_shaker;
       } else {
-        patterns.hihat = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]; // Quarter notes
+        patterns.hihat = patternBank.hihat.tropical_sparse;
       }
     } else if (currentGenre === 'dubstep') {
-      // Dubstep has minimal, sparse hi-hats
-      patterns.hihat = [0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0]; // Very sparse
+      patterns.hihat = patternBank.hihat.dubstep_sparse;
     } else if (currentGenre === 'trance') {
-      // Trance has steady, driving hi-hats
-      patterns.hihat = [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0]; // Steady 8ths
+      patterns.hihat = patternBank.hihat.trance_driving;
     } else {
-      // Techno - dynamic based on energy AND tension
-      patterns.hihat = [];
-      const hihatDensity = (energy / 100) * 0.5 + (tensionLevel / 100) * 0.5;
-      for (let i = 0; i < 16; i++) {
-        // More rapid hits at high tension
-        if (tensionLevel > 70 && i % 2 === 1) {
-          patterns.hihat[i] = 1; // Constant 16ths at high tension
-        } else {
-          patterns.hihat[i] = Math.random() < hihatDensity ? 1 : 0;
-        }
+      // Techno - use groovy pattern, with straight16 at high tension
+      if (tensionLevel > 70) {
+        patterns.hihat = patternBank.hihat.straight16;
+      } else if (section === 'BUILD') {
+        patterns.hihat = patternBank.hihat.buildup;
+      } else {
+        patterns.hihat = patternBank.hihat.groovy;
       }
     }
   }
@@ -1454,52 +1511,81 @@ function updatePatterns() {
   if (chordLoop) chordLoop.dispose();
   if (subLoop) subLoop.dispose();
   
-  // Kick with micro-timing
-  kickLoop = new Tone.Sequence((time, note) => {
-    if (note && !muteStates.kick) {
-      // Slight timing variation, but keep kick more stable
-      const humanTime = humanize(time, 0.003);
+  // Get swing amount for current genre
+  const swingAmount = GENRE_CONFIGS[currentGenre]?.swing || 0;
+
+  // Kick with velocity and micro-timing (minimal swing on kick for stability)
+  kickLoop = new Tone.Sequence((time, velocity, index) => {
+    if (velocity && !muteStates.kick) {
+      // Apply minimal swing to kick (keeps it grounded)
+      const swungTime = applySwing(index, time, swingAmount * 0.3);
+      const humanTime = humanize(swungTime, 0.003);
+      // Use velocity for volume (0.6-1.0 range mapped to volume)
+      const vol = -6 + (velocity * 6); // Range: -6dB to 0dB
+      kick.volume.setValueAtTime(vol, humanTime);
       kick.triggerAttackRelease("C1", "8n", humanTime);
       sidechain.ratio.setValueAtTime(20, humanTime);
       sidechain.ratio.linearRampToValueAtTime(8, humanTime + 0.1);
       Tone.Draw.schedule(() => {
         flashIndicator('kickIndicator');
-        // Trigger game beat event
-        if (window.GameAPI && window.GameAPI.onBeat) {
+        // Trigger game beat event (only on strong hits)
+        if (velocity >= 0.7 && window.GameAPI && window.GameAPI.onBeat) {
           window.GameAPI.onBeat();
         }
       }, humanTime);
     }
   }, patterns.kick, "16n");
-  
-  // Snare with more looseness
-  snareLoop = new Tone.Sequence((time, note) => {
-    if (note && !muteStates.snare) {
-      const humanTime = humanize(time, 0.005);
+
+  // Snare with velocity, swing, and ghost notes
+  snareLoop = new Tone.Sequence((time, velocity, index) => {
+    if (velocity && !muteStates.snare) {
+      // Full swing on snare for groove
+      const swungTime = applySwing(index, time, swingAmount);
+      const humanTime = humanize(swungTime, 0.005);
+      // Ghost notes (velocity < 0.5) are quieter
+      const isGhost = velocity < 0.5;
+      const vol = isGhost ? -18 + (velocity * 20) : -6 + (velocity * 6);
+      snare.volume.setValueAtTime(vol, humanTime);
+      // Shorter decay for ghost notes
+      snare.envelope.decay = isGhost ? 0.08 : 0.15;
       snare.triggerAttackRelease("8n", humanTime);
       Tone.Draw.schedule(() => {
         flashIndicator('snareIndicator');
-        // Trigger different enemy type on snare
-        if (window.GameAPI && window.GameAPI.onSnare) {
+        // Trigger enemy only on strong hits (not ghost notes)
+        if (velocity >= 0.7 && window.GameAPI && window.GameAPI.onSnare) {
           window.GameAPI.onSnare();
         }
       }, humanTime);
     }
   }, patterns.snare, "16n");
-  
-  // Hi-hat with most variation
-  hihatLoop = new Tone.Sequence((time, note) => {
-    if (note && !muteStates.hat) {
-      const humanTime = humanize(time, 0.008);
-      // Vary between closed and open hi-hats
-      const velocity = 0.3 + Math.random() * 0.4;
-      const duration = Math.random() > 0.8 ? "16n" : "32n"; // Occasional longer hat
+
+  // Hi-hat with open/closed articulation and velocity
+  // Pattern values: 0=off, 0.1-1.0=closed (velocity), 1.1-2.0=open (velocity-1 for actual vel)
+  hihatLoop = new Tone.Sequence((time, value, index) => {
+    if (value && !muteStates.hat) {
+      // Full swing on hi-hats
+      const swungTime = applySwing(index, time, swingAmount);
+      const humanTime = humanize(swungTime, 0.008);
+
+      // Determine if open (value >= 1.5) or closed
+      const isOpen = value >= 1.5;
+      const velocity = isOpen ? (value - 1) : value; // Extract velocity
+
+      // Set decay based on open/closed
+      hihat.envelope.decay = isOpen ? 0.12 : 0.025;
+      hihat.envelope.release = isOpen ? 0.1 : 0.03;
+
+      // Volume from velocity
+      const vol = -18 + (velocity * 12); // Range: -18dB to -6dB
+      hihat.volume.setValueAtTime(vol, humanTime);
+
+      const duration = isOpen ? "16n" : "32n";
       hihat.triggerAttackRelease(duration, humanTime);
-      hihat.volume.setValueAtTime(-15 + (velocity * 10), humanTime); // Subtle volume variation
+
       Tone.Draw.schedule(() => {
         flashIndicator('hatIndicator');
-        // Spawn obstacles on some hi-hat hits
-        if (Math.random() < 0.2 && window.GameAPI && window.GameAPI.onHihat) {
+        // Spawn obstacles on some hi-hat hits (stronger hits more likely)
+        if (velocity > 0.6 && Math.random() < 0.2 && window.GameAPI && window.GameAPI.onHihat) {
           window.GameAPI.onHihat();
         }
       }, humanTime);
