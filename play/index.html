@@ -32,7 +32,7 @@
   <meta name="apple-mobile-web-app-title" content="Beatrider">
   <link rel="apple-touch-icon" href="icon-192.png">
   
-  <script src="https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
   <!-- iOS audio unlocking handled by custom unlockIOSAudio() function below -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   
@@ -806,23 +806,28 @@ let sessionHighScore = savedData.highScore;
 
 // Configure Tone.js for better Mac compatibility
 // Set up audio context with optimal settings for Mac
-if (typeof Tone !== 'undefined') {
-  // Detect if we're on Mac for specific optimizations
-  const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+// Wrapped in try-catch to prevent iOS from blocking page load
+try {
+  if (typeof Tone !== 'undefined') {
+    // Detect if we're on Mac for specific optimizations
+    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
 
-  // Set latencyHint based on platform
-  // 'playback' has higher latency but better performance on Mac
-  // 'interactive' for other platforms
-  Tone.context.latencyHint = isMac ? 'playback' : 'interactive';
+    // Set latencyHint based on platform
+    // 'playback' has higher latency but better performance on Mac
+    // 'interactive' for other platforms
+    Tone.context.latencyHint = isMac ? 'playback' : 'interactive';
 
-  // Adjust lookAhead time - lower for Mac to reduce CPU usage
-  Tone.context.lookAhead = isMac ? 0.05 : 0.1;
+    // Adjust lookAhead time - lower for Mac to reduce CPU usage
+    Tone.context.lookAhead = isMac ? 0.05 : 0.1;
 
-  // Set update interval - slightly higher on Mac for better performance
-  Tone.context.updateInterval = isMac ? 0.04 : 0.025;
+    // Set update interval - slightly higher on Mac for better performance
+    Tone.context.updateInterval = isMac ? 0.04 : 0.025;
 
-  // Don't auto-resume - this causes the "must be resumed after user gesture" error
-  // Audio will start when user clicks to play the game
+    // Don't auto-resume - this causes the "must be resumed after user gesture" error
+    // Audio will start when user clicks to play the game
+  }
+} catch (toneConfigError) {
+  console.warn('Tone.js configuration error (will retry on user interaction):', toneConfigError);
 }
 
 // iOS Audio Unlock - comprehensive fallback for iOS Safari
@@ -876,6 +881,17 @@ async function unlockIOSAudio() {
         osc.start(0);
         osc.stop(0.001);
         console.log('Silent oscillator played');
+      }
+    }
+
+    // Start any deferred audio nodes
+    if (typeof offScreenFilter !== 'undefined' && offScreenFilter && !offScreenFilter.started) {
+      try {
+        offScreenFilter.start();
+        offScreenFilter.started = true;
+        console.log('offScreenFilter started');
+      } catch (filterErr) {
+        console.warn('Could not start offScreenFilter:', filterErr);
       }
     }
 
@@ -2414,7 +2430,8 @@ const offScreenFilter = new Tone.AutoFilter({
   octaves: 3,
   depth: 0.8
 }).connect(offScreenDistortion);
-offScreenFilter.start();
+// Don't start immediately - will be started on first user interaction
+// offScreenFilter.start() moved to unlockIOSAudio()
 
 const gameSounds = {
   // Movement - subtle filter sweep in key
