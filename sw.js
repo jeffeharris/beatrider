@@ -73,9 +73,9 @@ self.addEventListener('fetch', event => {
           // Network request failed, serve appropriate offline fallback
           const url = new URL(event.request.url);
           if (url.pathname.startsWith('/play')) {
-            return caches.match('/play/index.html');
+            return caches.match('./play/index.html');
           }
-          return caches.match('/index.html');
+          return caches.match('./index.html');
         });
       })
   );
