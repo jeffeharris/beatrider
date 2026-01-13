@@ -1,11 +1,11 @@
-const CACHE_NAME = 'beatrider-v9';
+const CACHE_NAME = 'beatrider-v10';
 const urlsToCache = [
   './',
   './index.html',
   './play/',
   './play/index.html',
-  'https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js',
-  'https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js'
+  'https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js',
+  'https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.min.js'
 ];
 
 // Install event - cache resources
