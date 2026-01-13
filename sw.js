@@ -1,9 +1,11 @@
-const CACHE_NAME = 'beatrider-v8';
+const CACHE_NAME = 'beatrider-v9';
 const urlsToCache = [
   './',
   './index.html',
-  'https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js',
-  'https://unpkg.com/tone@14.7.77/build/Tone.js'
+  './play/',
+  './play/index.html',
+  'https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js',
+  'https://cdn.jsdelivr.net/npm/tone@latest/build/Tone.min.js'
 ];
 
 // Install event - cache resources
@@ -63,7 +65,11 @@ self.addEventListener('fetch', event => {
 
           return response;
         }).catch(() => {
-          // Network request failed, serve offline fallback if available
+          // Network request failed, serve appropriate offline fallback
+          const url = new URL(event.request.url);
+          if (url.pathname.startsWith('/play')) {
+            return caches.match('/play/index.html');
+          }
           return caches.match('/index.html');
         });
       })
