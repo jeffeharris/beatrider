@@ -13,7 +13,12 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        return cache.addAll(urlsToCache);
+        // Cache each URL individually so one failure doesn't block others
+        return Promise.all(
+          urlsToCache.map(url =>
+            cache.add(url).catch(err => console.warn('Failed to cache:', url, err))
+          )
+        );
       })
   );
   self.skipWaiting();
