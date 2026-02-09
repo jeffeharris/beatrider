@@ -41,17 +41,13 @@ export function initCreateSceneState(data) {
     tutorial_mode: this.isTutorial
   });
 
-  this.isPaused = false;
+  initializeMainSceneStateSlices.call(this);
+
   this.pauseOverlay = null;
   this.pauseText = null;
   this.wasAutoPaused = false;
   this.pauseScoreText = null;
   this.pauseHighScoreText = null;
-
-  this.isShowingGameOver = false;
-  this.isInvincible = false;
-  this.playerCanControl = true;
-  initializeMainSceneStateSlices.call(this);
 
   window.gameScene = this;
   window.currentGameScene = this;

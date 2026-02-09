@@ -1,13 +1,14 @@
 import { gameState, isMobile, updateDimensions } from '../../config.js';
 
 export function resizeMainSceneSystem() {
+  const { player } = this.stateSlices;
   updateDimensions(this.cameras.main.width, this.cameras.main.height);
 
   this.vanishX = gameState.WIDTH / 2;
   this.vanishY = gameState.HEIGHT * 0.15;
 
   if (this.player) {
-    this.player.x = this._laneX(this.playerLane);
+    this.player.x = this._laneX(player.lane);
     this.player.y = gameState.PLAYER_Y;
   }
 

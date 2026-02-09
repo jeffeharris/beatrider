@@ -5,15 +5,16 @@ import { handleMobilePointerMove } from './mobile-controls-pointer-move.js';
 import { handleMobilePointerUp } from './mobile-controls-pointer-up.js';
 
 export function setupMobileControlsSystem() {
+  const { player, input } = this.stateSlices;
   this.touchStartX = 0;
   this.touchStartY = 0;
-  this.touchZoneActive = false;
-  this.isTouchFiring = false;
+  input.touchActive = false;
+  input.touchFiring = false;
 
   this.zoneRadius = MAIN_SCENE_TUNING.touch.zoneRadiusPx;
   this.zoneDeadRadius = savedData.settings?.touchSensitivity || MAIN_SCENE_TUNING.touch.defaultDeadZonePx;
 
-  this.currentZone = 'center';
+  input.currentZone = 'center';
   this.lastMoveTime = 0;
   this.moveCooldown = MAIN_SCENE_TUNING.touch.moveCooldownMs;
   this.laneBeforeMove = null;
@@ -22,9 +23,9 @@ export function setupMobileControlsSystem() {
   this.zoneRepeatRate = MAIN_SCENE_TUNING.touch.zoneRepeatRateMs;
   this.lastZoneCheckTime = 0;
 
-  this.jumpChargeAmount = 0;
+  input.jumpChargeAmount = 0;
   this.maxPullDistance = 0;
-  this.isChargingJump = false;
+  player.charging = false;
   this.jumpThreshold = MAIN_SCENE_TUNING.touch.jumpThresholdPx;
 
   this.touchIndicator = this.add.circle(0, 0, 15, 0x00ff00, 0.3);

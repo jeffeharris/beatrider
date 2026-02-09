@@ -4,6 +4,7 @@ import { gameState, LANES, ENEMY_SPEED_BASE } from '../../config.js';
 import { currentDifficulty } from '../../audio/music-ui.js';
 
 export function handleTutorialSpawnSystem() {
+  const { combat } = this.stateSlices;
   switch (this.tutorialWave) {
     case 0:
       if (!this.tutorialWaveStarted) {
@@ -13,12 +14,12 @@ export function handleTutorialSpawnSystem() {
         this.shootingShown = false;
       }
 
-      if (this.beats >= 1) {
+      if (combat.beats >= 1) {
         if (!this.shootingShown) {
           this.shootingShown = true;
           this.tutorialText.setText('ENEMIES APPEAR ON BEAT!');
         }
-        if (this.beats % 1 === 0) {
+        if (combat.beats % 1 === 0) {
           this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.8, 'enemyTex');
         }
       }
@@ -46,7 +47,7 @@ export function handleTutorialSpawnSystem() {
         });
       }
 
-      if (this.beats === 4) {
+      if (combat.beats === 4) {
         this._spawnObstacle(2);
         this.time.delayedCall(1000, () => {
           this._spawnObstacle(1);
@@ -60,7 +61,7 @@ export function handleTutorialSpawnSystem() {
       break;
 
     case 2:
-      if (this.beats % 6 === 0) {
+      if (combat.beats % 6 === 0) {
         this._spawnObstacle(2);
         this.time.delayedCall(600, () => {
           this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.6, 'enemyTex');
@@ -89,7 +90,7 @@ export function handleTutorialSpawnSystem() {
         });
       }
 
-      if (this.beats % 8 === 0 && this.beats > 0) {
+      if (combat.beats % 8 === 0 && combat.beats > 0) {
         this._spawnObstacle(0);
         this._spawnObstacle(1);
         this._spawnObstacle(3);
@@ -101,14 +102,14 @@ export function handleTutorialSpawnSystem() {
       break;
 
     case 4:
-      if (this.beats === 1) {
+      if (combat.beats === 1) {
         this._spawnObstacle(2);
         this.time.delayedCall(700, () => {
           this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.5, 'enemyTex');
         });
       }
 
-      if (this.beats === 12) {
+      if (combat.beats === 12) {
         this._spawnObstacle(3);
         this.time.delayedCall(700, () => {
           this._spawnEnemy(3, ENEMY_SPEED_BASE * 0.5, 'enemyTex');
@@ -139,13 +140,13 @@ export function handleTutorialSpawnSystem() {
         this.tutorialSuperJumps = 0;
       }
 
-      if (this.beats === 2 && !this.superJumpShown) {
+      if (combat.beats === 2 && !this.superJumpShown) {
         this.superJumpShown = true;
         this.tutorialText.setText('CHARGE AND JUMP OVER THE SHIELD!');
         this._spawnObstacle(2);
       }
 
-      if (this.beats > 2 && this.beats % 6 === 0) {
+      if (combat.beats > 2 && combat.beats % 6 === 0) {
         this._spawnObstacle(Phaser.Math.Between(1, 3));
       }
       break;
@@ -158,10 +159,10 @@ export function handleTutorialSpawnSystem() {
         this.isBreakSection = true;
       }
 
-      if (this.beats % 8 === 0) {
+      if (combat.beats % 8 === 0) {
         this._spawnObstacle(2);
       }
-      if (this.beats % 8 === 4) {
+      if (combat.beats % 8 === 4) {
         this._spawnObstacle(Phaser.Math.Between(1, 3));
       }
       break;
@@ -183,6 +184,7 @@ export function handleTutorialSpawnSystem() {
 }
 
 export function updateTutorialProgressSystem() {
+  const { player, input } = this.stateSlices;
   if (!this.isTutorial) return;
 
   switch (this.tutorialWave) {
@@ -226,11 +228,11 @@ export function updateTutorialProgressSystem() {
       break;
 
     case 5:
-      if (this.jumpChargeAmount > 0.3) {
+      if (input.jumpChargeAmount > 0.3) {
         this.tutorialText.setText('RELEASE TO JUMP!');
-      } else if (this.jumpChargeAmount > 0.1) {
+      } else if (input.jumpChargeAmount > 0.1) {
         this.tutorialText.setText('KEEP HOLDING TO CHARGE MORE!');
-      } else if (this.isChargingJump) {
+      } else if (player.charging) {
         this.tutorialText.setText('CHARGING...');
       }
 
@@ -286,6 +288,7 @@ export function advanceTutorialSystem() {
 }
 
 export function skipTutorialSystem() {
+  const { combat } = this.stateSlices;
   this.tutorialText.setText('SKIPPING TUTORIAL...');
   this.tutorialProgressText.setText('Starting full game...');
 
@@ -300,11 +303,12 @@ export function skipTutorialSystem() {
     this.adaptiveState.currentSpeedMultiplier = 1.0;
     this.adaptiveState.assistStartTime = null;
     Tone.Transport.bpm.value = 120;
-    this.beats = 0;
+    combat.beats = 0;
   });
 }
 
 export function completeTutorialSystem() {
+  const { combat } = this.stateSlices;
   localStorage.setItem('beatrider_tutorial_completed', 'true');
   this.tutorialText.setText('TUTORIAL COMPLETE!');
   this.tutorialProgressText.setText('Starting full game...');
@@ -324,8 +328,8 @@ export function completeTutorialSystem() {
     Tone.Transport.bpm.value = 120;
 
     window.GameAPI.onBeat = () => {
-      this.beats++;
-      const speed = (ENEMY_SPEED_BASE + Math.floor(this.beats / 16) * 30) * currentDifficulty.speedMult;
+      combat.beats++;
+      const speed = (ENEMY_SPEED_BASE + Math.floor(combat.beats / 16) * 30) * currentDifficulty.speedMult;
       const lane = Phaser.Math.Between(0, LANES - 1);
       this._spawnEnemy(lane, speed, 'enemyTex');
 

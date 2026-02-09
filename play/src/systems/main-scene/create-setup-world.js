@@ -4,6 +4,7 @@ import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
 
 export function initializeSceneWorldAndHUD() {
+  const { player: playerState, combat } = this.stateSlices;
   this.trails = [];
   this.trailGraphics = this.add.graphics();
 
@@ -101,8 +102,8 @@ export function initializeSceneWorldAndHUD() {
   gfx.fillPath();
   gfx.generateTexture('drifterTex', enemySize, enemySize).destroy();
 
-  this.playerLane = 2;
-  this.player = this.add.image(this._laneX(this.playerLane), gameState.PLAYER_Y, 'playerTex');
+  playerState.lane = 2;
+  this.player = this.add.image(this._laneX(playerState.lane), gameState.PLAYER_Y, 'playerTex');
   this.player.w = playerSize;
   this.player.h = playerSize;
   this.player.setDepth(500);
@@ -115,15 +116,15 @@ export function initializeSceneWorldAndHUD() {
   this.obstacles = [];
   this.powerUps = [];
   this.lastShotAt = 0;
-  this.rapidFire = false;
-  this.rapidFireTimer = 0;
-  this.offScreenTimer = 0;
+  combat.rapidFire = false;
+  combat.rapidFireTimer = 0;
+  combat.offScreenTimer = 0;
   this.offScreenShotCount = 0;
   this.offScreenTurnDelay = 0;
-  this.isMoving = false;
-  this.isStretching = false;
-  this.isJumping = false;
-  this.isCrouching = false;
+  playerState.moving = false;
+  playerState.stretching = false;
+  playerState.jumping = false;
+  playerState.crouching = false;
   this.crouchTimer = 0;
   this.maxChargeTime = MAIN_SCENE_TUNING.crouchMaxChargeMs;
   this.releaseGraceTime = MAIN_SCENE_TUNING.crouchReleaseGraceMs;
@@ -137,14 +138,14 @@ export function initializeSceneWorldAndHUD() {
   this.wobbleVelocity = { x: 0, y: 0 };
   this.wobbleDamping = 0.92;
 
-  this.isDashing = false;
+  playerState.dashing = false;
   this.lastLeftPress = 0;
   this.lastRightPress = 0;
   this.doubleTapWindow = PLAYER_CONFIG.dash.doubleTapWindow;
   this.keys = this.input.keyboard.addKeys(`LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC,${MAIN_SCENE_TUNING.debug.toggleKey}`);
-  this.score = 0;
-  this.beats = 0;
-  this.combo = 1;
+  combat.score = 0;
+  combat.beats = 0;
+  combat.combo = 1;
   this.comboTimer = 0;
   this.lastKillTime = 0;
   this.maxCombo = 8;
