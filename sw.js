@@ -1,13 +1,13 @@
-const CACHE_NAME = 'beatrider-v11';
+const CACHE_NAME = 'beatrider-v12';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/play/',
   '/play/index.html',
-  '/play/index-vite.html',
   '/play/manifest.json',
   '/play/icon-192.png',
-  '/play/icon-512.png'
+  '/play/icon-512.png',
+  '/play/audio/unlock.wav'
 ];
 
 async function precache() {
@@ -51,7 +51,7 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request).catch(async () => {
         const cache = await caches.open(CACHE_NAME);
         if (url.pathname.startsWith('/play')) {
-          return (await cache.match('/play/index-vite.html')) || cache.match('/play/index.html');
+          return cache.match('/play/index.html');
         }
         return cache.match('/index.html');
       })

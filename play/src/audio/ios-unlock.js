@@ -3,12 +3,12 @@ import * as Tone from 'tone';
 // iOS Audio Unlock - comprehensive fallback for iOS Safari
 // iOS requires audio to be "unlocked" via user gesture before WebAudio works
 export const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-export const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+export const isSafariAudio = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
 export let iosAudioUnlocked = false;
 let unlockInFlight = null;
 
 // Silent audio data URI (tiny valid MP3) - most reliable iOS unlock method
-const SILENT_AUDIO_DATA = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV////////////////////////////////////////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQDgAAAAAAAAAGw/+M4xAALAAqIAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+const IOS_UNLOCK_AUDIO_PATHS = ['/play/audio/unlock.wav', './audio/unlock.wav'];
 
 export async function unlockIOSAudio() {
   if (iosAudioUnlocked) return;
@@ -18,18 +18,22 @@ export async function unlockIOSAudio() {
     console.log('Attempting iOS audio unlock...');
 
     try {
-    // Method 1: HTML5 Audio element with silent MP3 (most reliable for iOS)
+    // Method 1: HTML5 Audio element using a real file URL.
     if (isIOS) {
-      const silentAudio = new Audio(SILENT_AUDIO_DATA);
-      silentAudio.setAttribute('playsinline', '');
-      silentAudio.volume = 0.01;
-      try {
-        await silentAudio.play();
-        silentAudio.pause();
-        silentAudio.remove();
-        console.log('HTML5 Audio unlock successful');
-      } catch (e) {
-        // Some Safari variants reject inline data audio sources.
+      for (const path of IOS_UNLOCK_AUDIO_PATHS) {
+        const silentAudio = new Audio(path);
+        silentAudio.setAttribute('playsinline', '');
+        silentAudio.preload = 'auto';
+        silentAudio.volume = 0.01;
+        try {
+          await silentAudio.play();
+          silentAudio.pause();
+          silentAudio.currentTime = 0;
+          console.log('HTML5 Audio unlock successful');
+          break;
+        } catch (e) {
+          // Try the next path.
+        }
       }
     }
 
@@ -37,6 +41,7 @@ export async function unlockIOSAudio() {
     if (typeof Tone !== 'undefined') {
       await Tone.start();
       console.log('Tone.start() called, state:', Tone.context.state);
+      Tone.Destination.mute = false;
 
       // Force resume if still suspended
       if (Tone.context.state === 'suspended') {
@@ -61,7 +66,7 @@ export async function unlockIOSAudio() {
 }
 
 // Add touch/click listeners for iOS to unlock audio on first interaction
-if (isIOS || isSafari) {
+if (isIOS || isSafariAudio) {
   const earlyUnlock = (e) => {
     // Only unlock on actual user gestures
     if (e.isTrusted) {

@@ -2,9 +2,12 @@ import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, isMobile, LANES, ENEMY_SPEED_BASE, BULLET_SPEED, FIRE_COOLDOWN, HORIZONTAL_SHOOTING, ARC_SHOT_BASE_SAFE_DISTANCE, ARC_SHOT_HEIGHT_BONUS, ARC_SHOT_MAX_JUMP_HEIGHT, PLAYER_CONFIG, pulsePatternPool, sectionPatternMap, updateDimensions } from '../config.js';
 import { savedData, saveGameData, sessionHighScore, setSessionHighScore } from '../storage.js';
-import { currentBar, setCurrentBar, currentChordIndex, setCurrentChordIndex, lastSection, setLastSection, currentGenre, updatePatterns, getSection, ensureTransportScheduled } from '../audio/music-engine.js';
+import { currentBar, setCurrentBar, currentChordIndex, setCurrentChordIndex, lastSection, setLastSection, currentGenre, updatePatterns, getSection, ensureTransportScheduled, getMusicWatchdogStatus, recoverMusicLoops } from '../audio/music-engine.js';
 import { currentDifficulty, DIFFICULTY_PRESETS, uiState, updateGridButton, updatePlayPauseButton } from '../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../audio/game-sounds.js';
+import { createStarfieldSystem, updateStarfieldSystem } from '../systems/main-scene/starfield.js';
+import { handleTutorialSpawnSystem, updateTutorialProgressSystem, advanceTutorialSystem, skipTutorialSystem, completeTutorialSystem } from '../systems/main-scene/tutorial.js';
+import { updateTrailsSystem } from '../systems/main-scene/trails.js';
 
 export default class Main extends Phaser.Scene {
   constructor() {
@@ -23,82 +26,11 @@ export default class Main extends Phaser.Scene {
   }
   
   createStarfield() {
-    // Clean up existing starfield graphics if they exist
-    if (this.starGraphics) {
-      this.starGraphics.destroy();
-    }
-    
-    // Create three layers of stars for parallax effect
-    this.stars = [
-      [], // Far stars (slow)
-      [], // Medium stars
-      []  // Near stars (fast)
-    ];
-    
-    const starColors = [0x666666, 0x999999, 0xbbbbbb];
-    const starCounts = [100, 50, 25];
-    const starSizes = [1, 1.5, 2];
-    
-    this.starGraphics = this.add.graphics();
-    
-    // Generate random stars for each layer - they start at random positions along their path
-    for(let layer = 0; layer < 3; layer++) {
-      for(let i = 0; i < starCounts[layer]; i++) {
-        this.stars[layer].push({
-          // Stars spread across the whole screen area
-          baseX: Math.random() * gameState.WIDTH * 2 - gameState.WIDTH/2, // Can be off-screen horizontally
-          baseY: Math.random() * gameState.HEIGHT * 2 - gameState.HEIGHT, // Can go above and below screen
-          progress: Math.random(), // Random starting position along path
-          speed: (layer + 1) * 0.3, // Different speeds for parallax
-          size: starSizes[layer],
-          color: starColors[layer],
-          twinkle: Math.random() * Math.PI * 2 // Random twinkle phase
-        });
-      }
-    }
+    return createStarfieldSystem.call(this);
   }
   
   updateStarfield(dt) {
-    if (!this.starGraphics) return; // Safety check
-    this.starGraphics.clear();
-    const vanishY = gameState.HEIGHT * 0.15;
-    const vanishX = gameState.WIDTH / 2;
-    
-    // Update and draw each star layer
-    for(let layer = 0; layer < 3; layer++) {
-      for(let star of this.stars[layer]) {
-        // Move stars along perspective (increase progress)
-        star.progress += star.speed * (dt/1000);
-        
-        // Wrap around when star passes the player
-        if(star.progress > 1.2) {
-          star.progress = 0;
-          star.baseX = Math.random() * gameState.WIDTH * 2 - gameState.WIDTH/2; // New random X spread
-          star.baseY = Math.random() * gameState.HEIGHT * 2 - gameState.HEIGHT; // New random Y spread
-        }
-        
-        // Calculate positions - stars follow same exponential curve as grid
-        const curvedProgress = Math.pow(star.progress, 2.5); // Same curve as grid/objects
-        const y = vanishY + (star.baseY - vanishY) * curvedProgress;
-        const x = vanishX + (star.baseX - vanishX) * curvedProgress;
-        
-        // Skip stars that are off-screen
-        if(x < -50 || x > gameState.WIDTH + 50) continue;
-        
-        // Scale based on distance (smaller when far)
-        const size = star.size * (0.1 + star.progress * 1.5);
-        
-        // Add subtle twinkling and fade based on distance
-        star.twinkle += dt * 0.003;
-        const twinkleAlpha = 0.8 + Math.sin(star.twinkle) * 0.2;
-        const distanceAlpha = Math.min(1, star.progress * 2); // Fade in as they approach
-        const alpha = twinkleAlpha * distanceAlpha * 0.85;
-        
-        // Draw star
-        this.starGraphics.fillStyle(star.color, alpha);
-        this.starGraphics.fillCircle(x, y, size);
-      }
-    }
+    return updateStarfieldSystem.call(this, dt);
   }
   
   create(data){
@@ -191,6 +123,10 @@ export default class Main extends Phaser.Scene {
       this.events.once('shutdown', () => {
         if (this.visibilityHandler) {
           document.removeEventListener('visibilitychange', this.visibilityHandler);
+        }
+        if (this.musicWatchdog) {
+          this.musicWatchdog.remove(false);
+          this.musicWatchdog = null;
         }
       });
     }
@@ -292,6 +228,27 @@ export default class Main extends Phaser.Scene {
       uiState.isPlaying = true;
       updatePlayPauseButton();
     }
+
+    // If music callbacks stall while gameplay is active (seen on iOS Safari),
+    // recover loop scheduling automatically.
+    this.lastWatchdogRecoveryAt = 0;
+    this.musicWatchdog = this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        if (this.isPaused || this.isShowingGameOver) return;
+        if (Tone.Transport.state !== 'started') return;
+
+        const status = getMusicWatchdogStatus(Tone.now());
+        if (status.secondsSinceSequenceCallback < 3) return;
+        if (this.time.now - this.lastWatchdogRecoveryAt < 5000) return;
+
+        this.lastWatchdogRecoveryAt = this.time.now;
+        if (recoverMusicLoops(Tone.now())) {
+          console.warn('Music watchdog recovered stalled music loops');
+        }
+      }
+    });
     
     // Initialize trail system
     this.trails = [];
@@ -2962,404 +2919,23 @@ export default class Main extends Phaser.Scene {
   }
   
   handleTutorialSpawn() {
-    // Only spawn on certain beats for controlled tutorial experience
-    switch(this.tutorialWave) {
-      case 0: // Shooting practice
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('PRESS SPACE TO SHOOT');
-          this.tutorialProgressText.setText('Shoot the approaching enemies');
-          this.tutorialWaveStarted = true;
-          this.shootingShown = false;
-        }
-        
-        // After 1 beat, start spawning enemies
-        if (this.beats >= 1) {
-          if (!this.shootingShown) {
-            this.shootingShown = true;
-            this.tutorialText.setText('ENEMIES APPEAR ON BEAT!');
-          }
-          // Spawn every beat for continuous flow
-          if (this.beats % 1 === 0) {
-            this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.8, 'enemyTex'); // Center lane
-          }
-        }
-        break;
-        
-      case 1: // Movement practice
-        if (!this.tutorialWaveStarted) {
-          // First just show the controls
-          this.tutorialText.setText('PRESS ← → TO MOVE LANES');
-          this.tutorialProgressText.setText('Move left and right');
-          this.tutorialWaveStarted = true;
-          this.tutorialTimer = 10000; // 10 seconds total
-          this.movementShown = false;
-          
-          // Spawn first V formation immediately
-          this.tutorialText.setText('DODGE THE V FORMATION!');
-          this.movementShown = true;
-          
-          // Proper V formation with obstacles - 1 second spacing
-          // Center lane first (point of V)
-          this._spawnObstacle(2);
-          // Inner lanes 1000ms later
-          this.time.delayedCall(1000, () => {
-            this._spawnObstacle(1);
-            this._spawnObstacle(3);
-          });
-          // Outer lanes 1000ms after that (wings)
-          this.time.delayedCall(2000, () => {
-            this._spawnObstacle(0);
-            this._spawnObstacle(4);
-          });
-        }
-        
-        // Second V formation - spawn earlier at beat 4 instead of 6
-        if (this.beats === 4) {
-          // Another V with same 1 second spacing
-          this._spawnObstacle(2);
-          this.time.delayedCall(1000, () => {
-            this._spawnObstacle(1);
-            this._spawnObstacle(3);
-          });
-          this.time.delayedCall(2000, () => {
-            this._spawnObstacle(0);
-            this._spawnObstacle(4);
-          });
-        }
-        break;
-        
-      case 2: // Arc shot practice - move to shoot over obstacles
-        if (this.beats % 6 === 0) {
-          this._spawnObstacle(2); // Center lane obstacle
-          // Spawn enemy behind it with more spacing
-          this.time.delayedCall(600, () => {
-            this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.6, 'enemyTex');
-          });
-        }
-        
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('JUMP + SHOOT = ARC SHOT OVER SHIELDS');
-          this.tutorialProgressText.setText('Hit 2 enemies behind shields');
-          this.tutorialWaveStarted = true;
-        }
-        break;
-        
-      case 3: // Dash practice
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('DOUBLE-TAP → TO DASH');
-          this.tutorialProgressText.setText('Dash through gaps to collect power-ups');
-          this.tutorialWaveStarted = true;
-          
-          // Spawn immediately when entering this wave
-          // Create wall of obstacles with gap
-          this._spawnObstacle(0);
-          this._spawnObstacle(1);
-          // Gap in lane 2
-          this._spawnObstacle(3);
-          this._spawnObstacle(4);
-          
-          // Spawn power-up RIGHT behind the wall
-          this.time.delayedCall(20, () => {
-            this._spawnPowerUp(0); // Power-up on left side, requires dash to reach
-          });
-        }
-        
-        // Second wall after some beats
-        if (this.beats % 8 === 0 && this.beats > 0) {
-          // Create another wall
-          this._spawnObstacle(0);
-          this._spawnObstacle(1);
-          // Gap in lane 2
-          this._spawnObstacle(3);
-          this._spawnObstacle(4);
-          
-          // Power-up behind
-          this.time.delayedCall(20, () => {
-            this._spawnPowerUp(4); // Different lane this time
-          });
-        }
-        break;
-        
-      case 4: // Arc shot practice
-        // First set - teach arc shot
-        if (this.beats === 1) {
-          this._spawnObstacle(2); // Center lane obstacle
-          // Spawn enemy behind it with more spacing
-          this.time.delayedCall(700, () => {
-            this._spawnEnemy(2, ENEMY_SPEED_BASE * 0.5, 'enemyTex');
-          });
-        }
-        
-        // Second set - more spacing, different lane
-        if (this.beats === 12) {  // Much more spacing
-          this._spawnObstacle(3); // Different lane
-          this.time.delayedCall(700, () => {
-            this._spawnEnemy(3, ENEMY_SPEED_BASE * 0.5, 'enemyTex');
-          });
-        }
-        
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('JUMP + SHOOT = ARC SHOT');
-          this.tutorialProgressText.setText('Hit enemy, then move to dodge shield');
-          this.tutorialWaveStarted = true;
-          this.tutorialArcShotCount = 0;
-        }
-        
-        // Update text after first arc shot
-        if (this.tutorialArcShotCount !== (this.tutorialProgress.arcShotsHit || 0)) {
-          this.tutorialArcShotCount = this.tutorialProgress.arcShotsHit || 0;
-          if (this.tutorialArcShotCount === 1) {
-            this.tutorialText.setText('GOOD! NOW MOVE TO DODGE THE SHIELD');
-          }
-        }
-        break;
-        
-      case 5: // Super jump teaching
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('HOLD ↓ TO CHARGE SUPER JUMP');
-          this.tutorialProgressText.setText('Hold down, then release to jump higher!');
-          this.tutorialWaveStarted = true;
-          this.superJumpShown = false;
-          this.tutorialSuperJumps = 0;
-        }
-        
-        // After 2 beats, spawn obstacle to practice jumping over
-        if (this.beats === 2 && !this.superJumpShown) {
-          this.superJumpShown = true;
-          this.tutorialText.setText('CHARGE AND JUMP OVER THE SHIELD!');
-          this._spawnObstacle(2); // Center lane obstacle to jump over
-        }
-        
-        // Spawn another obstacle every 6 beats for practice
-        if (this.beats > 2 && this.beats % 6 === 0) {
-          this._spawnObstacle(Phaser.Math.Between(1, 3));
-        }
-        break;
-        
-      case 6: // Star collection with super jump
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('STARS APPEAR DURING BREAKS!');
-          this.tutorialProgressText.setText('Super jump to collect stars above shields');
-          this.tutorialWaveStarted = true;
-          // Force break section behavior for stars during tutorial
-          this.isBreakSection = true;
-        }
-        
-        // Spawn obstacles with stars
-        if (this.beats % 8 === 0) {
-          this._spawnObstacle(2); // This will auto-spawn a star above it
-        }
-        if (this.beats % 8 === 4) {
-          this._spawnObstacle(Phaser.Math.Between(1, 3));
-        }
-        break;
-        
-      case 7: // Full game preview with adaptive assistance
-        if (!this.tutorialWaveStarted) {
-          this.tutorialText.setText('FULL GAME - SURVIVE!');
-          this.tutorialProgressText.setText('Starting at 70% difficulty, will increase gradually');
-          this.tutorialWaveStarted = true;
-          this.tutorialTimer = 30000; // 30 seconds
-          
-          // Enable adaptive assistance at 70% for the start
-          this.adaptiveState.isAssisting = true;
-          this.adaptiveState.assistStartTime = this.time.now;
-          this.adaptiveState.currentSpawnMultiplier = 0.7;  // 70% spawn rate
-          this.adaptiveState.currentSpeedMultiplier = 0.85; // 85% speed
-        }
-        // Wave 7 uses normal game spawning via GameAPI callbacks
-        // No manual spawns needed here
-        break;
-    }
+    return handleTutorialSpawnSystem.call(this);
   }
   
   updateTutorialProgress() {
-    if (!this.isTutorial) return;
-    
-    // Check wave completion based on current wave
-    switch(this.tutorialWave) {
-      case 0: // Shooting - need 3 hits
-        this.tutorialProgressText.setText(`Enemies hit: ${this.tutorialProgress.shotsHit}/3`);
-        if (this.tutorialProgress.shotsHit >= 3) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 1: // Movement - survive timer
-        if (this.tutorialTimer) {
-          this.tutorialTimer -= 16; // Approximate frame time
-          const seconds = Math.ceil(this.tutorialTimer / 1000);
-          this.tutorialProgressText.setText(`Dodge for: ${seconds} seconds`);
-          if (this.tutorialTimer <= 0) {
-            this.advanceTutorial();
-          }
-        }
-        break;
-        
-      case 2: // Arc shots - hit enemies behind obstacles
-        this.tutorialProgressText.setText(`Arc shots hit: ${this.tutorialProgress.arcShotsHit || 0}/2`);
-        if ((this.tutorialProgress.arcShotsHit || 0) >= 2) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 3: // Dash - collect power-ups through dashing
-        this.tutorialProgressText.setText(`Power-ups collected: ${this.tutorialProgress.powerUpsCollected || 0}/2`);
-        if ((this.tutorialProgress.powerUpsCollected || 0) >= 2) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 4: // Arc shots - hit enemies behind obstacles
-        this.tutorialProgressText.setText(`Arc shots hit: ${this.tutorialProgress.arcShotsHit || 0}/2`);
-        if ((this.tutorialProgress.arcShotsHit || 0) >= 2) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 5: // Super jump teaching - need to perform 2 super jumps
-        // Update instruction based on charge state
-        if (this.jumpChargeAmount > 0.3) {
-          this.tutorialText.setText('RELEASE TO JUMP!');
-        } else if (this.jumpChargeAmount > 0.1) {
-          this.tutorialText.setText('KEEP HOLDING TO CHARGE MORE!');
-        } else if (this.isChargingJump) {
-          this.tutorialText.setText('CHARGING...');
-        }
-        
-        // Progress is now tracked directly in superJump function
-        this.tutorialProgressText.setText(`Super jumps: ${this.tutorialSuperJumps || 0}/2`);
-        if ((this.tutorialSuperJumps || 0) >= 2) {
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 6: // Stars - collect 2
-        this.tutorialProgressText.setText(`Stars collected: ${this.tutorialProgress.starsCollected}/2`);
-        if (this.tutorialProgress.starsCollected >= 2) {
-          // Turn off break section mode after completing star tutorial
-          this.isBreakSection = false;
-          this.advanceTutorial();
-        }
-        break;
-        
-      case 7: // Full game - survive timer with adaptive difficulty display
-        if (this.tutorialTimer) {
-          this.tutorialTimer -= 16;
-          const seconds = Math.ceil(this.tutorialTimer / 1000);
-          
-          // Show current difficulty level based on adaptive state
-          const difficultyPercent = Math.round(this.adaptiveState.currentSpawnMultiplier * 100);
-          const speedPercent = Math.round(this.adaptiveState.currentSpeedMultiplier * 100);
-          
-          this.tutorialProgressText.setText(`Practice: ${seconds}s | Difficulty: ${difficultyPercent}% | Speed: ${speedPercent}%`);
-          
-          if (this.tutorialTimer <= 0) {
-            this.completeTutorial();
-          }
-        }
-        break;
-    }
+    return updateTutorialProgressSystem.call(this);
   }
   
   advanceTutorial() {
-    this.tutorialWave++;
-    this.tutorialWaveStarted = false;
-    this.tutorialTimer = null; // Reset any timers
-    
-    // Flash success message
-    const successText = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2, 'EXCELLENT!', {
-      font: 'bold 48px monospace',
-      fill: '#00ff00',
-      stroke: '#000000',
-      strokeThickness: 6
-    }).setOrigin(0.5).setDepth(1001);
-    
-    this.tweens.add({
-      targets: successText,
-      scale: 1.5,
-      alpha: 0,
-      duration: 1000,
-      ease: 'Power2',
-      onComplete: () => successText.destroy()
-    });
-    
-    // Check if we've completed all waves (0-6, then 7 completes itself)
-    if (this.tutorialWave >= 7) {
-      // Wave 7 will complete itself via timer
-      // Don't call completeTutorial here
-    }
+    return advanceTutorialSystem.call(this);
   }
   
   skipTutorial() {
-    // Mark tutorial as skipped but not completed
-    // Don't save completion so it will be offered again next time
-    
-    // Show skip message briefly
-    this.tutorialText.setText('SKIPPING TUTORIAL...');
-    this.tutorialProgressText.setText('Starting full game...');
-    
-    // Transition to normal game quickly
-    this.time.delayedCall(500, () => {
-      this.isTutorial = false;
-      this.tutorialText.destroy();
-      this.tutorialProgressText.destroy();
-      this.skipTutorialButton.destroy();
-      
-      // Reset adaptive difficulty to normal
-      this.adaptiveState.isAssisting = false;
-      this.adaptiveState.currentSpawnMultiplier = 1.0;
-      this.adaptiveState.currentSpeedMultiplier = 1.0;
-      this.adaptiveState.assistStartTime = null;
-      
-      // Reset tempo to normal
-      Tone.Transport.bpm.value = 120;
-      
-      // Reset beats counter
-      this.beats = 0;
-    });
+    return skipTutorialSystem.call(this);
   }
   
   completeTutorial() {
-    // Save completion
-    localStorage.setItem('beatrider_tutorial_completed', 'true');
-    
-    // Show completion message
-    this.tutorialText.setText('TUTORIAL COMPLETE!');
-    this.tutorialProgressText.setText('Starting full game...');
-    
-    // Transition to normal game after delay
-    this.time.delayedCall(2000, () => {
-      this.isTutorial = false;
-      this.tutorialText.destroy();
-      this.tutorialProgressText.destroy();
-      if (this.skipTutorialButton && !this.skipTutorialButton.destroyed) {
-        this.skipTutorialButton.destroy();
-      }
-      
-      // Reset adaptive difficulty to normal
-      this.adaptiveState.isAssisting = false;
-      this.adaptiveState.currentSpawnMultiplier = 1.0;
-      this.adaptiveState.currentSpeedMultiplier = 1.0;
-      this.adaptiveState.assistStartTime = null;
-      
-      // Reset tempo to normal
-      Tone.Transport.bpm.value = 120;
-      
-      // Reset GameAPI to normal spawning
-      window.GameAPI.onBeat = () => {
-        this.beats++;
-        const speed=(ENEMY_SPEED_BASE + Math.floor(this.beats/16)*30) * currentDifficulty.speedMult;
-        const lane = Phaser.Math.Between(0,LANES-1);
-        this._spawnEnemy(lane, speed, 'enemyTex');
-        
-        for(let enemy of this.enemies) {
-          if(enemy.enemyType === 'enemyTex') {
-            enemy.pulseTime = this.time.now;
-          }
-        }
-      };
-    });
+    return completeTutorialSystem.call(this);
   }
   
   _spawnDrifter(lane){
@@ -4923,46 +4499,6 @@ export default class Main extends Phaser.Scene {
   }
   
   updateTrails(dt) {
-    this.trailGraphics.clear();
-    
-    // Draw enemy trails
-    for(let enemy of this.enemies) {
-      if(enemy.trailPoints && enemy.trailPoints.length > 1) {
-        for(let i = 0; i < enemy.trailPoints.length - 1; i++) {
-          const point = enemy.trailPoints[i];
-          const nextPoint = enemy.trailPoints[i + 1];
-          
-          // Fade trail based on position in array
-          const alpha = (i / enemy.trailPoints.length) * 0.5;
-          point.alpha = alpha;
-          
-          // Choose color based on enemy type
-          let color = 0xff3366; // Default red
-          if(enemy.enemyType === 'fastEnemyTex') color = 0xffff00;
-          else if(enemy.isDrifter) color = 0xff00ff;
-          
-          this.trailGraphics.lineStyle(2, color, alpha);
-          this.trailGraphics.lineBetween(point.x, point.y, nextPoint.x, nextPoint.y);
-        }
-      }
-    }
-    
-    // Draw bullet trails
-    for(let bullet of this.bullets) {
-      if(bullet.trailPoints && bullet.trailPoints.length > 1) {
-        for(let i = 0; i < bullet.trailPoints.length - 1; i++) {
-          const point = bullet.trailPoints[i];
-          const nextPoint = bullet.trailPoints[i + 1];
-          
-          const alpha = (i / bullet.trailPoints.length) * 0.7;
-          
-          // Cyan trails for bullets, yellow if arc shot
-          const color = bullet.isArcShot ? 0xffff00 : 0x00ffff;
-          
-          this.trailGraphics.lineStyle(1, color, alpha);
-          this.trailGraphics.lineBetween(point.x, point.y, nextPoint.x, nextPoint.y);
-        }
-      }
-    }
+    return updateTrailsSystem.call(this, dt);
   }
 }

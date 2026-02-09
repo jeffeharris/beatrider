@@ -227,7 +227,7 @@ export const PLAYER_CONFIG = {
 
 // Detect Mac browsers which have WebGL performance issues
 export const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
-// Note: isSafari is also defined in ios-unlock.js for audio context;
+// Note: Safari detection is also defined in ios-unlock.js for audio context;
 // this one is used for renderer selection
 export const isSafariBrowser = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
 export const isChrome = /Chrome/.test(navigator.userAgent);
