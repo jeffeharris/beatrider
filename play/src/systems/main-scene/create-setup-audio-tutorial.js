@@ -62,6 +62,7 @@ export function setupSceneVisualBaseAndTutorialUI() {
 }
 
 export function startMusicAndWatchdog() {
+  const flow = this.stateSlices?.flow;
   if (typeof Tone !== 'undefined' && Tone.Transport.state !== 'started') {
     const startMusic = async () => {
       try {
@@ -99,7 +100,7 @@ export function startMusicAndWatchdog() {
     delay: 1000,
     loop: true,
     callback: () => {
-      if (this.isPaused || this.isShowingGameOver) return;
+      if ((flow?.paused ?? this.isPaused) || (flow?.gameOver ?? this.isShowingGameOver)) return;
       if (Tone.Transport.state !== 'started') return;
 
       const status = getMusicWatchdogStatus(Tone.now());

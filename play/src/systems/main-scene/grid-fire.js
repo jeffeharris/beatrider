@@ -93,9 +93,13 @@ export function drawPerspectiveGridSystem() {
 }
 
 export function fireSystem() {
-  if (!this.playerCanControl || this.isMoving) return;
+  const player = this.stateSlices?.player;
+  const flow = this.stateSlices?.flow;
+  const combat = this.stateSlices?.combat;
+  if (!(flow?.playerCanControl ?? this.playerCanControl) || (player?.moving ?? this.isMoving)) return;
 
-  const isOffScreen = this.playerLane < 0 || this.playerLane >= LANES;
+  const lane = player?.lane ?? this.playerLane;
+  const isOffScreen = lane < 0 || lane >= LANES;
   if (!HORIZONTAL_SHOOTING && isOffScreen) return;
 
   if (HORIZONTAL_SHOOTING && isOffScreen) {
@@ -105,12 +109,12 @@ export function fireSystem() {
   const now = this.time.now;
   if (this.fireBlockTime && now < this.fireBlockTime) return;
 
-  const cooldown = (this.rapidFire ? FIRE_COOLDOWN / 3 : FIRE_COOLDOWN) * currentDifficulty.fireMult;
+  const cooldown = ((combat?.rapidFire ?? this.rapidFire) ? FIRE_COOLDOWN / 3 : FIRE_COOLDOWN) * currentDifficulty.fireMult;
   if (now - this.lastShotAt < cooldown) return;
   this.lastShotAt = now;
 
   this.wobbleVelocity.y = 3;
-  if (!this.isJumping) {
+  if (!(player?.jumping ?? this.isJumping)) {
     this.tweens.add({
       targets: this.player,
       scaleX: 0.9,
@@ -122,11 +126,11 @@ export function fireSystem() {
   }
 
   const b = this.add.image(this.player.x, this.player.y, 'bulletTex');
-  b.lane = this.playerLane;
+  b.lane = lane;
   b.setDepth(50);
 
   let bulletColor = 0xffffff;
-  switch (this.combo) {
+  switch (combat?.combo ?? this.combo) {
     case 1: bulletColor = 0xffffff; break;
     case 2: bulletColor = 0xccffcc; break;
     case 3: bulletColor = 0x00ff00; break;
@@ -138,7 +142,7 @@ export function fireSystem() {
     default: bulletColor = 0xff00ff; break;
   }
 
-  if (this.isJumping) {
+  if (player?.jumping ?? this.isJumping) {
     const jumpHeight = Math.max(0, this.groundY - this.player.y);
     const heightPercent = Math.min(1, jumpHeight / 200);
     if (heightPercent > 0.5) {
@@ -152,19 +156,19 @@ export function fireSystem() {
 
   b.lastX = this.player.x;
   b.lastY = this.player.y;
-  b.rotationSpeed = this.combo >= 6 ? 0.3 : 0;
+  b.rotationSpeed = (combat?.combo ?? this.combo) >= 6 ? 0.3 : 0;
 
   const vanishY = gameState.HEIGHT * 0.15;
   const normalizedY = (this.player.y - vanishY) / (gameState.HEIGHT - vanishY);
   b.progress = Math.pow(normalizedY, 1 / 2.5);
 
   if (HORIZONTAL_SHOOTING && isOffScreen) {
-    const direction = this.playerLane < 0 ? 1 : -1;
+    const direction = lane < 0 ? 1 : -1;
     b.vx = direction * BULLET_SPEED * 1.2;
     b.vy = 0;
     b.isHorizontal = true;
-    b.startLane = this.playerLane;
-    b.currentLane = this.playerLane < 0 ? -0.5 : 4.5;
+    b.startLane = lane;
+    b.currentLane = lane < 0 ? -0.5 : 4.5;
     b.w = Math.floor(12 * gameState.MOBILE_SCALE);
     b.h = Math.floor(6 * gameState.MOBILE_SCALE);
     b.setRotation(direction > 0 ? Math.PI / 2 : -Math.PI / 2);
@@ -176,7 +180,7 @@ export function fireSystem() {
   b.w = b.w || Math.floor(6 * gameState.MOBILE_SCALE);
   b.h = b.h || Math.floor(12 * gameState.MOBILE_SCALE);
 
-  if (this.isJumping && !isOffScreen) {
+  if ((player?.jumping ?? this.isJumping) && !isOffScreen) {
     b.isArcShot = true;
     const jumpHeight = Math.abs(this.player.y - gameState.PLAYER_Y);
     const jumpPercent = Math.min(jumpHeight / ARC_SHOT_MAX_JUMP_HEIGHT, 1);
@@ -186,11 +190,11 @@ export function fireSystem() {
     b.arcDistance = 0;
   }
 
-  if (this.rapidFire) {
+  if (combat?.rapidFire ?? this.rapidFire) {
     b.vy *= 1.5;
     if (Math.random() < 0.3) {
       try {
-        const note = getGameNote(this.playerLane) + '6';
+        const note = getGameNote(lane) + '6';
         const sound = gameSounds.laserSounds[gameSounds.currentLaserSound];
         if (sound.triggerAttackRelease) {
           sound.triggerAttackRelease(note, '32n', Tone.now() + 0.01);
@@ -201,16 +205,16 @@ export function fireSystem() {
     }
   } else {
     try {
-      const note = getGameNote(this.playerLane) + '5';
+      const note = getGameNote(lane) + '5';
       const sound = gameSounds.laserSounds[gameSounds.currentLaserSound];
       if (gameSounds.currentLaserSound === 2) {
-        const chordNotes = [note, getGameNote(this.playerLane + 2) + '5', getGameNote(this.playerLane + 4) + '5'];
+        const chordNotes = [note, getGameNote(lane + 2) + '5', getGameNote(lane + 4) + '5'];
         sound.triggerAttackRelease(chordNotes, '32n', Tone.now() + 0.01);
       } else if (gameSounds.currentLaserSound === 4) {
         sound.triggerAttack(note, Tone.now() + 0.01);
       } else if (gameSounds.currentLaserSound === 5) {
-        const highNote = getGameNote(this.playerLane) + '6';
-        const lowNote = getGameNote(this.playerLane) + '3';
+        const highNote = getGameNote(lane) + '6';
+        const lowNote = getGameNote(lane) + '3';
         sound.triggerAttackRelease(highNote, '16n', Tone.now());
         sound.frequency.exponentialRampToValueAtTime(
           Tone.Frequency(lowNote).toFrequency(),

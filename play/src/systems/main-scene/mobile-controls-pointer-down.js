@@ -3,14 +3,23 @@ import { gameState, MAIN_SCENE_TUNING } from '../../config.js';
 import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function handleMobilePointerDown(pointer) {
+  const player = this.stateSlices?.player;
+  const input = this.stateSlices?.input;
   const edgePadding = this.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
   this.touchStartX = Phaser.Math.Clamp(pointer.x, edgePadding, gameState.WIDTH - edgePadding);
   this.touchStartY = Phaser.Math.Clamp(pointer.y, edgePadding, gameState.HEIGHT - edgePadding);
-  this.touchZoneActive = true;
+  if (input) input.touchActive = true;
+  else this.touchZoneActive = true;
 
-  this.currentZone = 'center';
-  this.isChargingJump = false;
-  this.jumpChargeAmount = 0;
+  if (input) {
+    input.currentZone = 'center';
+    input.jumpChargeAmount = 0;
+  } else {
+    this.currentZone = 'center';
+    this.jumpChargeAmount = 0;
+  }
+  if (player) player.charging = false;
+  else this.isChargingJump = false;
   this.maxPullDistance = 0;
   this.queuedCrouchOnLanding = false;
   this.usingTimeBasedCharge = false;
@@ -19,7 +28,8 @@ export function handleMobilePointerDown(pointer) {
   this.touchIndicator.setVisible(true);
   this.touchIndicator.setAlpha(0.5);
 
-  this.isTouchFiring = true;
+  if (input) input.touchFiring = true;
+  else this.isTouchFiring = true;
 
   const dx = pointer.x - this.touchStartX;
   const dy = pointer.y - this.touchStartY;
@@ -46,7 +56,8 @@ export function handleMobilePointerDown(pointer) {
         dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_RIGHT, { source: 'touch' });
       }
       this.lastMoveTime = this.time.now;
-      this.currentZone = startZone;
+      if (input) input.currentZone = startZone;
+      else this.currentZone = startZone;
     }
   }
 

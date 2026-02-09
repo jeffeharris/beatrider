@@ -59,14 +59,15 @@ export function setupVisibilityAndShutdownHandlers() {
   if (this.visibilityHandler) return;
 
   this.visibilityHandler = () => {
+    const flow = this.stateSlices?.flow;
     if (document.hidden) {
-      if (!this.isPaused && !this.isShowingGameOver) {
+      if (!(flow?.paused ?? this.isPaused) && !(flow?.gameOver ?? this.isShowingGameOver)) {
         this.pauseGame();
         this.wasAutoPaused = true;
       }
     } else if (this.wasAutoPaused) {
       this.wasAutoPaused = false;
-      if (this.isPaused && this.pauseOverlay) {
+      if ((flow?.paused ?? this.isPaused) && this.pauseOverlay) {
         this.pauseOverlay.setVisible(true);
         this.pauseText.setVisible(true);
       }
