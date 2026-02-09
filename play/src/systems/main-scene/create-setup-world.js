@@ -3,17 +3,11 @@ import { sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
 
-export function initializeSceneWorldAndHUD() {
-  const { player: playerState, combat } = this.stateSlices;
-  this.trails = [];
-  this.trailGraphics = this.add.graphics();
-
-  const gfx = this.make.graphics({ x: 0, y: 0, add: false });
-
+function computeWorldSizes() {
   const screenReference = Math.min(gameState.WIDTH, gameState.HEIGHT);
   const screenScale = screenReference / 800;
-
   const mobileBoost = isMobile ? 1.2 : 1.0;
+
   const basePlayerSize = Math.floor(36 * screenScale * mobileBoost);
   const baseEnemySize = Math.floor(32 * screenScale * mobileBoost);
   const baseBulletW = Math.floor(8 * screenScale * mobileBoost);
@@ -22,16 +16,19 @@ export function initializeSceneWorldAndHUD() {
   const baseObstacleH = Math.floor(22 * screenScale * mobileBoost);
   const basePowerUpSize = Math.floor(28 * screenScale * mobileBoost);
 
-  const playerSize = Math.floor(basePlayerSize * gameState.MOBILE_SCALE);
-  const enemySize = Math.floor(baseEnemySize * gameState.MOBILE_SCALE);
-  const bulletW = Math.floor(baseBulletW * gameState.MOBILE_SCALE);
-  const bulletH = Math.floor(baseBulletH * gameState.MOBILE_SCALE);
-  const obstacleW = Math.floor(baseObstacleW * gameState.MOBILE_SCALE);
-  const obstacleH = Math.floor(baseObstacleH * gameState.MOBILE_SCALE);
-  const powerUpSize = Math.floor(basePowerUpSize * gameState.MOBILE_SCALE);
+  return {
+    playerSize: Math.floor(basePlayerSize * gameState.MOBILE_SCALE),
+    enemySize: Math.floor(baseEnemySize * gameState.MOBILE_SCALE),
+    bulletW: Math.floor(baseBulletW * gameState.MOBILE_SCALE),
+    bulletH: Math.floor(baseBulletH * gameState.MOBILE_SCALE),
+    obstacleW: Math.floor(baseObstacleW * gameState.MOBILE_SCALE),
+    obstacleH: Math.floor(baseObstacleH * gameState.MOBILE_SCALE),
+    powerUpSize: Math.floor(basePowerUpSize * gameState.MOBILE_SCALE)
+  };
+}
 
-  this.enemyBaseSize = enemySize;
-  this.fastEnemyBaseSize = Math.floor(enemySize * 1.25);
+function buildMainSceneTextures(gfx, sizes) {
+  const { enemySize, bulletW, bulletH, obstacleW, obstacleH, powerUpSize, playerSize } = sizes;
 
   gfx.fillStyle(0x00ffcc, 1).fillRect(0, 0, playerSize, playerSize).generateTexture('playerTex', playerSize, playerSize).clear();
   gfx.fillStyle(0xff3366, 1).fillRect(0, 0, enemySize, enemySize).generateTexture('enemyTex', enemySize, enemySize).clear();
@@ -80,11 +77,8 @@ export function initializeSceneWorldAndHUD() {
     const x = starSize / 2 + Math.cos(angle) * radius;
     const y = starSize / 2 + Math.sin(angle) * radius;
 
-    if (i === 0) {
-      gfx.moveTo(x, y);
-    } else {
-      gfx.lineTo(x, y);
-    }
+    if (i === 0) gfx.moveTo(x, y);
+    else gfx.lineTo(x, y);
   }
 
   gfx.closePath();
@@ -101,56 +95,76 @@ export function initializeSceneWorldAndHUD() {
   gfx.closePath();
   gfx.fillPath();
   gfx.generateTexture('drifterTex', enemySize, enemySize).destroy();
+}
+
+function initializeSceneEntities(scene, sizes) {
+  const { player: playerState } = scene.stateSlices;
 
   playerState.lane = 2;
-  this.player = this.add.image(this._laneX(playerState.lane), gameState.PLAYER_Y, 'playerTex');
-  this.player.w = playerSize;
-  this.player.h = playerSize;
-  this.player.setDepth(500);
+  scene.player = scene.add.image(scene._laneX(playerState.lane), gameState.PLAYER_Y, 'playerTex');
+  scene.player.w = sizes.playerSize;
+  scene.player.h = sizes.playerSize;
+  scene.player.setDepth(500);
 
-  this.chargeGlow = this.add.graphics();
-  this.chargeGlow.setDepth(-1);
-  this.chargeGlow.setVisible(false);
-  this.enemies = [];
-  this.bullets = [];
-  this.obstacles = [];
-  this.powerUps = [];
-  this.lastShotAt = 0;
+  scene.chargeGlow = scene.add.graphics();
+  scene.chargeGlow.setDepth(-1);
+  scene.chargeGlow.setVisible(false);
+
+  scene.enemyBaseSize = sizes.enemySize;
+  scene.fastEnemyBaseSize = Math.floor(sizes.enemySize * 1.25);
+}
+
+function initializeRuntimeState(scene) {
+  const { player: playerState, combat } = scene.stateSlices;
+
+  scene.trails = [];
+  scene.trailGraphics = scene.add.graphics();
+  scene.enemies = [];
+  scene.bullets = [];
+  scene.obstacles = [];
+  scene.powerUps = [];
+  scene.lastShotAt = 0;
+
   combat.rapidFire = false;
   combat.rapidFireTimer = 0;
   combat.offScreenTimer = 0;
-  this.offScreenShotCount = 0;
-  this.offScreenTurnDelay = 0;
+  combat.score = 0;
+  combat.beats = 0;
+  combat.combo = 1;
+
+  scene.offScreenShotCount = 0;
+  scene.offScreenTurnDelay = 0;
   playerState.moving = false;
   playerState.stretching = false;
   playerState.jumping = false;
   playerState.crouching = false;
-  this.crouchTimer = 0;
-  this.maxChargeTime = MAIN_SCENE_TUNING.crouchMaxChargeMs;
-  this.releaseGraceTime = MAIN_SCENE_TUNING.crouchReleaseGraceMs;
-  this.queuedSuperJumpCharge = 0;
-  this.keyboardJumpQueuedWhileAirborne = false;
-  this.queuedCrouchOnLanding = false;
-  this.usingTimeBasedCharge = false;
-  this.touchChargeStartTime = 0;
-
-  this.idleWobblePhase = 0;
-  this.wobbleVelocity = { x: 0, y: 0 };
-  this.wobbleDamping = 0.92;
-
   playerState.dashing = false;
-  this.lastLeftPress = 0;
-  this.lastRightPress = 0;
-  this.doubleTapWindow = PLAYER_CONFIG.dash.doubleTapWindow;
-  this.keys = this.input.keyboard.addKeys(`LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC,${MAIN_SCENE_TUNING.debug.toggleKey}`);
-  combat.score = 0;
-  combat.beats = 0;
-  combat.combo = 1;
-  this.comboTimer = 0;
-  this.lastKillTime = 0;
-  this.maxCombo = 8;
-  this.comboWindow = MAIN_SCENE_TUNING.comboWindowMs;
 
+  scene.crouchTimer = 0;
+  scene.maxChargeTime = MAIN_SCENE_TUNING.crouchMaxChargeMs;
+  scene.releaseGraceTime = MAIN_SCENE_TUNING.crouchReleaseGraceMs;
+  scene.queuedSuperJumpCharge = 0;
+  scene.keyboardJumpQueuedWhileAirborne = false;
+  scene.queuedCrouchOnLanding = false;
+  scene.usingTimeBasedCharge = false;
+  scene.touchChargeStartTime = 0;
+
+  scene.idleWobblePhase = 0;
+  scene.wobbleVelocity = { x: 0, y: 0 };
+  scene.wobbleDamping = 0.92;
+
+  scene.lastLeftPress = 0;
+  scene.lastRightPress = 0;
+  scene.doubleTapWindow = PLAYER_CONFIG.dash.doubleTapWindow;
+  scene.keys = scene.input.keyboard.addKeys(`LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC,${MAIN_SCENE_TUNING.debug.toggleKey}`);
+
+  scene.comboTimer = 0;
+  scene.lastKillTime = 0;
+  scene.maxCombo = 8;
+  scene.comboWindow = MAIN_SCENE_TUNING.comboWindowMs;
+}
+
+function createHud(scene) {
   const scoreFontSize = isMobile ? '24px' : '16px';
   const scoreY = isMobile ? gameState.HEIGHT - 36 : gameState.HEIGHT - 24;
   const highScoreY = isMobile ? gameState.HEIGHT - 72 : gameState.HEIGHT - 48;
@@ -159,30 +173,43 @@ export function initializeSceneWorldAndHUD() {
   const labelOffset = 10;
   const valueOffset = 80;
 
-  this.highScoreLabel = this.add.text(labelOffset, highScoreY, 'high', { font: `${scoreFontSize} monospace`, fill: '#ff0' });
-  this.highScoreText = this.add.text(valueOffset, highScoreY, sessionHighScore.toString(), { font: `${scoreFontSize} monospace`, fill: '#ff0' });
-  this.highScoreText.setOrigin(0, 0);
+  scene.highScoreLabel = scene.add.text(labelOffset, highScoreY, 'high', { font: `${scoreFontSize} monospace`, fill: '#ff0' });
+  scene.highScoreText = scene.add.text(valueOffset, highScoreY, sessionHighScore.toString(), { font: `${scoreFontSize} monospace`, fill: '#ff0' });
+  scene.highScoreText.setOrigin(0, 0);
 
-  this.scoreLabel = this.add.text(labelOffset, scoreY, 'score', { font: `${scoreFontSize} monospace`, fill: '#0f0' });
-  this.scoreText = this.add.text(valueOffset, scoreY, '0', { font: `${scoreFontSize} monospace`, fill: '#0f0' });
-  this.scoreText.setOrigin(0, 0);
-  this.comboText = this.add.text(10, comboY, '', { font: `${scoreFontSize} monospace`, fill: '#ff00ff' });
-  this.comboText.setAlpha(0);
+  scene.scoreLabel = scene.add.text(labelOffset, scoreY, 'score', { font: `${scoreFontSize} monospace`, fill: '#0f0' });
+  scene.scoreText = scene.add.text(valueOffset, scoreY, '0', { font: `${scoreFontSize} monospace`, fill: '#0f0' });
+  scene.scoreText.setOrigin(0, 0);
+  scene.comboText = scene.add.text(10, comboY, '', { font: `${scoreFontSize} monospace`, fill: '#ff00ff' });
+  scene.comboText.setAlpha(0);
 
   const meterY = comboY + 30;
-  this.comboMeterBg = this.add.graphics();
-  this.comboMeterBg.fillStyle(0x333333, 0.5);
-  this.comboMeterBg.fillRect(10, meterY, 200, 8);
-  this.comboMeterBg.setVisible(false);
+  scene.comboMeterBg = scene.add.graphics();
+  scene.comboMeterBg.fillStyle(0x333333, 0.5);
+  scene.comboMeterBg.fillRect(10, meterY, 200, 8);
+  scene.comboMeterBg.setVisible(false);
 
-  this.comboMeter = this.add.graphics();
-  this.comboMeterY = meterY;
+  scene.comboMeter = scene.add.graphics();
+  scene.comboMeterY = meterY;
+}
 
-  this.gridVisible = gameState.gridEnabled;
+function wireSceneUiAndDebug(scene) {
+  scene.gridVisible = gameState.gridEnabled;
 
   uiState.gridVisible = gameState.gridEnabled;
   updateGridButton();
 
-  this.setupMobileControls();
-  setupDebugToolsSystem.call(this);
+  scene.setupMobileControls();
+  setupDebugToolsSystem.call(scene);
+}
+
+export function initializeSceneWorldAndHUD() {
+  const gfx = this.make.graphics({ x: 0, y: 0, add: false });
+  const sizes = computeWorldSizes();
+
+  buildMainSceneTextures(gfx, sizes);
+  initializeSceneEntities(this, sizes);
+  initializeRuntimeState(this);
+  createHud(this);
+  wireSceneUiAndDebug(this);
 }
