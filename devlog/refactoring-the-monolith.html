@@ -245,6 +245,32 @@
             margin: 3rem 0;
         }
 
+        figure {
+            margin: 2rem 0;
+        }
+
+        .phone-screenshots {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .phone-screenshots img {
+            max-height: 500px;
+            width: auto;
+            border: 1px solid #333;
+            border-radius: 8px;
+        }
+
+        figcaption {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
         footer {
             margin-top: 4rem;
             padding-top: 2rem;
@@ -354,7 +380,7 @@
 
             <p>Claude Code recently shipped <a href="https://code.claude.com/docs/en/agent-teams">Agent Teams</a> as an experimental feature. Instead of one AI session doing everything sequentially, you spin up a team: a lead agent that coordinates work, and teammates that each get their own context window, their own task list, and can message each other directly.</p>
 
-            <p>The key insight: unlike subagents (which do focused work and report back), teammates operate independently. They can explore different parts of a codebase in parallel without stepping on each other. The docs describe it well -- agent teams are strongest for "new modules or features" where "teammates can each own a separate piece."</p>
+            <p>Unlike subagents (which do focused work and report back), teammates operate independently. They can explore different parts of a codebase in parallel without stepping on each other. The docs describe it well -- agent teams are strongest for "new modules or features" where "teammates can each own a separate piece."</p>
 
             <p>That's exactly what a monolith decomposition is.</p>
 
@@ -374,7 +400,7 @@
                 <li>90 lines of Phaser initialization</li>
             </ul>
 
-            <p>Natural seams everywhere. Perfect candidate.</p>
+            <p>Natural seams everywhere.</p>
 
             <h2>Sending in the Team</h2>
 
@@ -388,11 +414,11 @@
 
             <p>Earlier in the session, Claude (Opus 4.6) had already extracted the simpler leaf modules -- storage, config, audio engine, music UI, CSS. Those went cleanly because they had fewer dependencies. The agent team tackled the hard remaining pieces: the files with deep coupling and cross-module dependencies.</p>
 
-            <p>Three agents, three files, one monolith being carved up simultaneously. The whole team extraction took about 15 minutes of wall clock time.</p>
+            <p>The whole team extraction took about 15 minutes of wall clock time.</p>
 
             <h2>The Experience</h2>
 
-            <p>What struck me was how <em>mechanical</em> the process felt. Not in a bad way -- in a "this is exactly what AI should be doing" way.</p>
+            <p>What struck me was how <em>satisfying</em> it was to watch. Three agents doing the tedious, error-prone work I never wanted to do by hand -- and doing it correctly. This is exactly what AI should be doing.</p>
 
             <p>The scene-extractor agent read 5,000 lines of monolith code, identified every bare global variable reference (<code>WIDTH</code>, <code>HEIGHT</code>, <code>PLAYER_Y</code>, <code>gridEnabled</code>, <code>currentBar</code>... about 50 different variables), and converted each one to the correct ES module import pattern. Some were simple constant imports. Others were mutable state that needed getter/setter wrappers because you can't reassign imported bindings in ES modules. The agent handled the distinction automatically across 150+ replacements.</p>
 
@@ -447,19 +473,31 @@
 
             <h2>What This Says About the Tooling</h2>
 
-            <p><strong>Opus 4.6 is genuinely good at mechanical code transformation.</strong> Reading thousands of lines, identifying patterns, applying consistent replacements -- this is tedious, error-prone work for humans and exactly the kind of task where AI shines. I would have made more mistakes doing this by hand, and it would have taken days.</p>
+            <p><strong>Opus 4.6 is genuinely good at mechanical code transformation.</strong> Reading thousands of lines, identifying patterns, applying consistent replacements -- I would have made more mistakes doing this by hand, and it would have taken days.</p>
 
             <p><strong>Agent Teams work for decomposition.</strong> The monolith had natural seams, and the team structure mapped cleanly onto them. Each agent owned a separate file, no conflicts. The <a href="https://code.claude.com/docs/en/agent-teams">docs recommend</a> avoiding two agents editing the same file, and for this task that was easy to respect.</p>
 
-            <p><strong>The boundaries are still the hard part.</strong> Individual modules were correct. Integration wasn't. This mirrors the classic software engineering truth: the interfaces between components are harder than the components themselves. Giving each agent explicit interface specs (what to import, what to export) rather than letting them infer it would have caught some issues earlier.</p>
+            <p><strong>The boundaries are still the hard part.</strong> Individual modules were correct. Integration wasn't. Giving each agent explicit interface specs (what to import, what to export) rather than letting them infer it would have caught some issues earlier.</p>
 
             <p><strong>Multiple models, multiple strengths.</strong> Opus 4.6 excelled at the parallel extraction -- fast, mechanical, faithful to the source. Codex 5.3 excelled at the review pass -- reading across module boundaries, spotting integration issues, making targeted fixes. Using both felt natural, like having a build crew and then a code reviewer.</p>
 
+            <h2>Oh, One More Thing</h2>
+
+            <p>And yes, I did this all from my phone.</p>
+
+            <figure>
+                <div class="phone-screenshots">
+                    <img src="images/IMG_6056.PNG" alt="Claude Code agent team running on a phone, showing a team-lead coordinating task shutdown">
+                    <img src="images/IMG_6057.PNG" alt="Six AI agents running in parallel on a phone terminal">
+                </div>
+                <figcaption>Agent teams at 1 PM and 5 PM. The amount of compute I hold in my hand is mindbending.</figcaption>
+            </figure>
+
             <h2>The Bigger Picture</h2>
 
-            <p>Six months ago I argued that AI makes software disposable. I still think that's true for prototypes and MVPs. But the more interesting question is what happens when the tooling gets good enough that refactoring is <em>also</em> cheap.</p>
+            <p>Six months ago I argued that AI makes software disposable. I still think that's true. But here's what I didn't expect: when the disposable thing turns out to be worth keeping, the gap to <em>proper</em> is now surprisingly small.</p>
 
-            <p>If you can build it in a week and refactor it in an hour, the calculus changes. You don't have to choose between "disposable" and "maintainable." You can start disposable, ship fast, and add structure later -- when and if you need it -- because the cost of restructuring has dropped by an order of magnitude.</p>
+            <p>Build fast, build throwaway. If it clicks, restructure it in an afternoon. For a game, a family tool, a side project -- the distance between "it works" and "it's maintainable" just collapsed by an order of magnitude.</p>
 
             <p>The monolith is dead. Long live the modules.</p>
 
