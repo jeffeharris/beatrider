@@ -48,7 +48,4 @@ export function resizeMainSceneSystem() {
     this._drawPerspectiveGrid();
   }
 
-  if (this.mobileControls) {
-    this.setupMobileControls();
-  }
 }

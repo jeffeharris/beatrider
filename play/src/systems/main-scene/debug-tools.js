@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { MAIN_SCENE_TUNING } from '../../config.js';
+import { LANES, MAIN_SCENE_TUNING } from '../../config.js';
 
 function warnInvariant(scene, key, message) {
   const now = scene.time.now;
@@ -13,6 +13,8 @@ function warnInvariant(scene, key, message) {
 export function setupDebugToolsSystem() {
   this.debugHudVisible = false;
   this.lastDebugHudUpdateAt = 0;
+  this.playerLaneDesyncFrames = 0;
+  this.playerLaneLastHealAt = 0;
   this._debugWarnTimes = {};
 
   this.debugHudText = this.add.text(12, 12, '', {
@@ -41,6 +43,43 @@ export function assertMainSceneStateDev() {
   }
   if (player.lane < -1 || player.lane > 5) {
     warnInvariant(this, 'lane-out-of-range', `playerLane out of expected bounds: ${player.lane}`);
+  }
+}
+
+export function monitorAndHealPlayerLaneDesync() {
+  const { player, flow } = this.stateSlices;
+  if (!this.player || flow.paused || flow.gameOver) return;
+
+  if (player.lane < 0 || player.lane >= LANES || player.moving || player.dashing) {
+    this.playerLaneDesyncFrames = 0;
+    return;
+  }
+
+  const expectedX = this._laneX(player.lane);
+  const diff = Math.abs(this.player.x - expectedX);
+  if (diff <= 2) {
+    this.playerLaneDesyncFrames = 0;
+    return;
+  }
+
+  this.playerLaneDesyncFrames = (this.playerLaneDesyncFrames || 0) + 1;
+
+  if (import.meta.env.DEV) {
+    warnInvariant(this, 'lane-position-desync', `player x desynced by ${diff.toFixed(2)} at lane ${player.lane}`);
+  }
+
+  if (this.playerLaneDesyncFrames < 4) return;
+
+  const now = this.time.now;
+  if (now - (this.playerLaneLastHealAt || 0) < 500) return;
+
+  this.tweens.killTweensOf(this.player);
+  this.player.x = expectedX;
+  this.playerLaneDesyncFrames = 0;
+  this.playerLaneLastHealAt = now;
+
+  if (import.meta.env.DEV) {
+    warnInvariant(this, 'lane-position-heal', `corrected player x to lane ${player.lane}`);
   }
 }
 

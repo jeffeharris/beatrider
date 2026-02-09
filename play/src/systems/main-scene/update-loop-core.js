@@ -1,7 +1,7 @@
 import { updateTutorialAndAdaptiveState, handlePauseAndGridInput } from './update-loop-core-state.js';
 import { updateIdleWobble, updateTimeBasedTouchCharge, updateComboMeter, updatePulseAndGrid } from './update-loop-core-visuals.js';
 import { handleMovementInputAndOffscreen, handleCrouchChargeAndJump, handleFiringInput } from './update-loop-core-player-actions.js';
-import { assertMainSceneStateDev, updateDebugHudSystem } from './debug-tools.js';
+import { assertMainSceneStateDev, monitorAndHealPlayerLaneDesync, updateDebugHudSystem } from './debug-tools.js';
 
 export function runUpdateLoopCore(dt) {
   assertMainSceneStateDev.call(this);
@@ -25,6 +25,7 @@ export function runUpdateLoopCore(dt) {
   handleMovementInputAndOffscreen.call(this, dt);
   handleCrouchChargeAndJump.call(this, dt);
   handleFiringInput.call(this);
+  monitorAndHealPlayerLaneDesync.call(this);
   updateDebugHudSystem.call(this);
 
   return shifts;
