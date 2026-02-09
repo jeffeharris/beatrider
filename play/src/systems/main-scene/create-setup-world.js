@@ -2,6 +2,7 @@ import { gameState, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../con
 import { sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
+import { createResourceBarSystem } from './resource-bar.js';
 
 function computeWorldSizes() {
   const screenReference = Math.min(gameState.WIDTH, gameState.HEIGHT);
@@ -127,10 +128,13 @@ function initializeRuntimeState(scene) {
 
   combat.rapidFire = false;
   combat.rapidFireTimer = 0;
+  combat.rapidFireFromShield = false;
   combat.offScreenTimer = 0;
   combat.score = 0;
   combat.beats = 0;
   combat.combo = 1;
+  combat.ammo = 100;
+  combat.shield = 0;
 
   scene.offScreenShotCount = 0;
   scene.offScreenTurnDelay = 0;
@@ -211,5 +215,6 @@ export function initializeSceneWorldAndHUD() {
   initializeSceneEntities(this, sizes);
   initializeRuntimeState(this);
   createHud(this);
+  createResourceBarSystem(this);
   wireSceneUiAndDebug(this);
 }

@@ -37,6 +37,9 @@ export function applyGameResetTransition(slices) {
   combat.beats = 0;
   combat.rapidFire = false;
   combat.rapidFireTimer = 0;
+  combat.ammo = 100;
+  combat.shield = 0;
+  combat.rapidFireFromShield = false;
 
   player.lane = 2;
   player.jumping = false;

@@ -1,5 +1,6 @@
 import { updateTutorialAndAdaptiveState, handlePauseAndGridInput } from './update-loop-core-state.js';
 import { updateIdleWobble, updateTimeBasedTouchCharge, updateComboMeter, updatePulseAndGrid } from './update-loop-core-visuals.js';
+import { updateResourceBarSystem } from './resource-bar.js';
 import { handleMovementInputAndOffscreen, handleCrouchChargeAndJump, handleFiringInput } from './update-loop-core-player-actions.js';
 import { assertMainSceneStateDev, monitorAndHealPlayerLaneDesync, updateDebugHudSystem } from './debug-tools.js';
 
@@ -16,6 +17,7 @@ export function runUpdateLoopCore(dt) {
   updateIdleWobble.call(this, dt);
   updateTimeBasedTouchCharge.call(this, dt);
   updateComboMeter.call(this);
+  updateResourceBarSystem.call(this);
 
   this.updateStarfield(dt);
   this.updateTrails(dt);
