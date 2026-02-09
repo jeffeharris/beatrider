@@ -1,0 +1,70 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: play/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: play
+
+      - name: Build
+        run: npm run build
+        working-directory: play
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site/play
+
+          # Root static files
+          cp index.html CNAME sw.js manifest.json LICENSE _site/
+          cp icon-192.png icon-512.png icon.svg _site/
+          cp og-image-main.png _site/
+
+          # Devlog
+          cp -r devlog _site/
+
+          # Experiments
+          cp -r experiments _site/
+
+          # Vite build output → /play/
+          cp -r play/dist/* _site/play/
+
+          # Static assets not processed by Vite
+          cp play/og-image-game.png _site/play/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

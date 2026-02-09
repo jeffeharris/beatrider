@@ -23,4 +23,6 @@ Thumbs.db
 node_modules/
 
 # Build output
+dist/
 play/dist/
+_site/
