@@ -1,6 +1,13 @@
 {
   "posts": [
     {
+      "title": "Refactoring the Monolith",
+      "slug": "refactoring-the-monolith",
+      "date": "February 9, 2026",
+      "category": "AI Development",
+      "excerpt": "An 8,360-line monolith, three AI agents working in parallel, and an hour later: 12 clean ES modules. Testing Claude Code Agent Teams and Opus 4.6 on a real restructuring task."
+    },
+    {
       "title": "Arguing Software Into Existence",
       "slug": "arguing-software-into-existence",
       "date": "August 19, 2025",

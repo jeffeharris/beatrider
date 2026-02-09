@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refactoring the Monolith - Beatrider</title>
+
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://thebeatrider.com/devlog/refactoring-the-monolith.html">
+    <meta property="og:title" content="Refactoring the Monolith">
+    <meta property="og:description" content="An 8,360-line monolith, three AI agents working in parallel, and an hour later: 12 clean ES modules. Testing Claude Code Agent Teams and Opus 4.6 on a real restructuring task.">
+    <meta property="og:image" content="https://thebeatrider.com/devlog/og-image-blog.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Refactoring the Monolith">
+    <meta name="twitter:description" content="An 8,360-line monolith, three AI agents working in parallel, and an hour later: 12 clean ES modules. Testing Claude Code Agent Teams and Opus 4.6 on a real restructuring task.">
+    <meta name="twitter:image" content="https://thebeatrider.com/devlog/og-image-blog.png">
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23000'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2300ffcc' font-family='monospace' font-size='24' font-weight='bold'>B</text></svg>">
+
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-6SQJ9NR8SD"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-6SQJ9NR8SD', {
+            page_title: 'Refactoring the Monolith',
+            page_path: '/devlog/refactoring-the-monolith.html'
+        });
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 80px 2rem 2rem 2rem;
+            line-height: 1.8;
+        }
+
+        .container {
+            max-width: 750px;
+            width: 100%;
+        }
+
+        /* Sticky header */
+        .sticky-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #222;
+        }
+
+        .sticky-header .logo {
+            font-size: 1.2rem;
+            letter-spacing: 0.2em;
+            color: #fff;
+            padding-right: 0.2em;
+        }
+
+        .sticky-nav {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .sticky-nav a {
+            color: #888;
+            text-decoration: none;
+            transition: color 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .sticky-nav a:hover {
+            color: #fff;
+        }
+
+        .sticky-play {
+            padding: 0.5rem 1.5rem;
+            border: 2px solid #ff00ff;
+            color: #ff00ff;
+            text-decoration: none;
+            transition: all 0.2s;
+            letter-spacing: 0.1em;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            font-weight: bold;
+            background: transparent;
+        }
+
+        .sticky-play:hover {
+            background: #ff00ff;
+            color: #0a0a0a;
+            box-shadow: 0 0 15px #ff00ff;
+            text-decoration: none;
+        }
+
+        .article-meta {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid #222;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            font-weight: normal;
+            letter-spacing: 0.05em;
+            line-height: 1.3;
+        }
+
+        .article-date {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .article-excerpt {
+            color: #aaa;
+            font-style: italic;
+            margin-top: 1rem;
+        }
+
+        article {
+            color: #ccc;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin: 3rem 0 1.5rem;
+            font-weight: normal;
+            color: #fff;
+        }
+
+        h3 {
+            font-size: 1.2rem;
+            margin: 2rem 0 1rem;
+            font-weight: normal;
+            color: #fff;
+        }
+
+        p {
+            margin-bottom: 1.5rem;
+            color: #aaa;
+        }
+
+        strong {
+            color: #fff;
+        }
+
+        em {
+            color: #ccc;
+        }
+
+        a {
+            color: #00ffcc;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        code {
+            background: rgba(0, 255, 204, 0.15);
+            color: #00ffcc;
+            padding: 0.2rem 0.4rem;
+            font-family: 'Courier New', monospace;
+            border: 1px solid rgba(0, 255, 204, 0.3);
+        }
+
+        pre {
+            background: #000;
+            border: 1px solid #333;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        blockquote {
+            border-left: 2px solid #444;
+            padding-left: 1.5rem;
+            margin: 1.5rem 0;
+            color: #888;
+            font-style: italic;
+        }
+
+        ul, ol {
+            margin: 1.5rem 0;
+            padding-left: 2rem;
+            color: #aaa;
+        }
+
+        li {
+            margin: 0.5rem 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #333;
+            color: #aaa;
+        }
+
+        th {
+            color: #fff;
+            border-bottom: 2px solid #444;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #333;
+            margin: 3rem 0;
+        }
+
+        footer {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid #222;
+            text-align: center;
+            color: #555;
+            font-size: 0.8rem;
+        }
+
+        .sticky-nav .current-page {
+            color: #00ffcc;
+        }
+
+        @media (max-width: 480px) {
+            .sticky-nav a:not(.sticky-play):not(.current-page) {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 100px 1rem 1rem 1rem;
+            }
+
+            h1 {
+                font-size: 1.75rem;
+                line-height: 1.2;
+            }
+
+            h2 {
+                font-size: 1.4rem;
+                margin: 2rem 0 1rem;
+            }
+
+            .sticky-header {
+                padding: 0.75rem 1rem;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .sticky-header .logo {
+                font-size: 1rem;
+            }
+
+            .sticky-nav {
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .sticky-nav a {
+                font-size: 0.75rem;
+            }
+
+            .sticky-play {
+                padding: 0.4rem 1rem;
+                font-size: 0.75rem;
+                border-width: 2px;
+            }
+
+            .article-meta {
+                margin-bottom: 2rem;
+                padding-bottom: 1rem;
+            }
+
+            table {
+                font-size: 0.85rem;
+            }
+
+            th, td {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sticky header -->
+        <div class="sticky-header">
+            <div class="logo">BEATRIDER</div>
+            <div class="sticky-nav">
+                <a href="/">Home</a>
+                <a href="/devlog/" class="current-page">Devlog</a>
+                <a href="/#guide">Guide</a>
+                <a href="/#about">About</a>
+                <a href="/play/" class="sticky-play">PLAY</a>
+            </div>
+        </div>
+
+        <div class="article-meta">
+            <h1>Refactoring the Monolith</h1>
+            <div class="article-date">February 9, 2026</div>
+            <div class="article-excerpt">An 8,360-line monolith, three AI agents working in parallel, and an hour later: 12 clean ES modules. Testing Claude Code Agent Teams and Opus 4.6 on a real restructuring task.</div>
+        </div>
+
+        <article>
+
+            <h2>The Experiment</h2>
+
+            <p>Six months ago I <a href="arguing-software-into-existence.html">built Beatrider in about a week</a> without opening an IDE. I argued the result -- 8,000 lines of AI-generated code in a single HTML file -- was disposable software. Cheaper to rebuild than refactor.</p>
+
+            <p>I still pull it up when I'm waiting in line at the pharmacy or have five minutes to kill. It's a fun little thing. But 8,360 lines in one file makes it hard to touch without breaking something, and I was curious: how far has the tooling come in six months?</p>
+
+            <p>The question wasn't "does this need refactoring?" It was: <strong>can Claude Code's <a href="https://code.claude.com/docs/en/agent-teams">Agent Teams</a> and Opus 4.6 take an AI-generated monolith and decompose it into proper modules?</strong> How good are the out-of-the-box models and frameworks at a real restructuring task, not a greenfield build?</p>
+
+            <h2>What Agent Teams Are</h2>
+
+            <p>Claude Code recently shipped <a href="https://code.claude.com/docs/en/agent-teams">Agent Teams</a> as an experimental feature. Instead of one AI session doing everything sequentially, you spin up a team: a lead agent that coordinates work, and teammates that each get their own context window, their own task list, and can message each other directly.</p>
+
+            <p>The key insight: unlike subagents (which do focused work and report back), teammates operate independently. They can explore different parts of a codebase in parallel without stepping on each other. The docs describe it well -- agent teams are strongest for "new modules or features" where "teammates can each own a separate piece."</p>
+
+            <p>That's exactly what a monolith decomposition is.</p>
+
+            <h2>The Monolith</h2>
+
+            <p>One HTML file. 8,360 lines. Everything inside a single <code>&lt;script&gt;</code> tag:</p>
+
+            <ul>
+                <li>500 lines of CSS</li>
+                <li>155 lines of storage/persistence</li>
+                <li>1,400 lines of music synthesis (Tone.js instruments, patterns, sequencing)</li>
+                <li>600 lines of music UI (sliders, genre buttons, settings panel)</li>
+                <li>160 lines of game sound effects</li>
+                <li>285 lines of game config and constants</li>
+                <li>500 lines for the start screen</li>
+                <li><strong>5,000 lines for the main gameplay scene</strong></li>
+                <li>90 lines of Phaser initialization</li>
+            </ul>
+
+            <p>Natural seams everywhere. Perfect candidate.</p>
+
+            <h2>Sending in the Team</h2>
+
+            <p>I set up an agent team with three teammates working in parallel:</p>
+
+            <ul>
+                <li><strong>sounds-fixer</strong>: Fix the game sound effects module's broken export pattern</li>
+                <li><strong>scene-extractor</strong>: Pull out the massive 5,000-line gameplay scene, converting ~150 global variable references to ES module imports</li>
+                <li><strong>entrypoint-creator</strong>: Build the new HTML shell and Phaser initialization module</li>
+            </ul>
+
+            <p>Earlier in the session, Claude (Opus 4.6) had already extracted the simpler leaf modules -- storage, config, audio engine, music UI, CSS. Those went cleanly because they had fewer dependencies. The agent team tackled the hard remaining pieces: the files with deep coupling and cross-module dependencies.</p>
+
+            <p>Three agents, three files, one monolith being carved up simultaneously. The whole team extraction took about 15 minutes of wall clock time.</p>
+
+            <h2>The Experience</h2>
+
+            <p>What struck me was how <em>mechanical</em> the process felt. Not in a bad way -- in a "this is exactly what AI should be doing" way.</p>
+
+            <p>The scene-extractor agent read 5,000 lines of monolith code, identified every bare global variable reference (<code>WIDTH</code>, <code>HEIGHT</code>, <code>PLAYER_Y</code>, <code>gridEnabled</code>, <code>currentBar</code>... about 50 different variables), and converted each one to the correct ES module import pattern. Some were simple constant imports. Others were mutable state that needed getter/setter wrappers because you can't reassign imported bindings in ES modules. The agent handled the distinction automatically across 150+ replacements.</p>
+
+            <p>The entrypoint-creator read the monolith's initialization code and HTML structure, then produced a clean 135-line entry point and a 170-line HTML shell. Faithful reproduction of the original logic, just properly separated.</p>
+
+            <p>The sounds-fixer diagnosed that one module exported a factory function while another module expected a direct named export, and wired them together correctly.</p>
+
+            <p>Build passes. 977 modules resolved. The module graph works.</p>
+
+            <h2>Where It Got Interesting</h2>
+
+            <p>The bugs weren't in any individual module -- each agent's output was internally correct. The bugs lived at the <em>boundaries</em> between modules, where agents had made slightly different assumptions about how their pieces connect.</p>
+
+            <p>The audio library worked differently as an ES module import than it did as a CDN global. Code that initialized at import time now ran before the browser allowed audio. One agent's export didn't match another agent's import. These are the classic integration problems of any modular system, just surfaced in a single afternoon instead of over weeks of development.</p>
+
+            <p>This is where <a href="https://openai.com/index/introducing-codex/">OpenAI's Codex</a> (running GPT 5.3) earned its keep. After the agent team completed the structural extraction, I used Codex for code review and targeted bug fixes on the integrated result. Different tool, different strength: Codex was good at reading the full module graph and spotting the cross-boundary issues that individual agents had missed during parallel work. It fixed the audio initialization timing, patched the transport scheduling, and cleaned up a few module interface mismatches.</p>
+
+            <h2>The Numbers</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Before</th>
+                        <th>After</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1 file, 8,360 lines</td>
+                        <td>12 ES modules</td>
+                    </tr>
+                    <tr>
+                        <td>No build step</td>
+                        <td>Vite, 8-second production build</td>
+                    </tr>
+                    <tr>
+                        <td>CDN script tags</td>
+                        <td>npm packages, tree-shaking</td>
+                    </tr>
+                    <tr>
+                        <td>Ctrl+F to navigate</td>
+                        <td>Import graph, IDE navigation</td>
+                    </tr>
+                    <tr>
+                        <td>298KB single payload</td>
+                        <td>4 chunks: Phaser (340KB gz), Tone (52KB gz), app (30KB gz), vendors (30KB gz)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>Total time from "let's try this" to passing build: <strong>about an hour</strong>, including setup, extraction, debugging, and the Codex review pass. The original game took a week to build.</p>
+
+            <h2>What This Says About the Tooling</h2>
+
+            <p><strong>Opus 4.6 is genuinely good at mechanical code transformation.</strong> Reading thousands of lines, identifying patterns, applying consistent replacements -- this is tedious, error-prone work for humans and exactly the kind of task where AI shines. I would have made more mistakes doing this by hand, and it would have taken days.</p>
+
+            <p><strong>Agent Teams work for decomposition.</strong> The monolith had natural seams, and the team structure mapped cleanly onto them. Each agent owned a separate file, no conflicts. The <a href="https://code.claude.com/docs/en/agent-teams">docs recommend</a> avoiding two agents editing the same file, and for this task that was easy to respect.</p>
+
+            <p><strong>The boundaries are still the hard part.</strong> Individual modules were correct. Integration wasn't. This mirrors the classic software engineering truth: the interfaces between components are harder than the components themselves. Giving each agent explicit interface specs (what to import, what to export) rather than letting them infer it would have caught some issues earlier.</p>
+
+            <p><strong>Multiple models, multiple strengths.</strong> Opus 4.6 excelled at the parallel extraction -- fast, mechanical, faithful to the source. Codex 5.3 excelled at the review pass -- reading across module boundaries, spotting integration issues, making targeted fixes. Using both felt natural, like having a build crew and then a code reviewer.</p>
+
+            <h2>The Bigger Picture</h2>
+
+            <p>Six months ago I argued that AI makes software disposable. I still think that's true for prototypes and MVPs. But the more interesting question is what happens when the tooling gets good enough that refactoring is <em>also</em> cheap.</p>
+
+            <p>If you can build it in a week and refactor it in an hour, the calculus changes. You don't have to choose between "disposable" and "maintainable." You can start disposable, ship fast, and add structure later -- when and if you need it -- because the cost of restructuring has dropped by an order of magnitude.</p>
+
+            <p>The monolith is dead. Long live the modules.</p>
+
+            <hr>
+
+            <p><em>Beatrider is playable at <a href="https://thebeatrider.com/play/">thebeatrider.com/play</a>. Source code on <a href="https://github.com/jeffeharris/beatrider">GitHub</a>. It's now 12 modules of AI-generated code. Progress.</em></p>
+        </article>
+
+        <footer>
+            <p>vibe project</p>
+        </footer>
+    </div>
+</body>
+</html>
