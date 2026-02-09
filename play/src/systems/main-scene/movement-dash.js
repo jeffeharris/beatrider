@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
-import { gameState, LANES, PLAYER_CONFIG } from '../../config.js';
+import { gameState, LANES, PLAYER_CONFIG, DAMAGE_VALUES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { applyDamage } from './damage-state.js';
 
 function restoreJumpIfNeeded(scene, player) {
   if (!player.jumping) return;
@@ -153,7 +154,7 @@ export function dashRightSystem() {
 }
 
 export function checkDashCollisionSystem() {
-  const { player, flow } = this.stateSlices;
+  const { player, flow, combat } = this.stateSlices;
   // Check collision with obstacles during dash - using progress-based 3D collision
   for(let o of this.obstacles) {
     if(
@@ -163,24 +164,37 @@ export function checkDashCollisionSystem() {
       !player.jumping &&
       !flow.invincible
     ) {
-      // Set invincible immediately to prevent multiple deaths
-      flow.invincible = true;
+      const damage = DAMAGE_VALUES.obstacle;
+      const { nextShield, lethal } = applyDamage({ shield: combat.shield, damage });
 
-      // Hit obstacle during dash - game over
-      this.cameras.main.shake(500, 0.03);
-      this.player.setTint(0xff0000);
-
-      // Player death sound - same as regular collision
-      try {
-        const now = Tone.now();
-        gameSounds.obstacleHit.triggerAttackRelease('G2', '16n', now);
-        gameSounds.obstacleHit.triggerAttackRelease('D2', '16n', now + 0.05);
-        gameSounds.obstacleHit.triggerAttackRelease('G1', '16n', now + 0.1);
-        gameSounds.explosion.triggerAttackRelease('8n', now + 0.02);
-      } catch(e) {}
-
-      // Show game over screen
-      this.showGameOverScreen();
+      if (lethal) {
+        flow.invincible = true;
+        this.cameras.main.shake(500, 0.03);
+        this.player.setTint(0xff0000);
+        try {
+          const now = Tone.now();
+          gameSounds.obstacleHit.triggerAttackRelease('G2', '16n', now);
+          gameSounds.obstacleHit.triggerAttackRelease('D2', '16n', now + 0.05);
+          gameSounds.obstacleHit.triggerAttackRelease('G1', '16n', now + 0.1);
+          gameSounds.explosion.triggerAttackRelease('8n', now + 0.02);
+        } catch(e) {}
+        this.showGameOverScreen();
+      } else {
+        // Shield absorbs obstacle hit during dash
+        combat.shield = nextShield;
+        this.player.setTint(0xffffff);
+        this.time.delayedCall(100, () => {
+          if (combat.rapidFire) {
+            this.player.setTint(combat.rapidFireFromShield ? 0xff00ff : 0x00ff00);
+          } else {
+            this.player.clearTint();
+          }
+        });
+        this.cameras.main.shake(300, 0.02);
+        try {
+          gameSounds.obstacleHit.triggerAttackRelease('E2', '16n');
+        } catch(e) {}
+      }
       break;
     }
   }

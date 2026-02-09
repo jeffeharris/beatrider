@@ -116,8 +116,8 @@ export function fireSystem() {
   if (now - this.lastShotAt < cooldown) return;
   this.lastShotAt = now;
 
-  // Consume ammo (fallback shots don't cost ammo — you're already at 0)
-  if (combat.ammo > 0) {
+  // Consume ammo (fallback shots and shield-overflow rapid fire don't cost ammo)
+  if (combat.ammo > 0 && !combat.rapidFireFromShield) {
     combat.ammo--;
   }
 
