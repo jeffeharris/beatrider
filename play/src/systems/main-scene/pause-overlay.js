@@ -3,9 +3,12 @@ import { gameState } from '../../config.js';
 import { sessionHighScore } from '../../storage.js';
 
 export function pauseGameSystem() {
-  if (this.isPaused) return;
+  const flow = this.stateSlices?.flow;
+  const combat = this.stateSlices?.combat;
+  if (flow?.paused ?? this.isPaused) return;
 
-  this.isPaused = true;
+  if (flow) flow.paused = true;
+  else this.isPaused = true;
 
   this.pauseStartTime = this.time.now;
 
@@ -35,7 +38,7 @@ export function pauseGameSystem() {
   this.pauseHighScoreText.setOrigin(0.5, 0.5);
   this.pauseHighScoreText.setDepth(10001);
 
-  this.pauseScoreText = this.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 + 40, `Score: ${this.score}`, {
+  this.pauseScoreText = this.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 + 40, `Score: ${combat?.score ?? this.score}`, {
     font: `${smallFontSize}px monospace`,
     fill: '#0f0'
   });
@@ -105,7 +108,7 @@ export function pauseGameSystem() {
 
     window.trackEvent('pause_feedback_given', {
       type: feedbackType,
-      score: this.score,
+      score: combat?.score ?? this.score,
       survival_time: Math.floor((this.time.now - this.gameStartTime) / 1000)
     });
 
@@ -140,7 +143,7 @@ export function pauseGameSystem() {
 
       window.trackEvent('feedback_form_opened_from_pause', {
         initial_feedback: feedbackType,
-        score: this.score
+        score: combat?.score ?? this.score
       });
 
       window.open('https://docs.google.com/forms/d/e/1FAIpQLSeHzYiQAqJ_1VR6PAXgsBdJxkYte-UcwBlC1w83dJ0gopqBNQ/viewform', '_blank');
@@ -179,9 +182,11 @@ export function pauseGameSystem() {
 }
 
 export function resumeGameSystem() {
-  if (!this.isPaused) return;
+  const flow = this.stateSlices?.flow;
+  if (!(flow?.paused ?? this.isPaused)) return;
 
-  this.isPaused = false;
+  if (flow) flow.paused = false;
+  else this.isPaused = false;
   this.isHandlingFeedback = false;
 
   if (this.pauseStartTime) {

@@ -3,23 +3,30 @@ import { gameState, LANES, PLAYER_CONFIG } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 
 export function dashLeftSystem() {
-  if(this.isDashing) return;  // Only check isDashing, not isMoving
+  const player = this.stateSlices?.player;
+  const combat = this.stateSlices?.combat;
+  if(player?.dashing ?? this.isDashing) return;  // Only check isDashing, not isMoving
   // Block dashing if already off-screen
-  if(this.playerLane < 0 || this.playerLane >= LANES) return;
+  if((player?.lane ?? this.playerLane) < 0 || (player?.lane ?? this.playerLane) >= LANES) return;
   
-  const startLane = this.playerLane;
-  const targetLane = Math.max(-1, this.playerLane - 2);  // Dash 2 lanes total
+  const startLane = player?.lane ?? this.playerLane;
+  const targetLane = Math.max(-1, startLane - 2);  // Dash 2 lanes total
   // Can't dash if already at leftmost position  
   if(startLane <= -1) return;  // Allow dashing from lane 0
   
-  this.isDashing = true;
-  this.isMoving = true;
+  if (player) {
+    player.dashing = true;
+    player.moving = true;
+  } else {
+    this.isDashing = true;
+    this.isMoving = true;
+  }
   
   // Set a flag to prevent move animations from creating bounce tweens
   this.isDashStarting = true;
   
   // Store jump state before killing tweens
-  const wasJumping = this.isJumping;
+  const wasJumping = player?.jumping ?? this.isJumping;
   const jumpY = this.player.y;
   
   // Kill ALL existing tweens to prevent move animations from continuing
@@ -34,7 +41,8 @@ export function dashLeftSystem() {
       duration: 250,
       ease: 'Quad.easeIn',
       onComplete: () => {
-        this.isJumping = false;
+        if (player) player.jumping = false;
+        else this.isJumping = false;
         this.player.y = gameState.PLAYER_Y;
         // Animate rotation back to 0 if needed
         if(Math.abs(this.player.angle % 360) > 1) {
@@ -53,7 +61,7 @@ export function dashLeftSystem() {
   
   // Always update X to start lane position before dashing
   const startX = this._laneX(startLane);
-  if (!this.isJumping) {
+  if (!(player?.jumping ?? this.isJumping)) {
     this.player.x = startX;
   }
   this.player.setScale(1, 1);  // Reset scale
@@ -78,22 +86,30 @@ export function dashLeftSystem() {
   } catch(e) {}
   
   // Update lane immediately so firing is in sync
-  this.playerLane = targetLane;
+  if (player) player.lane = targetLane;
+  else this.playerLane = targetLane;
   
   // Reset rubber band timer when dashing off-screen
-  if(this.playerLane < 0 || this.playerLane >= LANES){
+  if((player?.lane ?? this.playerLane) < 0 || (player?.lane ?? this.playerLane) >= LANES){
     // Give extra time when dashing from edge lanes (0 or 4) to off-screen
-    const isDashingFromEdge = (startLane === 0 && this.playerLane < 0) || 
-                              (startLane === LANES - 1 && this.playerLane >= LANES);
-    this.offScreenTimer = isDashingFromEdge ? 
-      PLAYER_CONFIG.offScreen.gracePeriod + 400 : // Extra 400ms for edge dash
-      PLAYER_CONFIG.offScreen.gracePeriod;
+    const laneNow = player?.lane ?? this.playerLane;
+    const isDashingFromEdge = (startLane === 0 && laneNow < 0) ||
+                              (startLane === LANES - 1 && laneNow >= LANES);
+    if (combat) {
+      combat.offScreenTimer = isDashingFromEdge
+        ? PLAYER_CONFIG.offScreen.gracePeriod + 400
+        : PLAYER_CONFIG.offScreen.gracePeriod;
+    } else {
+      this.offScreenTimer = isDashingFromEdge
+        ? PLAYER_CONFIG.offScreen.gracePeriod + 400
+        : PLAYER_CONFIG.offScreen.gracePeriod;
+    }
     this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
     
     // Set turn delay based on dash type and rapid fire status
     if(isDashingFromEdge) {
       // Outer lane dash: 1200ms total
-      if(this.rapidFire) {
+      if(combat?.rapidFire ?? this.rapidFire) {
         // Rapid fire: leave 290ms for firing (~7-8 shots)
         this.offScreenTurnDelay = 910; // 1200ms - 290ms
       } else {
@@ -126,12 +142,17 @@ export function dashLeftSystem() {
     duration: PLAYER_CONFIG.dash.duration,  // 60ms - same as stretch phase
     ease: 'Power2',
     onComplete: () => {
-      this.isMoving = false;
-      this.isDashing = false;
+      if (player) {
+        player.moving = false;
+        player.dashing = false;
+      } else {
+        this.isMoving = false;
+        this.isDashing = false;
+      }
       // Clear the dash starting flag after dash completes
       this.isDashStarting = false;
       // Ensure visual position matches logical lane
-      const expectedX = this._laneX(this.playerLane);
+      const expectedX = this._laneX(player?.lane ?? this.playerLane);
       this.player.x = expectedX;
       
       // Log position again after a frame to see if something changes it
@@ -188,23 +209,30 @@ export function dashLeftSystem() {
 }
 
 export function dashRightSystem() {
-  if(this.isDashing) return;  // Only check isDashing, not isMoving
+  const player = this.stateSlices?.player;
+  const combat = this.stateSlices?.combat;
+  if(player?.dashing ?? this.isDashing) return;  // Only check isDashing, not isMoving
   // Block dashing if already off-screen
-  if(this.playerLane < 0 || this.playerLane >= LANES) return;
+  if((player?.lane ?? this.playerLane) < 0 || (player?.lane ?? this.playerLane) >= LANES) return;
   
-  const startLane = this.playerLane;
-  const targetLane = Math.min(LANES, this.playerLane + 2);  // Dash 2 lanes total
+  const startLane = player?.lane ?? this.playerLane;
+  const targetLane = Math.min(LANES, startLane + 2);  // Dash 2 lanes total
   // Can't dash if already at rightmost position
   if(startLane >= LANES) return;  // Allow dashing from lane 4 to off-screen
   
-  this.isDashing = true;
-  this.isMoving = true;
+  if (player) {
+    player.dashing = true;
+    player.moving = true;
+  } else {
+    this.isDashing = true;
+    this.isMoving = true;
+  }
   
   // Set a flag to prevent move animations from creating bounce tweens
   this.isDashStarting = true;
   
   // Store jump state before killing tweens
-  const wasJumping = this.isJumping;
+  const wasJumping = player?.jumping ?? this.isJumping;
   const jumpY = this.player.y;
   
   // Kill ALL existing tweens to prevent move animations from continuing
@@ -219,7 +247,8 @@ export function dashRightSystem() {
       duration: 250,
       ease: 'Quad.easeIn',
       onComplete: () => {
-        this.isJumping = false;
+        if (player) player.jumping = false;
+        else this.isJumping = false;
         this.player.y = gameState.PLAYER_Y;
         // Animate rotation back to 0 if needed
         if(Math.abs(this.player.angle % 360) > 1) {
@@ -238,7 +267,7 @@ export function dashRightSystem() {
   
   // Always update X to start lane position before dashing
   const startX = this._laneX(startLane);
-  if (!this.isJumping) {
+  if (!(player?.jumping ?? this.isJumping)) {
     this.player.x = startX;
   }
   this.player.setScale(1, 1);  // Reset scale
@@ -263,22 +292,30 @@ export function dashRightSystem() {
   } catch(e) {}
   
   // Update lane immediately so firing is in sync
-  this.playerLane = targetLane;
+  if (player) player.lane = targetLane;
+  else this.playerLane = targetLane;
   
   // Reset rubber band timer when dashing off-screen
-  if(this.playerLane < 0 || this.playerLane >= LANES){
+  if((player?.lane ?? this.playerLane) < 0 || (player?.lane ?? this.playerLane) >= LANES){
     // Give extra time when dashing from edge lanes (0 or 4) to off-screen
-    const isDashingFromEdge = (startLane === 0 && this.playerLane < 0) || 
-                              (startLane === LANES - 1 && this.playerLane >= LANES);
-    this.offScreenTimer = isDashingFromEdge ? 
-      PLAYER_CONFIG.offScreen.gracePeriod + 400 : // Extra 400ms for edge dash
-      PLAYER_CONFIG.offScreen.gracePeriod;
+    const laneNow = player?.lane ?? this.playerLane;
+    const isDashingFromEdge = (startLane === 0 && laneNow < 0) ||
+                              (startLane === LANES - 1 && laneNow >= LANES);
+    if (combat) {
+      combat.offScreenTimer = isDashingFromEdge
+        ? PLAYER_CONFIG.offScreen.gracePeriod + 400
+        : PLAYER_CONFIG.offScreen.gracePeriod;
+    } else {
+      this.offScreenTimer = isDashingFromEdge
+        ? PLAYER_CONFIG.offScreen.gracePeriod + 400
+        : PLAYER_CONFIG.offScreen.gracePeriod;
+    }
     this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
     
     // Set turn delay based on dash type and rapid fire status
     if(isDashingFromEdge) {
       // Outer lane dash: 1200ms total
-      if(this.rapidFire) {
+      if(combat?.rapidFire ?? this.rapidFire) {
         // Rapid fire: leave 290ms for firing (~7-8 shots)
         this.offScreenTurnDelay = 910; // 1200ms - 290ms
       } else {
@@ -311,12 +348,17 @@ export function dashRightSystem() {
     duration: PLAYER_CONFIG.dash.duration,  // 60ms - same as stretch phase
     ease: 'Power2',
     onComplete: () => {
-      this.isMoving = false;
-      this.isDashing = false;
+      if (player) {
+        player.moving = false;
+        player.dashing = false;
+      } else {
+        this.isMoving = false;
+        this.isDashing = false;
+      }
       // Clear the dash starting flag after dash completes
       this.isDashStarting = false;
       // Ensure visual position matches logical lane
-      const expectedX = this._laneX(this.playerLane);
+      const expectedX = this._laneX(player?.lane ?? this.playerLane);
       this.player.x = expectedX;
       
       // Log position again after a frame to see if something changes it
@@ -373,11 +415,20 @@ export function dashRightSystem() {
 }
 
 export function checkDashCollisionSystem() {
+  const player = this.stateSlices?.player;
+  const flow = this.stateSlices?.flow;
   // Check collision with obstacles during dash - using progress-based 3D collision
   for(let o of this.obstacles) {
-    if(o.progress > 0.94 && o.progress < 0.97 && o.lane === this.playerLane && !this.isJumping && !this.isInvincible) {
+    if(
+      o.progress > 0.94 &&
+      o.progress < 0.97 &&
+      o.lane === (player?.lane ?? this.playerLane) &&
+      !(player?.jumping ?? this.isJumping) &&
+      !(flow?.invincible ?? this.isInvincible)
+    ) {
       // Set invincible immediately to prevent multiple deaths
-      this.isInvincible = true;
+      if (flow) flow.invincible = true;
+      else this.isInvincible = true;
       
       // Hit obstacle during dash - game over
       this.cameras.main.shake(500, 0.03);

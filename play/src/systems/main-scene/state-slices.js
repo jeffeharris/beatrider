@@ -22,7 +22,8 @@ export function initializeMainSceneStateSlices() {
       dashing: 'isDashing',
       jumping: 'isJumping',
       crouching: 'isCrouching',
-      charging: 'isChargingJump'
+      charging: 'isChargingJump',
+      stretching: 'isStretching'
     }),
     combat: bindAliasSlice(this, {
       score: 'score',

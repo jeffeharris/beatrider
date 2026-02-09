@@ -6,11 +6,21 @@ import { currentDifficulty } from '../../audio/music-ui.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 
 export function showGameOverScreenSystem() {
-  this.isShowingGameOver = true;
-  this.playerCanControl = false;
+  const player = this.stateSlices?.player;
+  const flow = this.stateSlices?.flow;
+  const combat = this.stateSlices?.combat;
+  const input = this.stateSlices?.input;
+
+  if (flow) {
+    flow.gameOver = true;
+    flow.playerCanControl = false;
+  } else {
+    this.isShowingGameOver = true;
+    this.playerCanControl = false;
+  }
 
   this.recentDeaths.push({
-    score: this.score,
+    score: combat?.score ?? this.score,
     timestamp: Date.now()
   });
 
@@ -31,27 +41,27 @@ export function showGameOverScreenSystem() {
   const survivalSecondsRemainder = survivalSeconds % 60;
   const survivalTimeString = `${survivalMinutes}:${survivalSecondsRemainder.toString().padStart(2, '0')}`;
 
-  const pointsPerSecond = survivalSeconds > 0 ? (this.score / survivalSeconds).toFixed(1) : '0.0';
+  const pointsPerSecond = survivalSeconds > 0 ? ((combat?.score ?? this.score) / survivalSeconds).toFixed(1) : '0.0';
 
-  const scoreBucket = this.score < 100
+  const scoreBucket = (combat?.score ?? this.score) < 100
     ? '0-99'
-    : this.score < 500
+    : (combat?.score ?? this.score) < 500
       ? '100-499'
-      : this.score < 1000
+      : (combat?.score ?? this.score) < 1000
         ? '500-999'
-        : this.score < 2500
+        : (combat?.score ?? this.score) < 2500
           ? '1000-2499'
-          : this.score < 5000
+          : (combat?.score ?? this.score) < 5000
             ? '2500-4999'
             : '5000+';
 
   const sessionTime = this.sessionStartTime ? Math.floor((Date.now() - this.sessionStartTime) / 1000) : 0;
 
   window.trackEvent('game_over', {
-    score: this.score,
+    score: combat?.score ?? this.score,
     score_bucket: scoreBucket,
     high_score: sessionHighScore,
-    new_high_score: this.score > sessionHighScore,
+    new_high_score: (combat?.score ?? this.score) > sessionHighScore,
     combo_max: this.maxComboReached || this.comboCount,
     beats_survived: this.beats,
     session_time: sessionTime,
@@ -61,10 +71,10 @@ export function showGameOverScreenSystem() {
     grid_enabled: gameState.gridEnabled
   });
 
-  if (this.score > 100) {
+  if ((combat?.score ?? this.score) > 100) {
     window.trackEvent('achievement_unlocked', {
       achievement: 'score_over_100',
-      score: this.score
+      score: combat?.score ?? this.score
     });
   }
 
@@ -74,15 +84,15 @@ export function showGameOverScreenSystem() {
   overlay.setAlpha(0);
   overlay.setDepth(20000);
 
-  const beatHighScore = this.score > sessionHighScore;
+  const beatHighScore = (combat?.score ?? this.score) > sessionHighScore;
   if (beatHighScore) {
-    setSessionHighScore(this.score);
+    setSessionHighScore(combat?.score ?? this.score);
     saveGameData({ highScore: sessionHighScore });
 
     window.trackEvent('new_high_score', {
-      score: this.score,
+      score: combat?.score ?? this.score,
       previous_high: this.sessionHighScore || 0,
-      improvement: this.score - (this.sessionHighScore || 0)
+      improvement: (combat?.score ?? this.score) - (this.sessionHighScore || 0)
     });
   }
 
@@ -103,7 +113,7 @@ export function showGameOverScreenSystem() {
   scoreLabel.setAlpha(0);
   scoreLabel.setDepth(20001);
 
-  const scoreText = this.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2, this.score.toString(), {
+  const scoreText = this.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2, (combat?.score ?? this.score).toString(), {
     font: `${bigFontSize} monospace`,
     fill: beatHighScore ? '#ffff00' : '#00ffcc'
   });
@@ -261,35 +271,59 @@ export function showGameOverScreenSystem() {
         if (highScoreElement) highScoreElement.destroy();
         if (survivalStatsText) survivalStatsText.destroy();
 
-        this.score = 0;
+        if (combat) combat.score = 0;
+        else this.score = 0;
         this.scoreText.setText('0');
-        this.combo = 1;
+        if (combat) combat.combo = 1;
+        else this.combo = 1;
         this.comboText.setAlpha(0);
 
-        this.beats = 0;
+        if (combat) combat.beats = 0;
+        else this.beats = 0;
 
         this.gameStartTime = this.time.now;
 
-        this.rapidFire = false;
-        this.rapidFireTimer = 0;
+        if (combat) {
+          combat.rapidFire = false;
+          combat.rapidFireTimer = 0;
+        } else {
+          this.rapidFire = false;
+          this.rapidFireTimer = 0;
+        }
         this.player.clearTint();
 
-        this.playerLane = 2;
+        if (player) player.lane = 2;
+        else this.playerLane = 2;
         this.player.x = this._laneX(2);
         this.player.setVisible(true);
         this.player.setDepth(500);
 
-        this.isJumping = false;
-        this.isCrouching = false;
-        this.isStretching = false;
-        this.isDashing = false;
-        this.isMoving = false;
-        this.isTouchFiring = false;
+        if (player) {
+          player.jumping = false;
+          player.crouching = false;
+          player.stretching = false;
+          player.dashing = false;
+          player.moving = false;
+          player.charging = false;
+        } else {
+          this.isJumping = false;
+          this.isCrouching = false;
+          this.isStretching = false;
+          this.isDashing = false;
+          this.isMoving = false;
+        }
+        if (input) input.touchFiring = false;
+        else this.isTouchFiring = false;
         this.crouchTimer = 0;
         if (this.chargeGlow) this.chargeGlow.setVisible(false);
 
-        this.isShowingGameOver = false;
-        this.playerCanControl = true;
+        if (flow) {
+          flow.gameOver = false;
+          flow.playerCanControl = true;
+        } else {
+          this.isShowingGameOver = false;
+          this.playerCanControl = true;
+        }
 
         if (this.invincibilityTween) {
           this.invincibilityTween.stop();
@@ -305,7 +339,8 @@ export function showGameOverScreenSystem() {
         });
 
         this.time.delayedCall(2000, () => {
-          this.isInvincible = false;
+          if (flow) flow.invincible = false;
+          else this.isInvincible = false;
           if (this.invincibilityTween) {
             this.invincibilityTween.stop();
             this.invincibilityTween = null;
