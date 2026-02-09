@@ -5,55 +5,35 @@ import { currentGenre } from '../../audio/music-engine.js';
 import { currentDifficulty } from '../../audio/music-ui.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import { applyGameOverTransition, applyGameResetTransition } from './state-transitions.js';
+import {
+  appendRecentDeath,
+  buildSurvivalStats,
+  getScoreBucket,
+  shouldEnableAdaptiveAssist
+} from './game-over-state.js';
 
-export function showGameOverScreenSystem() {
-  const { player, flow, combat, input } = this.stateSlices;
-  applyGameOverTransition(flow);
+function updateRecentDeathsAndAdaptiveAssist(scene, score) {
+  scene.recentDeaths = appendRecentDeath(scene.recentDeaths || [], score, 3);
 
-  this.recentDeaths.push({
-    score: combat.score,
-    timestamp: Date.now()
-  });
-
-  if (this.recentDeaths.length > 3) {
-    this.recentDeaths.shift();
+  if (shouldEnableAdaptiveAssist(scene.recentDeaths)) {
+    scene.adaptiveState.isAssisting = true;
+    scene.adaptiveState.assistStartTime = scene.time.now;
+    scene.adaptiveState.currentSpawnMultiplier = 0.7;
+    scene.adaptiveState.currentSpeedMultiplier = 0.85;
   }
+}
 
-  if (this.recentDeaths.length === 3 && this.recentDeaths.every(death => death.score < 1000)) {
-    this.adaptiveState.isAssisting = true;
-    this.adaptiveState.assistStartTime = this.time.now;
-    this.adaptiveState.currentSpawnMultiplier = 0.7;
-    this.adaptiveState.currentSpeedMultiplier = 0.85;
-  }
-
-  const survivalTimeMs = this.time.now - this.gameStartTime;
-  const survivalSeconds = Math.floor(survivalTimeMs / 1000);
-  const survivalMinutes = Math.floor(survivalSeconds / 60);
-  const survivalSecondsRemainder = survivalSeconds % 60;
-  const survivalTimeString = `${survivalMinutes}:${survivalSecondsRemainder.toString().padStart(2, '0')}`;
-
-  const pointsPerSecond = survivalSeconds > 0 ? (combat.score / survivalSeconds).toFixed(1) : '0.0';
-
-  const scoreBucket = combat.score < 100
-    ? '0-99'
-    : combat.score < 500
-      ? '100-499'
-      : combat.score < 1000
-        ? '500-999'
-        : combat.score < 2500
-          ? '1000-2499'
-          : combat.score < 5000
-            ? '2500-4999'
-            : '5000+';
-
-  const sessionTime = this.sessionStartTime ? Math.floor((Date.now() - this.sessionStartTime) / 1000) : 0;
+function trackGameOverAnalytics(scene, combat, scoreBucket) {
+  const sessionTime = scene.sessionStartTime
+    ? Math.floor((Date.now() - scene.sessionStartTime) / 1000)
+    : 0;
 
   window.trackEvent('game_over', {
     score: combat.score,
     score_bucket: scoreBucket,
     high_score: sessionHighScore,
     new_high_score: combat.score > sessionHighScore,
-    combo_max: this.maxComboReached || this.comboCount,
+    combo_max: scene.maxComboReached || scene.comboCount,
     beats_survived: combat.beats,
     session_time: sessionTime,
     control_type: window.controlType,
@@ -68,35 +48,42 @@ export function showGameOverScreenSystem() {
       score: combat.score
     });
   }
+}
 
-  const overlay = this.add.graphics();
+function updateHighScoreIfNeeded(scene, score) {
+  const beatHighScore = score > sessionHighScore;
+  if (!beatHighScore) return false;
+
+  const previousHigh = sessionHighScore;
+  setSessionHighScore(score);
+  saveGameData({ highScore: sessionHighScore });
+
+  window.trackEvent('new_high_score', {
+    score,
+    previous_high: previousHigh,
+    improvement: score - previousHigh
+  });
+
+  return true;
+}
+
+function createGameOverUi(scene, { score, beatHighScore, survivalStats }) {
+  const overlay = scene.add.graphics();
   overlay.fillStyle(0x000000, 0.7);
   overlay.fillRect(0, 0, gameState.WIDTH, gameState.HEIGHT);
   overlay.setAlpha(0);
   overlay.setDepth(20000);
 
-  const beatHighScore = combat.score > sessionHighScore;
-  if (beatHighScore) {
-    setSessionHighScore(combat.score);
-    saveGameData({ highScore: sessionHighScore });
-
-    window.trackEvent('new_high_score', {
-      score: combat.score,
-      previous_high: this.sessionHighScore || 0,
-      improvement: combat.score - (this.sessionHighScore || 0)
-    });
-  }
-
   const screenRef = Math.min(gameState.WIDTH, gameState.HEIGHT);
   const isMobile = /Android|webOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
   const mobileMult = isMobile ? 1.2 : 1.0;
+
   const bigFontSize = `${Math.floor(screenRef * 0.09 * mobileMult)}px`;
   const medFontSize = `${Math.floor(screenRef * 0.05 * mobileMult)}px`;
   const smallFontSize = `${Math.floor(screenRef * 0.03 * mobileMult)}px`;
   const tinyFontSize = `${Math.floor(screenRef * 0.025 * mobileMult)}px`;
 
-  const scoreLabel = this.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 - screenRef * 0.08, 'SCORE', {
+  const scoreLabel = scene.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 - screenRef * 0.08, 'SCORE', {
     font: `${medFontSize} monospace`,
     fill: '#0f0'
   });
@@ -104,7 +91,7 @@ export function showGameOverScreenSystem() {
   scoreLabel.setAlpha(0);
   scoreLabel.setDepth(20001);
 
-  const scoreText = this.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2, combat.score.toString(), {
+  const scoreText = scene.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2, score.toString(), {
     font: `${bigFontSize} monospace`,
     fill: beatHighScore ? '#ffff00' : '#00ffcc'
   });
@@ -114,8 +101,10 @@ export function showGameOverScreenSystem() {
   scoreText.setDepth(20001);
 
   let congratsText = null;
+  let highScoreText = null;
+
   if (beatHighScore) {
-    congratsText = this.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 + screenRef * 0.1, 'NEW HIGH SCORE!', {
+    congratsText = scene.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 + screenRef * 0.1, 'NEW HIGH SCORE!', {
       font: `${medFontSize} monospace`,
       fill: '#ff00ff'
     });
@@ -124,7 +113,7 @@ export function showGameOverScreenSystem() {
     congratsText.setShadow(0, 0, '#ff00ff', 15);
     congratsText.setDepth(20001);
 
-    this.tweens.add({
+    scene.tweens.add({
       targets: congratsText,
       scaleX: 1.1,
       scaleY: 1.1,
@@ -134,15 +123,15 @@ export function showGameOverScreenSystem() {
       ease: 'Sine.inOut'
     });
   } else {
-    const highScoreText = this.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 + screenRef * 0.1, `HIGH SCORE: ${sessionHighScore}`, {
+    highScoreText = scene.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 + screenRef * 0.1, `HIGH SCORE: ${sessionHighScore}`, {
       font: `${smallFontSize} monospace`,
       fill: '#ff0'
     });
     highScoreText.setOrigin(0.5);
     highScoreText.setAlpha(0);
-    highScoreText.setData('isHighScoreText', true);
+    highScoreText.setDepth(20001);
 
-    this.tweens.add({
+    scene.tweens.add({
       targets: highScoreText,
       alpha: 0.8,
       duration: 600,
@@ -150,25 +139,31 @@ export function showGameOverScreenSystem() {
     });
   }
 
-  const statsY = beatHighScore ? gameState.HEIGHT / 2 + screenRef * 0.15 : gameState.HEIGHT / 2 + screenRef * 0.13;
-  const survivalStatsText = this.add.text(gameState.WIDTH / 2, statsY, `Survived: ${survivalTimeString}  •  ${pointsPerSecond} pts/sec`, {
-    font: `${tinyFontSize} monospace`,
-    fill: '#00ffcc'
-  });
+  const statsY = beatHighScore
+    ? gameState.HEIGHT / 2 + screenRef * 0.15
+    : gameState.HEIGHT / 2 + screenRef * 0.13;
+
+  const survivalStatsText = scene.add.text(
+    gameState.WIDTH / 2,
+    statsY,
+    `Survived: ${survivalStats.survivalTimeString}  •  ${survivalStats.pointsPerSecond} pts/sec`,
+    {
+      font: `${tinyFontSize} monospace`,
+      fill: '#00ffcc'
+    }
+  );
   survivalStatsText.setOrigin(0.5);
   survivalStatsText.setAlpha(0);
   survivalStatsText.setDepth(20001);
-  survivalStatsText.setData('isSurvivalStats', true);
 
-  this.tweens.add({
+  scene.tweens.add({
     targets: survivalStatsText,
     alpha: 0.9,
     duration: 600,
     delay: 1000
   });
 
-  const restartY = statsY + screenRef * 0.06;
-  const restartText = this.add.text(gameState.WIDTH / 2, restartY, 'RESTARTING IN 3...', {
+  const restartText = scene.add.text(gameState.WIDTH / 2, statsY + screenRef * 0.06, 'RESTARTING IN 3...', {
     font: `${smallFontSize} monospace`,
     fill: '#00ffcc'
   });
@@ -176,8 +171,20 @@ export function showGameOverScreenSystem() {
   restartText.setAlpha(0);
   restartText.setDepth(20001);
 
+  return {
+    overlay,
+    scoreLabel,
+    scoreText,
+    congratsText,
+    highScoreText,
+    survivalStatsText,
+    restartText
+  };
+}
+
+function startCountdown(scene, restartText) {
   let countdown = 3;
-  const countdownTimer = this.time.addEvent({
+  scene.time.addEvent({
     delay: 1000,
     callback: () => {
       countdown--;
@@ -186,7 +193,7 @@ export function showGameOverScreenSystem() {
       } else {
         restartText.setText('RESTARTING NOW!');
       }
-      this.tweens.add({
+      scene.tweens.add({
         targets: restartText,
         scaleX: 1.2,
         scaleY: 1.2,
@@ -197,22 +204,24 @@ export function showGameOverScreenSystem() {
     },
     repeat: 2
   });
+}
 
-  this.tweens.add({
-    targets: overlay,
+function animateGameOverIntro(scene, ui, beatHighScore) {
+  scene.tweens.add({
+    targets: ui.overlay,
     alpha: 1,
     duration: 300
   });
 
-  this.tweens.add({
-    targets: scoreLabel,
+  scene.tweens.add({
+    targets: ui.scoreLabel,
     alpha: 1,
     duration: 400,
     delay: 200
   });
 
-  this.tweens.add({
-    targets: scoreText,
+  scene.tweens.add({
+    targets: ui.scoreText,
     alpha: 1,
     scaleX: { from: 0.5, to: 1 },
     scaleY: { from: 0.5, to: 1 },
@@ -221,9 +230,9 @@ export function showGameOverScreenSystem() {
     ease: 'Back.out'
   });
 
-  if (congratsText) {
-    this.tweens.add({
-      targets: congratsText,
+  if (beatHighScore && ui.congratsText) {
+    scene.tweens.add({
+      targets: ui.congratsText,
       alpha: 1,
       duration: 600,
       delay: 800
@@ -238,64 +247,106 @@ export function showGameOverScreenSystem() {
     } catch (e) {}
   }
 
-  this.tweens.add({
-    targets: restartText,
+  scene.tweens.add({
+    targets: ui.restartText,
     alpha: 1,
     duration: 400,
     delay: 1200
   });
+}
 
-  this.time.delayedCall(4300, () => {
-    const highScoreElement = this.children.list.find(child => child && child.getData && child.getData('isHighScoreText'));
-    const survivalStatsElement = this.children.list.find(child => child && child.getData && child.getData('isSurvivalStats'));
+function resetRoundState(scene, slices) {
+  const { player, combat, flow, input } = slices;
 
-    this.tweens.add({
-      targets: [overlay, scoreLabel, scoreText, restartText, congratsText, highScoreElement, survivalStatsText].filter(Boolean),
+  applyGameResetTransition({ player, combat, flow, input });
+  scene.scoreText.setText('0');
+  scene.comboText.setAlpha(0);
+
+  scene.gameStartTime = scene.time.now;
+  scene.player.clearTint();
+  scene.player.x = scene._laneX(2);
+  scene.player.setVisible(true);
+  scene.player.setDepth(500);
+  scene.crouchTimer = 0;
+  if (scene.chargeGlow) scene.chargeGlow.setVisible(false);
+
+  if (scene.invincibilityTween) {
+    scene.invincibilityTween.stop();
+    scene.invincibilityTween = null;
+  }
+
+  scene.invincibilityTween = scene.tweens.add({
+    targets: scene.player,
+    alpha: { from: 0.3, to: 1 },
+    duration: 100,
+    yoyo: true,
+    repeat: -1
+  });
+
+  scene.time.delayedCall(2000, () => {
+    flow.invincible = false;
+    if (scene.invincibilityTween) {
+      scene.invincibilityTween.stop();
+      scene.invincibilityTween = null;
+      scene.player.setAlpha(1);
+    }
+  });
+}
+
+function scheduleRoundRestart(scene, ui, slices) {
+  scene.time.delayedCall(4300, () => {
+    scene.tweens.add({
+      targets: [
+        ui.overlay,
+        ui.scoreLabel,
+        ui.scoreText,
+        ui.restartText,
+        ui.congratsText,
+        ui.highScoreText,
+        ui.survivalStatsText
+      ].filter(Boolean),
       alpha: 0,
       duration: 300,
       onComplete: () => {
-        overlay.destroy();
-        scoreLabel.destroy();
-        scoreText.destroy();
-        restartText.destroy();
-        if (congratsText) congratsText.destroy();
-        if (highScoreElement) highScoreElement.destroy();
-        if (survivalStatsText) survivalStatsText.destroy();
+        ui.overlay.destroy();
+        ui.scoreLabel.destroy();
+        ui.scoreText.destroy();
+        ui.restartText.destroy();
+        if (ui.congratsText) ui.congratsText.destroy();
+        if (ui.highScoreText) ui.highScoreText.destroy();
+        if (ui.survivalStatsText) ui.survivalStatsText.destroy();
 
-        applyGameResetTransition({ player, combat, flow, input });
-        this.scoreText.setText('0');
-        this.comboText.setAlpha(0);
-
-        this.gameStartTime = this.time.now;
-        this.player.clearTint();
-        this.player.x = this._laneX(2);
-        this.player.setVisible(true);
-        this.player.setDepth(500);
-        this.crouchTimer = 0;
-        if (this.chargeGlow) this.chargeGlow.setVisible(false);
-
-        if (this.invincibilityTween) {
-          this.invincibilityTween.stop();
-          this.invincibilityTween = null;
-        }
-
-        this.invincibilityTween = this.tweens.add({
-          targets: this.player,
-          alpha: { from: 0.3, to: 1 },
-          duration: 100,
-          yoyo: true,
-          repeat: -1
-        });
-
-        this.time.delayedCall(2000, () => {
-          flow.invincible = false;
-          if (this.invincibilityTween) {
-            this.invincibilityTween.stop();
-            this.invincibilityTween = null;
-            this.player.setAlpha(1);
-          }
-        });
+        resetRoundState(scene, slices);
       }
     });
   });
+}
+
+export function showGameOverScreenSystem() {
+  const slices = this.stateSlices;
+  const { player, flow, combat, input } = slices;
+
+  applyGameOverTransition(flow);
+
+  updateRecentDeathsAndAdaptiveAssist(this, combat.score);
+
+  const survivalStats = buildSurvivalStats({
+    nowMs: this.time.now,
+    gameStartTimeMs: this.gameStartTime,
+    score: combat.score
+  });
+
+  const scoreBucket = getScoreBucket(combat.score);
+  trackGameOverAnalytics(this, combat, scoreBucket);
+
+  const beatHighScore = updateHighScoreIfNeeded(this, combat.score);
+  const ui = createGameOverUi(this, {
+    score: combat.score,
+    beatHighScore,
+    survivalStats
+  });
+
+  startCountdown(this, ui.restartText);
+  animateGameOverIntro(this, ui, beatHighScore);
+  scheduleRoundRestart(this, ui, { player, combat, flow, input });
 }
