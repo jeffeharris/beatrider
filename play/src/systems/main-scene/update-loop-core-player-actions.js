@@ -5,23 +5,29 @@ import { gameSounds } from '../../audio/game-sounds.js';
 import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function handleMovementInputAndOffscreen(dt) {
-  if (!this.playerCanControl) {
+  const player = this.stateSlices?.player;
+  const flow = this.stateSlices?.flow;
+  const combat = this.stateSlices?.combat;
+
+  if (!(flow?.playerCanControl ?? this.playerCanControl)) {
     // noop
   } else if (Phaser.Input.Keyboard.JustDown(this.keys.LEFT) || Phaser.Input.Keyboard.JustDown(this.keys.A)) {
     const now = this.time.now;
     if (now - this.lastLeftPress < this.doubleTapWindow) {
       if (this.laneBeforeKeyboardMove !== undefined && this.isMoving) {
         this.tweens.killTweensOf(this.player);
-        this.playerLane = this.laneBeforeKeyboardMove;
-        this.player.x = this._laneX(this.playerLane);
+        if (player) player.lane = this.laneBeforeKeyboardMove;
+        else this.playerLane = this.laneBeforeKeyboardMove;
+        this.player.x = this._laneX(player?.lane ?? this.playerLane);
         this.player.setScale(1, 1);
-        this.isMoving = false;
+        if (player) player.moving = false;
+        else this.isMoving = false;
       }
       dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.DASH_LEFT, { source: 'keyboard' });
       this.lastLeftPress = 0;
       this.laneBeforeKeyboardMove = undefined;
     } else {
-      this.laneBeforeKeyboardMove = this.playerLane;
+      this.laneBeforeKeyboardMove = player?.lane ?? this.playerLane;
       dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_LEFT, { source: 'keyboard' });
       this.lastLeftPress = now;
     }
@@ -30,28 +36,31 @@ export function handleMovementInputAndOffscreen(dt) {
     if (now - this.lastRightPress < this.doubleTapWindow) {
       if (this.laneBeforeKeyboardMove !== undefined && this.isMoving) {
         this.tweens.killTweensOf(this.player);
-        this.playerLane = this.laneBeforeKeyboardMove;
-        this.player.x = this._laneX(this.playerLane);
+        if (player) player.lane = this.laneBeforeKeyboardMove;
+        else this.playerLane = this.laneBeforeKeyboardMove;
+        this.player.x = this._laneX(player?.lane ?? this.playerLane);
         this.player.setScale(1, 1);
-        this.isMoving = false;
+        if (player) player.moving = false;
+        else this.isMoving = false;
       }
       dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.DASH_RIGHT, { source: 'keyboard' });
       this.lastRightPress = 0;
       this.laneBeforeKeyboardMove = undefined;
     } else {
-      this.laneBeforeKeyboardMove = this.playerLane;
+      this.laneBeforeKeyboardMove = player?.lane ?? this.playerLane;
       dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_RIGHT, { source: 'keyboard' });
       this.lastRightPress = now;
     }
   }
 
-  if (this.playerLane < 0 || this.playerLane >= LANES) {
-    this.offScreenTimer -= dt;
+  if ((player?.lane ?? this.playerLane) < 0 || (player?.lane ?? this.playerLane) >= LANES) {
+    if (combat) combat.offScreenTimer -= dt;
+    else this.offScreenTimer -= dt;
     if (this.offScreenTurnDelay > 0) {
       this.offScreenTurnDelay -= dt;
     }
 
-    const shakeIntensity = Math.max(0, 1 - this.offScreenTimer / 800) * 4;
+    const shakeIntensity = Math.max(0, 1 - (combat?.offScreenTimer ?? this.offScreenTimer) / 800) * 4;
     this.cameras.main.shake(100, shakeIntensity * 0.01);
 
     if (!this.offScreenPulse) {
@@ -62,7 +71,7 @@ export function handleMovementInputAndOffscreen(dt) {
     if (this.offScreenPulse > 200) {
       this.offScreenPulse = 0;
       try {
-        const intensity = Math.max(0, 1 - this.offScreenTimer / 800);
+        const intensity = Math.max(0, 1 - (combat?.offScreenTimer ?? this.offScreenTimer) / 800);
         const freq = 50 + intensity * 30;
         gameSounds.offScreenWomp.triggerAttackRelease(freq, '16n', Tone.now(), 0.2 + intensity * 0.3);
       } catch (e) {}
@@ -70,17 +79,19 @@ export function handleMovementInputAndOffscreen(dt) {
 
     this.cameras.main.setPostPipeline('ChromaticAberration');
 
-    if (this.offScreenTimer < 300) {
+    if ((combat?.offScreenTimer ?? this.offScreenTimer) < 300) {
       this.cameras.main.shake(100, 0.02);
     }
-    if (this.offScreenTimer <= 0) {
-      if (this.playerLane < 0) {
-        this.playerLane = 0;
-      } else if (this.playerLane >= LANES) {
-        this.playerLane = LANES - 1;
+    if ((combat?.offScreenTimer ?? this.offScreenTimer) <= 0) {
+      if ((player?.lane ?? this.playerLane) < 0) {
+        if (player) player.lane = 0;
+        else this.playerLane = 0;
+      } else if ((player?.lane ?? this.playerLane) >= LANES) {
+        if (player) player.lane = LANES - 1;
+        else this.playerLane = LANES - 1;
       }
 
-      const targetX = this._laneX(this.playerLane);
+      const targetX = this._laneX(player?.lane ?? this.playerLane);
 
       this.tweens.add({
         targets: this.player,
@@ -108,7 +119,7 @@ export function handleMovementInputAndOffscreen(dt) {
         ease: 'Power2'
       });
 
-      if (this.rapidFire) {
+      if (combat?.rapidFire ?? this.rapidFire) {
         this.player.setTint(0x00ff00);
       } else {
         this.player.clearTint();
@@ -120,16 +131,20 @@ export function handleMovementInputAndOffscreen(dt) {
       } catch (e) {}
     }
   } else {
-    if (!this.rapidFire) this.player.clearTint();
+    if (!(combat?.rapidFire ?? this.rapidFire)) this.player.clearTint();
     this.offScreenPulse = false;
     this.cameras.main.resetPostPipeline();
   }
 }
 
 export function handleCrouchChargeAndJump(dt) {
-  if (this.playerCanControl && (this.keys.DOWN.isDown || this.keys.S.isDown)) {
-    if (!this.isCrouching) {
-      this.isCrouching = true;
+  const player = this.stateSlices?.player;
+  const flow = this.stateSlices?.flow;
+
+  if ((flow?.playerCanControl ?? this.playerCanControl) && (this.keys.DOWN.isDown || this.keys.S.isDown)) {
+    if (!(player?.crouching ?? this.isCrouching)) {
+      if (player) player.crouching = true;
+      else this.isCrouching = true;
       this.crouchTimer = 0;
       this.chargeGlow.setVisible(true);
 
@@ -138,7 +153,7 @@ export function handleCrouchChargeAndJump(dt) {
         gameSounds.jumpCharge.frequency.rampTo(440, this.maxChargeTime / 1000);
       } catch (e) {}
 
-      if (!this.isJumping) {
+      if (!(player?.jumping ?? this.isJumping)) {
         this.tweens.add({
           targets: this.player,
           scaleX: 1.4,
@@ -168,34 +183,36 @@ export function handleCrouchChargeAndJump(dt) {
 
     this.chargeGlow.fillStyle(hexColor, glowAlpha);
     this.chargeGlow.fillCircle(0, 0, glowRadius);
-  } else if (this.isCrouching) {
+  } else if (player?.crouching ?? this.isCrouching) {
     const chargePercent = Math.min(this.crouchTimer / this.maxChargeTime, 1.0);
 
     try {
       gameSounds.jumpCharge.triggerRelease();
     } catch (e) {}
 
-    if (!this.isJumping) {
+    if (!(player?.jumping ?? this.isJumping)) {
       dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.SUPER_JUMP, { chargePercent, source: 'keyboard' });
     } else {
       this.queuedSuperJumpCharge = chargePercent;
     }
-    this.isCrouching = false;
+    if (player) player.crouching = false;
+    else this.isCrouching = false;
     this.crouchTimer = 0;
     this.chargeGlow.setVisible(false);
   }
 
   if (
-    this.playerCanControl &&
+    (flow?.playerCanControl ?? this.playerCanControl) &&
     (Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)) &&
-    !this.isCrouching
+    !(player?.crouching ?? this.isCrouching)
   ) {
     dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.JUMP, { source: 'keyboard' });
   }
 }
 
 export function handleFiringInput() {
-  if (this.keys.SPACE.isDown || this.isTouchFiring) {
+  const input = this.stateSlices?.input;
+  if (this.keys.SPACE.isDown || (input?.touchFiring ?? this.isTouchFiring)) {
     if (this.keys.SPACE.isDown && (window.controlType === 'unknown' || window.controlType === 'touch')) {
       window.controlType = 'keyboard';
       window.trackEvent('control_type_detected', {

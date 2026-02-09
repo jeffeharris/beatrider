@@ -5,11 +5,12 @@ import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function updateTutorialAndAdaptiveState(dt) {
+  const flow = this.stateSlices?.flow;
   if (this.isTutorial) {
     this.updateTutorialProgress();
   }
 
-  if (this.adaptiveState.isAssisting && !this.isPaused && !this.isShowingGameOver) {
+  if (this.adaptiveState.isAssisting && !(flow?.paused ?? this.isPaused) && !(flow?.gameOver ?? this.isShowingGameOver)) {
     const assistDuration = (this.time.now - this.adaptiveState.assistStartTime) / 1000;
 
     if (assistDuration > 90) {
@@ -27,9 +28,12 @@ export function updateTutorialAndAdaptiveState(dt) {
 }
 
 export function handlePauseAndGridInput() {
+  const flow = this.stateSlices?.flow;
+  const input = this.stateSlices?.input;
+
   if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
-    if (this.isShowingGameOver) return true;
-    if (!this.isPaused) {
+    if (flow?.gameOver ?? this.isShowingGameOver) return true;
+    if (!(flow?.paused ?? this.isPaused)) {
       this.pauseGame();
     } else {
       this.resumeGame();
@@ -43,7 +47,7 @@ export function handlePauseAndGridInput() {
 
     if (!this.gridVisible && this.gridGraphics) {
       this.gridGraphics.clear();
-    } else if (this.gridVisible && this.isPaused) {
+    } else if (this.gridVisible && (flow?.paused ?? this.isPaused)) {
       this._drawPerspectiveGrid();
     }
 
@@ -51,8 +55,8 @@ export function handlePauseAndGridInput() {
     updateGridButton();
   }
 
-  if (this.isPaused) {
-    if ((this.keys.SPACE.isDown || this.isTouchFiring) && !this.isHandlingFeedback) {
+  if (flow?.paused ?? this.isPaused) {
+    if ((this.keys.SPACE.isDown || (input?.touchFiring ?? this.isTouchFiring)) && !this.isHandlingFeedback) {
       dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.RESUME, {
         source: this.keys.SPACE.isDown ? 'keyboard' : 'touch'
       });

@@ -3,7 +3,8 @@ import * as Tone from 'tone';
 import { gameSounds } from '../../audio/game-sounds.js';
 
 export function updateIdleWobble(dt) {
-  if (!this.isMoving && !this.isJumping && !this.isDashing && this.player) {
+  const player = this.stateSlices?.player;
+  if (!(player?.moving ?? this.isMoving) && !(player?.jumping ?? this.isJumping) && !(player?.dashing ?? this.isDashing) && this.player) {
     this.idleWobblePhase += dt * 0.003;
     const breathScale = 1 + Math.sin(this.idleWobblePhase) * 0.03;
     const squishScale = 1 - Math.cos(this.idleWobblePhase * 2) * 0.02;
@@ -26,22 +27,27 @@ export function updateIdleWobble(dt) {
 }
 
 export function updateTimeBasedTouchCharge(dt) {
-  if (this.isChargingJump && this.usingTimeBasedCharge) {
+  const player = this.stateSlices?.player;
+  const input = this.stateSlices?.input;
+  if ((player?.charging ?? this.isChargingJump) && this.usingTimeBasedCharge) {
     const currentTime = this.time.now;
     const elapsed = currentTime - this.touchChargeStartTime;
-    this.jumpChargeAmount = Math.min(elapsed / this.maxChargeTime, 1.0);
+    const charge = Math.min(elapsed / this.maxChargeTime, 1.0);
+    if (input) input.jumpChargeAmount = charge;
+    else this.jumpChargeAmount = charge;
 
     this.chargeGlow.clear();
     this.chargeGlow.setPosition(this.player.x, this.player.y);
 
-    const pulseSpeed = 10 + this.jumpChargeAmount * 20;
+    const currentCharge = input?.jumpChargeAmount ?? this.jumpChargeAmount;
+    const pulseSpeed = 10 + currentCharge * 20;
     const pulse = Math.sin(currentTime * pulseSpeed * 0.001) * 0.2 + 0.8;
-    const glowRadius = 30 + this.jumpChargeAmount * 50 * pulse;
-    const glowAlpha = 0.3 + this.jumpChargeAmount * 0.5 * pulse;
+    const glowRadius = 30 + currentCharge * 50 * pulse;
+    const glowAlpha = 0.3 + currentCharge * 0.5 * pulse;
 
-    const glowColor = this.jumpChargeAmount < 0.3
+    const glowColor = currentCharge < 0.3
       ? { r: 0, g: 136, b: 255 }
-      : this.jumpChargeAmount < 0.7
+      : currentCharge < 0.7
         ? { r: 255, g: 255, b: 0 }
         : { r: 255, g: 0, b: 255 };
 
@@ -50,7 +56,7 @@ export function updateTimeBasedTouchCharge(dt) {
     this.chargeGlow.fillCircle(0, 0, glowRadius);
 
     try {
-      const pitchShift = 1 + this.jumpChargeAmount * 2;
+      const pitchShift = 1 + currentCharge * 2;
       gameSounds.jumpCharge.frequency.exponentialRampToValueAtTime(
         Tone.Frequency('C2').toFrequency() * pitchShift,
         Tone.now() + 0.05
@@ -60,7 +66,9 @@ export function updateTimeBasedTouchCharge(dt) {
 }
 
 export function updateComboMeter() {
-  if (this.combo > 1) {
+  const combat = this.stateSlices?.combat;
+  const combo = combat?.combo ?? this.combo;
+  if (combo > 1) {
     const timeSinceKill = this.time.now - this.lastKillTime;
     const timeRemaining = Math.max(0, this.comboWindow - timeSinceKill);
     const meterPercent = timeRemaining / this.comboWindow;
@@ -71,14 +79,15 @@ export function updateComboMeter() {
     let meterColor = 0x00ff00;
     if (meterPercent < 0.3) meterColor = 0xff0000;
     else if (meterPercent < 0.6) meterColor = 0xffff00;
-    else if (this.combo >= 6) meterColor = 0xff00ff;
-    else if (this.combo >= 4) meterColor = 0x00ffff;
+    else if (combo >= 6) meterColor = 0xff00ff;
+    else if (combo >= 4) meterColor = 0x00ffff;
 
     this.comboMeter.fillStyle(meterColor, 0.8);
     this.comboMeter.fillRect(10, this.comboMeterY, 200 * meterPercent, 8);
 
     if (timeRemaining <= 0) {
-      this.combo = 1;
+      if (combat) combat.combo = 1;
+      else this.combo = 1;
       this.comboMeterBg.setVisible(false);
       this.comboMeter.clear();
     }

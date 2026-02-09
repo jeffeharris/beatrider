@@ -5,6 +5,9 @@ import { sessionHighScore, setSessionHighScore } from '../../storage.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 
 export function updateEnemiesSystem(dt, pulseShift, pulseXShift) {
+const playerState = this.stateSlices?.player;
+const flow = this.stateSlices?.flow;
+const combat = this.stateSlices?.combat;
 const vanishY = gameState.HEIGHT * 0.15;
 for(let i=this.enemies.length-1; i>=0; i--){
   const e=this.enemies[i]; 
@@ -105,13 +108,21 @@ for(let i=this.enemies.length-1; i>=0; i--){
   // Remove or check collision (can't hit while jumping or stretching)
   // 3D collision: enemies only collide when near player (0.94-0.97), can step behind them after
   if(e.progress > 1.1){ e.destroy(); this.enemies.splice(i,1); }
-  else if(e.progress > 0.94 && e.progress < 0.97 && !this.isJumping && !this.isStretching && !this.isInvincible && this._aabb(e, this.player)){ 
+  else if(
+    e.progress > 0.94 &&
+    e.progress < 0.97 &&
+    !(playerState?.jumping ?? this.isJumping) &&
+    !this.isStretching &&
+    !(flow?.invincible ?? this.isInvincible) &&
+    this._aabb(e, this.player)
+  ){ 
     // Set invincible immediately to prevent multiple deaths
-    this.isInvincible = true;
+    if (flow) flow.invincible = true;
+    else this.isInvincible = true;
     
     // Save highscore before restarting
-    if(this.score > sessionHighScore) {
-      setSessionHighScore(this.score);
+    if((combat?.score ?? this.score) > sessionHighScore) {
+      setSessionHighScore(combat?.score ?? this.score);
     }
     
     // Create dramatic explosion for enemy hit with proper scale
