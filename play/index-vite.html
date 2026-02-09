@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Beatrider</title>
+
+  <!-- Open Graph / Social Media -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://thebeatrider.com/play/">
+  <meta property="og:title" content="BEATRIDER - Play Now">
+  <meta property="og:description" content="Arrow keys or WASD to move. Swipe on mobile. A retro rhythm shooter that adapts to your skill.">
+  <meta property="og:image" content="https://thebeatrider.com/play/og-image-game.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="BEATRIDER - Play Now">
+  <meta name="twitter:description" content="Arrow keys or WASD to move. Swipe on mobile. A retro rhythm shooter that adapts to your skill.">
+  <meta name="twitter:image" content="https://thebeatrider.com/play/og-image-game.png">
+
+  <!-- Favicon - simple pixelated B in cyan -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23000'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2300ffcc' font-family='monospace' font-size='24' font-weight='bold'>B</text></svg>">
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#000000">
+  <meta name="description" content="A retro lane-based rhythm shooter game">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Beatrider">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6SQJ9NR8SD"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-6SQJ9NR8SD', {
+      send_page_view: true
+    });
+  </script>
+
+  <link rel="stylesheet" href="./styles/game.css">
+</head>
+<body>
+  <div class="container">
+    <div id="gameContainer"></div>
+
+    <!-- Minimized music controls -->
+    <div id="musicControls" class="music-controls">
+      <button id="playPauseBtn" class="control-btn" title="Play/Pause">&#9654;</button>
+      <button id="expandBtn" class="control-btn" title="Settings">&#9776;</button>
+      <button id="gridToggleBtn" class="control-btn" title="Toggle Grid">&#8862;</button>
+    </div>
+
+    <!-- Expanded panel (hidden by default) -->
+    <div class="left-panel" id="expandedPanel">
+      <h1>MELODIC TECHNO ENGINE</h1>
+
+      <!-- Track indicators -->
+      <div class="track-squares" style="margin: 10px 0; display: flex; gap: 5px; justify-content: center;">
+        <div class="track-square" id="kickSquare" data-track="kick" title="Kick"></div>
+        <div class="track-square" id="snareSquare" data-track="snare" title="Snare"></div>
+        <div class="track-square" id="hatSquare" data-track="hat" title="Hi-hat"></div>
+        <div class="track-square" id="acidSquare" data-track="acid" title="Acid"></div>
+        <div class="track-square" id="stabSquare" data-track="stab" title="Stab"></div>
+        <div class="track-square" id="subSquare" data-track="sub" title="Sub"></div>
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label class="slider-label">MOOD:</label>
+          <select id="musicPresetSelector" class="sound-select">
+            <option value="">Custom</option>
+            <option value="chill">Chill</option>
+            <option value="driving" selected>Driving</option>
+            <option value="peak">Peak Time</option>
+            <option value="acid">Acid Storm</option>
+            <option value="dark">Dark</option>
+            <option value="hypnotic">Hypnotic</option>
+            <option value="anthem">Anthem</option>
+          </select>
+          <span id="musicPresetDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Classic techno</span>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">DIFFICULTY:</label>
+          <select id="difficultySelector" class="sound-select">
+            <option value="zen">Zen Mode</option>
+            <option value="normal" selected>Normal</option>
+            <option value="intense">Intense</option>
+            <option value="chaos">Chaos</option>
+          </select>
+          <span id="difficultyDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Standard</span>
+        </div>
+        <hr style="border-color: #0f0; margin: 15px 0; opacity: 0.3;">
+        <div style="margin-bottom: 15px;">
+          <label class="slider-label">Genre:</label>
+          <div style="display: flex; gap: 3px; margin-top: 5px; flex-wrap: wrap;">
+            <button id="genreTechno" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Techno</button>
+            <button id="genreDnb" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">D&B</button>
+            <button id="genreTropical" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Tropical</button>
+            <button id="genreDubstep" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Dubstep</button>
+            <button id="genreTrance" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Trance</button>
+          </div>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">BPM:</label>
+          <input type="range" id="bpmSlider" min="120" max="150" value="132" class="slider">
+          <span id="bpmDisplay" class="slider-value">132</span>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">ENERGY:</label>
+          <input type="range" id="energySlider" min="0" max="100" value="50" class="slider">
+          <span id="energyDisplay" class="slider-value">50</span>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">TENSION:</label>
+          <input type="range" id="tensionSlider" min="0" max="100" value="30" class="slider">
+          <span id="tensionDisplay" class="slider-value">30</span>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">SHOT:</label>
+          <select id="soundSelector" class="sound-select">
+            <option value="0">Triangle</option>
+            <option value="1">Acid</option>
+            <option value="2">Chord</option>
+            <option value="3">Echo</option>
+            <option value="4">Pluck</option>
+            <option value="5">Pew Pew</option>
+          </select>
+          <span id="soundDisplay" class="slider-value">Triangle</span>
+        </div>
+        <div class="slider-row" id="touchSensitivityRow" style="display: none;">
+          <label class="slider-label" title="Size of center deadzone - smaller = more responsive">DEADZONE:</label>
+          <input type="range" id="touchSensitivitySlider" min="0" max="5" value="2" step="1" class="slider sensitivity-slider" list="touchSensitivitySteps" title="Adjust the size of the center deadzone">
+          <datalist id="touchSensitivitySteps">
+            <option value="0"></option>
+            <option value="1"></option>
+            <option value="2"></option>
+            <option value="3"></option>
+            <option value="4"></option>
+            <option value="5"></option>
+          </datalist>
+          <span id="touchSensitivityDisplay" class="slider-value">Normal</span>
+        </div>
+      </div>
+
+      <div style="position: absolute; bottom: 10px; right: 10px;">
+        <a href="../" style="color: #00ff00; text-decoration: none; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
+           onmouseover="this.style.opacity='1'"
+           onmouseout="this.style.opacity='0.7'">about</a>
+      </div>
+
+    <div id="progression">
+      <div>SECTION: <span id="section">INTRO</span></div>
+      <div>BAR: <span id="bar">0</span> / 64</div>
+      <div>CHORD: <span id="chord">Cm</span></div>
+      <div>NEXT: <span id="nextSection">BUILD in 8 bars</span></div>
+    </div>
+
+      <div id="status">READY</div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

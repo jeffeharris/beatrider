@@ -1,82 +1,85 @@
-const CACHE_NAME = 'beatrider-v10';
-const urlsToCache = [
-  './',
-  './index.html',
-  './play/',
-  './play/index.html',
-  'https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js',
-  'https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.min.js'
+const CACHE_NAME = 'beatrider-v11';
+const PRECACHE_URLS = [
+  '/',
+  '/index.html',
+  '/play/',
+  '/play/index.html',
+  '/play/index-vite.html',
+  '/play/manifest.json',
+  '/play/icon-192.png',
+  '/play/icon-512.png'
 ];
 
-// Install event - cache resources
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        // Cache each URL individually so one failure doesn't block others
-        return Promise.all(
-          urlsToCache.map(url =>
-            cache.add(url).catch(err => console.warn('Failed to cache:', url, err))
-          )
-        );
-      })
-  );
+async function precache() {
+  const cache = await caches.open(CACHE_NAME);
+  await Promise.allSettled(PRECACHE_URLS.map((url) => cache.add(url)));
+}
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(precache());
   self.skipWaiting();
 });
 
-// Activate event - clean up old caches
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName !== CACHE_NAME)
+          .map((cacheName) => caches.delete(cacheName))
+      )
+    )
   );
   self.clients.claim();
 });
 
-// Fetch event - serve from cache when possible
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Cache hit - return response
-        if (response) {
-          return response;
+function isStaticAsset(pathname) {
+  return pathname.startsWith('/play/assets/');
+}
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  const url = new URL(event.request.url);
+  const isSameOrigin = url.origin === self.location.origin;
+
+  // Navigation requests: network first, offline fallback to cached app shell.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(async () => {
+        const cache = await caches.open(CACHE_NAME);
+        if (url.pathname.startsWith('/play')) {
+          return (await cache.match('/play/index-vite.html')) || cache.match('/play/index.html');
         }
-
-        // Clone the request
-        const fetchRequest = event.request.clone();
-
-        return fetch(fetchRequest).then(response => {
-          // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
-          }
-
-          // Clone the response
-          const responseToCache = response.clone();
-
-          // Add to cache for future use
-          caches.open(CACHE_NAME)
-            .then(cache => {
-              cache.put(event.request, responseToCache);
-            });
-
-          return response;
-        }).catch(() => {
-          // Network request failed, serve appropriate offline fallback
-          const url = new URL(event.request.url);
-          if (url.pathname.startsWith('/play')) {
-            return caches.match('./play/index.html');
-          }
-          return caches.match('./index.html');
-        });
+        return cache.match('/index.html');
       })
+    );
+    return;
+  }
+
+  // Vite hashed bundles and other play static assets: stale-while-revalidate.
+  if (isSameOrigin && isStaticAsset(url.pathname)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        const networkFetch = fetch(event.request)
+          .then((response) => {
+            if (response && response.ok) {
+              cache.put(event.request, response.clone());
+            }
+            return response;
+          })
+          .catch(() => cached);
+        return cached || networkFetch;
+      })
+    );
+    return;
+  }
+
+  // Default: network first, then cache.
+  event.respondWith(
+    fetch(event.request).catch(() => caches.match(event.request))
   );
 });

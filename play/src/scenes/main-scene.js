@@ -1,3308 +1,12 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Beatrider</title>
-  
-  <!-- Open Graph / Social Media -->
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://thebeatrider.com/play/">
-  <meta property="og:title" content="BEATRIDER - Play Now">
-  <meta property="og:description" content="Arrow keys or WASD to move. Swipe on mobile. A retro rhythm shooter that adapts to your skill.">
-  <meta property="og:image" content="https://thebeatrider.com/play/og-image-game.png">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="BEATRIDER - Play Now">
-  <meta name="twitter:description" content="Arrow keys or WASD to move. Swipe on mobile. A retro rhythm shooter that adapts to your skill.">
-  <meta name="twitter:image" content="https://thebeatrider.com/play/og-image-game.png">
-  
-  <!-- Favicon - simple pixelated B in cyan -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23000'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2300ffcc' font-family='monospace' font-size='24' font-weight='bold'>B</text></svg>">
-  
-  <!-- PWA Meta Tags -->
-  <meta name="theme-color" content="#000000">
-  <meta name="description" content="A retro lane-based rhythm shooter game">
-  <link rel="manifest" href="./manifest.json">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Beatrider">
-  <link rel="apple-touch-icon" href="./icon-192.png">
-  
-  <script src="https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.min.js"></script>
-  <!-- iOS audio unlocking handled by custom unlockIOSAudio() function below -->
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
-  
-  <!-- Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6SQJ9NR8SD"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-6SQJ9NR8SD', {
-      send_page_view: true
-    });
-    
-    // Track control type (will be updated when controls are used)
-    window.controlType = 'unknown';
-    
-    // Helper function for safe GA event tracking
-    window.trackEvent = function(eventName, parameters) {
-      if (typeof gtag !== 'undefined') {
-        gtag('event', eventName, parameters);
-      }
-    };
-    
-    // Track session start
-    window.addEventListener('load', () => {
-      trackEvent('session_start', {
-        platform: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
-        screen_size: `${window.innerWidth}x${window.innerHeight}`,
-        orientation: window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
-      });
-    });
-    
-    // Track time engagement automatically (GA4 does this but we can enhance it)
-    let engagementTime = 0;
-    let lastActiveTime = Date.now();
-    setInterval(() => {
-      if (document.hasFocus()) {
-        engagementTime += 10;
-        // Track milestone engagement times
-        if (engagementTime === 60) {
-          trackEvent('engagement_1min', {});
-        } else if (engagementTime === 300) {
-          trackEvent('engagement_5min', {});
-        } else if (engagementTime === 600) {
-          trackEvent('engagement_10min', {});
-        }
-      }
-    }, 10000); // Check every 10 seconds
-  </script>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html, body { 
-      background: #000; 
-      color: #0f0; 
-      font: 14px monospace; 
-      text-shadow: 0 0 10px #0f0;
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-    }
-    .container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
-    .left-panel {
-      position: absolute;
-      top: 70px;
-      left: 10px;
-      width: 380px;
-      max-height: 0;
-      overflow: hidden;
-      background: rgba(0, 0, 0, 0.95);
-      border: 0px solid #0f0;
-      border-radius: 0 0 8px 8px;
-      border-top: none;
-      z-index: 9;
-      backdrop-filter: blur(5px);
-      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s, opacity 0.3s ease, border-width 0.4s;
-      padding: 0 10px;
-      opacity: 0.15; /* Very transparent by default */
-    }
-    
-    .left-panel:hover,
-    .left-panel.touched {
-      opacity: 1; /* Fully opaque when interacted with */
-    }
-    
-    .left-panel.expanded {
-      max-height: calc(100vh - 140px); /* Leave room for score at bottom */
-      padding: 10px;
-      border-width: 1px;
-      overflow-y: auto;
-      opacity: 1 !important; /* Always fully visible when expanded */
-    }
-    
-    /* Custom scrollbar styling for expanded panel */
-    .left-panel.expanded::-webkit-scrollbar {
-      width: 6px;
-    }
-    
-    .left-panel.expanded::-webkit-scrollbar-track {
-      background: rgba(0, 255, 0, 0.1);
-      border-radius: 3px;
-    }
-    
-    .left-panel.expanded::-webkit-scrollbar-thumb {
-      background: rgba(0, 255, 0, 0.5);
-      border-radius: 3px;
-      border: 1px solid rgba(0, 255, 0, 0.3);
-    }
-    
-    .left-panel.expanded::-webkit-scrollbar-thumb:hover {
-      background: rgba(0, 255, 0, 0.8);
-      box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
-    }
-    #gameContainer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-    }
-    button { 
-      background: #111; 
-      color: #0f0; 
-      border: 1px solid #0f0; 
-      padding: 10px 20px; 
-      margin: 5px;
-      cursor: pointer;
-      text-shadow: 0 0 5px #0f0;
-    }
-    button:hover { 
-      background: #222; 
-      box-shadow: 0 0 10px #0f0;
-    }
-    .controls { 
-      margin: 20px 0; 
-    }
-    .slider-row {
-      display: flex;
-      align-items: center;
-      margin: 10px 0;
-      gap: 10px;
-    }
-    .slider-label {
-      min-width: 80px;
-      text-align: right;
-      color: #0f0;
-    }
-    .slider {
-      flex: 1;
-      max-width: 200px;
-    }
-    
-    /* Special styling for sensitivity slider - no fill gradient */
-    .sensitivity-slider {
-      -webkit-appearance: none;
-      appearance: none;
-      background: transparent;
-      outline: none;
-      flex: 1;
-      max-width: 200px;
-    }
-    
-    .sensitivity-slider::-webkit-slider-track {
-      background: #333;
-      height: 4px;
-      border-radius: 2px;
-    }
-    
-    .sensitivity-slider::-moz-range-track {
-      background: #333;
-      height: 4px;
-      border-radius: 2px;
-    }
-    
-    .sensitivity-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 16px;
-      height: 16px;
-      background: #0f0;
-      border-radius: 50%;
-      cursor: pointer;
-      margin-top: -6px;
-    }
-    
-    .sensitivity-slider::-moz-range-thumb {
-      width: 16px;
-      height: 16px;
-      background: #0f0;
-      border-radius: 50%;
-      cursor: pointer;
-      border: none;
-    }
-    
-    /* Show tick marks */
-    .sensitivity-slider::-webkit-slider-runnable-track {
-      background: #333;
-    }
-    .slider-value {
-      min-width: 40px;
-      color: #ff0;
-      font-weight: bold;
-    }
-    .sound-select {
-      flex: 1;
-      max-width: 200px;
-      background: #111;
-      color: #0f0;
-      border: 1px solid #0f0;
-      padding: 4px;
-      font-family: monospace;
-    }
-    h1 { 
-      color: #ff0; 
-      text-shadow: 0 0 20px #ff0;
-      font-size: 18px;
-      margin: 10px 0;
-    }
-    .track-row {
-      margin: 5px 0;
-      display: flex;
-      align-items: center;
-    }
-    .track-name {
-      width: 80px;
-      text-align: right;
-      margin-right: 10px;
-    }
-    .beat-indicator {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      background: #030;
-      border: 1px solid #0f0;
-      margin-right: 5px;
-    }
-    .pattern-display {
-      display: inline-block;
-      margin-left: 10px;
-      font-size: 10px;
-      color: #0a0;
-    }
-    .mute-btn {
-      width: 40px;
-      height: 20px;
-      padding: 2px;
-      margin: 0 5px;
-      font-size: 10px;
-      background: #030;
-      color: #0f0;
-      border: 1px solid #0f0;
-      cursor: pointer;
-    }
-    .mute-btn.muted {
-      background: #300;
-      color: #f00;
-      border-color: #f00;
-    }
-    #progression {
-      margin: 20px 0;
-      padding: 10px;
-      border: 1px solid #0f0;
-      background: #010;
-    }
-    
-    /* Minimized music controls */
-    .music-controls {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(0, 0, 0, 0.9);
-      border: 1px solid #0f0;
-      border-radius: 8px;
-      padding: 10px;
-      z-index: 10;
-      backdrop-filter: blur(5px);
-      opacity: 0.15; /* Very transparent by default */
-      transition: opacity 0.3s ease;
-      max-width: calc(100vw - 20px);
-      overflow: hidden; /* Prevent any scrolling */
-      flex-wrap: wrap;
-      touch-action: none; /* Disable touch scrolling */
-    }
-    
-    .music-controls:hover,
-    .music-controls.touched,
-    .music-controls.settings-open {
-      opacity: 1; /* Fully opaque when interacted with or settings open */
-    }
-    
-    .control-btn {
-      width: 40px;
-      height: 40px;
-      background: #111;
-      color: #0f0;
-      border: 1px solid #0f0;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      position: relative;
-    }
-    
-    
-    .control-btn:hover {
-      background: #222;
-      box-shadow: 0 0 10px #0f0;
-    }
-    
-    .control-btn.inactive svg {
-      stroke: #666 !important;
-    }
-    
-    .control-btn.active svg {
-      stroke: #0f0 !important;
-    }
-    
-    .track-squares {
-      display: flex;
-      gap: 8px;
-      padding: 0 10px;
-      border-left: 1px solid #0f0;
-      border-right: 1px solid #0f0;
-      flex-wrap: nowrap;
-    }
-    
-    .track-square {
-      width: 30px;
-      height: 30px;
-      background: #030;
-      border: 2px solid #0f0;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .track-square.active {
-      background: #0f0;
-      box-shadow: 0 0 15px #0f0;
-    }
-    
-    .track-square.muted {
-      background: #300;
-      border-color: #f00;
-      opacity: 0.5;
-    }
-    
-    .track-square.flash {
-      animation: flash 0.1s;
-    }
-    
-    @keyframes flash {
-      0% { background: #0f0; box-shadow: 0 0 20px #0f0; }
-      100% { background: #030; box-shadow: none; }
-    }
-    
-    /* Mobile-specific styles - applied via JavaScript */
-    body.mobile {
-      font-size: 18px;
-    }
-    
-    body.mobile .music-controls {
-      padding: 8px;
-      gap: 8px;
-      max-width: calc(100vw - 16px);
-    }
-    
-    body.mobile .control-btn {
-      width: 45px;
-      height: 45px;
-      font-size: 24px;
-      border-width: 2px;
-    }
-    
-    /* Small screen adjustments */
-    @media (max-width: 480px) and (orientation: portrait) {
-      .music-controls {
-        padding: 2px;
-        gap: 2px;
-        flex-wrap: nowrap;
-        max-height: 40px;
-      }
-      
-      .control-btn {
-        width: 26px;
-        height: 26px;
-        font-size: 14px;
-      }
-      
-      .track-squares {
-        flex-wrap: nowrap;
-        gap: 1px;
-        padding: 0 3px;
-      }
-      
-      .track-square {
-        width: 18px;
-        height: 18px;
-      }
-      
-      body.mobile .control-btn {
-        width: 28px;
-        height: 28px;
-        font-size: 16px;
-      }
-      
-      body.mobile .track-squares {
-        gap: 1px;
-        padding: 0 3px;
-      }
-    }
-    
-    @media (max-width: 480px) and (orientation: landscape) {
-      .music-controls {
-        padding: 5px;
-        gap: 5px;
-      }
-      
-      .control-btn {
-        width: 35px;
-        height: 35px;
-        font-size: 18px;
-      }
-      
-      .track-square {
-        width: 25px;
-        height: 25px;
-      }
-    }
-    
-    body.mobile .track-square {
-      width: 45px;
-      height: 45px;
-      border-width: 3px;
-    }
-    
-    body.mobile .track-squares {
-      gap: 12px;
-      padding: 0 15px;
-    }
-    
-    body.mobile .left-panel {
-      width: 90%;
-      max-width: 500px;
-      font-size: 18px;
-    }
-    
-    body.mobile .left-panel.expanded {
-      max-height: calc(100vh - 120px); /* Leave room for score on mobile */
-      padding: 20px;
-    }
-    
-    body.mobile button {
-      padding: 15px 30px;
-      font-size: 18px;
-      border-width: 2px;
-    }
-    
-    body.mobile .slider-label {
-      min-width: 120px;
-      font-size: 18px;
-    }
-    
-    body.mobile .sound-select {
-      padding: 8px;
-      font-size: 18px;
-      border-width: 2px;
-    }
-    
-    body.mobile h1 {
-      font-size: 24px;
-    }
-    
-    body.mobile .slider-row {
-      margin: 15px 0;
-      gap: 15px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div id="gameContainer"></div>
-    
-    <!-- Minimized music controls -->
-    <div id="musicControls" class="music-controls">
-      <button id="playPauseBtn" class="control-btn" title="Play/Pause">▶</button>
-      <button id="expandBtn" class="control-btn" title="Settings">☰</button>
-      <button id="gridToggleBtn" class="control-btn" title="Toggle Grid">⊞</button>
-    </div>
-    
-    <!-- Expanded panel (hidden by default) -->
-    <div class="left-panel" id="expandedPanel">
-      <h1>MELODIC TECHNO ENGINE</h1>
-      
-      <!-- Track indicators -->
-      <div class="track-squares" style="margin: 10px 0; display: flex; gap: 5px; justify-content: center;">
-        <div class="track-square" id="kickSquare" data-track="kick" title="Kick"></div>
-        <div class="track-square" id="snareSquare" data-track="snare" title="Snare"></div>
-        <div class="track-square" id="hatSquare" data-track="hat" title="Hi-hat"></div>
-        <div class="track-square" id="acidSquare" data-track="acid" title="Acid"></div>
-        <div class="track-square" id="stabSquare" data-track="stab" title="Stab"></div>
-        <div class="track-square" id="subSquare" data-track="sub" title="Sub"></div>
-      </div>
-      
-      <div class="controls">
-        <div class="slider-row">
-          <label class="slider-label">MOOD:</label>
-          <select id="musicPresetSelector" class="sound-select">
-            <option value="">Custom</option>
-            <option value="chill">Chill</option>
-            <option value="driving" selected>Driving</option>
-            <option value="peak">Peak Time</option>
-            <option value="acid">Acid Storm</option>
-            <option value="dark">Dark</option>
-            <option value="hypnotic">Hypnotic</option>
-            <option value="anthem">Anthem</option>
-          </select>
-          <span id="musicPresetDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Classic techno</span>
-        </div>
-        <div class="slider-row">
-          <label class="slider-label">DIFFICULTY:</label>
-          <select id="difficultySelector" class="sound-select">
-            <option value="zen">Zen Mode</option>
-            <option value="normal" selected>Normal</option>
-            <option value="intense">Intense</option>
-            <option value="chaos">Chaos</option>
-          </select>
-          <span id="difficultyDisplay" class="slider-value" style="font-size: 10px; width: 100px;">Standard</span>
-        </div>
-        <hr style="border-color: #0f0; margin: 15px 0; opacity: 0.3;">
-        <div style="margin-bottom: 15px;">
-          <label class="slider-label">Genre:</label>
-          <div style="display: flex; gap: 3px; margin-top: 5px; flex-wrap: wrap;">
-            <button id="genreTechno" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Techno</button>
-            <button id="genreDnb" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">D&B</button>
-            <button id="genreTropical" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Tropical</button>
-            <button id="genreDubstep" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Dubstep</button>
-            <button id="genreTrance" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Trance</button>
-          </div>
-        </div>
-        <div class="slider-row">
-          <label class="slider-label">BPM:</label>
-          <input type="range" id="bpmSlider" min="120" max="150" value="132" class="slider">
-          <span id="bpmDisplay" class="slider-value">132</span>
-        </div>
-        <div class="slider-row">
-          <label class="slider-label">ENERGY:</label>
-          <input type="range" id="energySlider" min="0" max="100" value="50" class="slider">
-          <span id="energyDisplay" class="slider-value">50</span>
-        </div>
-        <div class="slider-row">
-          <label class="slider-label">TENSION:</label>
-          <input type="range" id="tensionSlider" min="0" max="100" value="30" class="slider">
-          <span id="tensionDisplay" class="slider-value">30</span>
-        </div>
-        <div class="slider-row">
-          <label class="slider-label">SHOT:</label>
-          <select id="soundSelector" class="sound-select">
-            <option value="0">Triangle</option>
-            <option value="1">Acid</option>
-            <option value="2">Chord</option>
-            <option value="3">Echo</option>
-            <option value="4">Pluck</option>
-            <option value="5">Pew Pew</option>
-          </select>
-          <span id="soundDisplay" class="slider-value">Triangle</span>
-        </div>
-        <div class="slider-row" id="touchSensitivityRow" style="display: none;">
-          <label class="slider-label" title="Size of center deadzone - smaller = more responsive">DEADZONE:</label>
-          <input type="range" id="touchSensitivitySlider" min="0" max="5" value="2" step="1" class="slider sensitivity-slider" list="touchSensitivitySteps" title="Adjust the size of the center deadzone">
-          <datalist id="touchSensitivitySteps">
-            <option value="0"></option>
-            <option value="1"></option>
-            <option value="2"></option>
-            <option value="3"></option>
-            <option value="4"></option>
-            <option value="5"></option>
-          </datalist>
-          <span id="touchSensitivityDisplay" class="slider-value">Normal</span>
-        </div>
-      </div>
-      
-      <div style="position: absolute; bottom: 10px; right: 10px;">
-        <a href="../" style="color: #00ff00; text-decoration: none; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;" 
-           onmouseover="this.style.opacity='1'" 
-           onmouseout="this.style.opacity='0.7'">about</a>
-      </div>
-  
-  <div id="progression">
-    <div>SECTION: <span id="section">INTRO</span></div>
-    <div>BAR: <span id="bar">0</span> / 64</div>
-    <div>CHORD: <span id="chord">Cm</span></div>
-    <div>NEXT: <span id="nextSection">BUILD in 8 bars</span></div>
-  </div>
-  
-      <div id="status">READY</div>
-    </div>
-  </div>
-
-<script>
-// ============================================
-// STORAGE SYSTEM - MUST BE FIRST
-// ============================================
-const STORAGE_KEY = 'beatrider_data';
-const STORAGE_VERSION = 2; // Version number for migrations
-
-// Default settings structure
-const DEFAULT_SETTINGS = {
-  version: STORAGE_VERSION,
-  highScore: 0,
-  settings: {
-    gridEnabled: true,
-    difficulty: 'normal',
-    touchSensitivity: 30,
-    laserSound: 0,
-    musicPreset: 'driving',
-    customMusic: {
-      bpm: 128,
-      energy: 60,
-      tension: 40
-    },
-    trackMutes: {
-      kick: false,
-      snare: false,
-      hat: false,
-      acid: false,
-      stab: false,
-      sub: false
-    }
-  }
-};
-
-// Deep merge helper for nested settings
-function deepMerge(target, source) {
-  const output = { ...target };
-  if (isObject(target) && isObject(source)) {
-    Object.keys(source).forEach(key => {
-      if (isObject(source[key])) {
-        if (!(key in target))
-          output[key] = source[key];
-        else
-          output[key] = deepMerge(target[key], source[key]);
-      } else {
-        output[key] = source[key];
-      }
-    });
-  }
-  return output;
-}
-
-function isObject(item) {
-  return item && typeof item === 'object' && !Array.isArray(item);
-}
-
-// Migrate data from older versions
-function migrateData(data) {
-  // No version or version 1: flat structure to nested
-  if (!data.version || data.version < 2) {
-    const migrated = {
-      version: STORAGE_VERSION,
-      highScore: data.highScore || 0,
-      settings: {
-        gridEnabled: data.gridEnabled !== undefined ? data.gridEnabled : true,
-        difficulty: 'normal',
-        touchSensitivity: 30,
-        laserSound: 0,
-        musicPreset: 'driving',
-        customMusic: {
-          bpm: 128,
-          energy: 60,
-          tension: 40
-        },
-        trackMutes: {
-          kick: false,
-          snare: false,
-          hat: false,
-          acid: false,
-          stab: false,
-          sub: false
-        }
-      }
-    };
-    
-    // Check for legacy touchSensitivity key
-    const legacySensitivity = localStorage.getItem('touchSensitivity');
-    if (legacySensitivity) {
-      migrated.settings.touchSensitivity = parseInt(legacySensitivity) || 30;
-      localStorage.removeItem('touchSensitivity');
-    }
-    
-    return migrated;
-  }
-  
-  return data;
-}
-
-function loadGameData() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) {
-      const parsed = JSON.parse(data);
-      const migrated = migrateData(parsed);
-      
-      // Save migrated data if it changed
-      if (migrated.version !== parsed.version) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-      }
-      
-      // Merge with defaults to ensure all fields exist
-      return deepMerge(DEFAULT_SETTINGS, migrated);
-    }
-  } catch (e) {
-    console.warn('Failed to load game data, using defaults:', e);
-  }
-  return { ...DEFAULT_SETTINGS }; // Return a copy of defaults
-}
-
-function saveGameData(data) {
-  try {
-    const current = loadGameData();
-    const updated = deepMerge(current, data);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  } catch (e) {
-    console.warn('Failed to save game data:', e);
-    // Continue with session-only settings
-  }
-}
-
-// Debounced save to prevent excessive writes
-let saveTimer = null;
-let pendingData = {};
-
-function saveGameDataDebounced(data) {
-  // Accumulate changes
-  pendingData = deepMerge(pendingData, data);
-  
-  // Clear existing timer
-  clearTimeout(saveTimer);
-  
-  // Set new timer (100ms delay)
-  saveTimer = setTimeout(() => {
-    saveGameData(pendingData);
-    pendingData = {};
-  }, 100);
-}
-
-// Load saved data IMMEDIATELY after defining storage functions
-const savedData = loadGameData();
-let sessionHighScore = savedData.highScore;
-
-// ============================================
-// AUDIO SETUP
-// ============================================
-
-// Configure Tone.js for better Mac compatibility
-// Set up audio context with optimal settings for Mac
-if (typeof Tone !== 'undefined') {
-  // Detect if we're on Mac for specific optimizations
-  const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
-
-  // Set latencyHint based on platform
-  // 'playback' has higher latency but better performance on Mac
-  // 'interactive' for other platforms
-  Tone.context.latencyHint = isMac ? 'playback' : 'interactive';
-
-  // Adjust lookAhead time - lower for Mac to reduce CPU usage
-  Tone.context.lookAhead = isMac ? 0.05 : 0.1;
-
-  // Set update interval - slightly higher on Mac for better performance
-  Tone.context.updateInterval = isMac ? 0.04 : 0.025;
-
-  // Don't auto-resume - this causes the "must be resumed after user gesture" error
-  // Audio will start when user clicks to play the game
-}
-
-// iOS Audio Unlock - comprehensive fallback for iOS Safari
-// iOS requires audio to be "unlocked" via user gesture before WebAudio works
-const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-const isSafariAudio = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-let iosAudioUnlocked = false;
-
-// Silent audio data URI (tiny valid MP3) - most reliable iOS unlock method
-const SILENT_AUDIO_DATA = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV////////////////////////////////////////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQDgAAAAAAAAAGw/+M4xAALAAqIAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
-
-async function unlockIOSAudio() {
-  if (iosAudioUnlocked) return;
-
-  console.log('Attempting iOS audio unlock...');
-
-  try {
-    // Method 1: HTML5 Audio element with silent MP3 (most reliable for iOS)
-    if (isIOS || isSafariAudio) {
-      const silentAudio = new Audio(SILENT_AUDIO_DATA);
-      silentAudio.setAttribute('playsinline', '');
-      silentAudio.volume = 0.01;
-      try {
-        await silentAudio.play();
-        silentAudio.pause();
-        silentAudio.remove();
-        console.log('HTML5 Audio unlock successful');
-      } catch (e) {
-        console.log('HTML5 Audio unlock skipped:', e.message);
-      }
-    }
-
-    // Method 2: Tone.js context resume
-    if (typeof Tone !== 'undefined') {
-      await Tone.start();
-      console.log('Tone.start() called, state:', Tone.context.state);
-
-      // Force resume if still suspended
-      if (Tone.context.state === 'suspended') {
-        await Tone.context.resume();
-        console.log('Context resumed, state:', Tone.context.state);
-      }
-
-      // Method 3: Play silent oscillator through WebAudio
-      if (Tone.context.state === 'running') {
-        const osc = Tone.context.createOscillator();
-        const gain = Tone.context.createGain();
-        gain.gain.value = 0;
-        osc.connect(gain);
-        gain.connect(Tone.context.destination);
-        osc.start(0);
-        osc.stop(0.001);
-        console.log('Silent oscillator played');
-      }
-    }
-
-    iosAudioUnlocked = true;
-    console.log('iOS audio unlock complete, context state:', Tone?.context?.state);
-  } catch (e) {
-    console.warn('iOS audio unlock error:', e);
-  }
-}
-
-// Add touch/click listeners for iOS to unlock audio on first interaction
-if (isIOS || isSafariAudio) {
-  const earlyUnlock = (e) => {
-    // Only unlock on actual user gestures
-    if (e.isTrusted) {
-      unlockIOSAudio();
-    }
-  };
-  // Use multiple event types for best coverage
-  ['touchstart', 'touchend', 'click', 'keydown'].forEach(event => {
-    document.addEventListener(event, earlyUnlock, { passive: true, once: true });
-  });
-}
-
-// Master chain with sidechain compression
-const masterLimiter = new Tone.Limiter(-3).toDestination();
-
-// High-pass filter for tension building (cuts bass)
-const masterHighpass = new Tone.Filter({
-  frequency: 20,
-  type: "highpass",
-  rolloff: -24
-}).connect(masterLimiter);
-
-const sidechain = new Tone.Compressor({
-  threshold: -20,
-  ratio: 8,
-  attack: 0.003,
-  release: 0.1
-}).connect(masterHighpass);
-
-// Instruments
-const kick = new Tone.MembraneSynth({
-  pitchDecay: 0.05,
-  octaves: 10,
-  oscillator: { type: "sine" },
-  envelope: {
-    attack: 0.001,
-    decay: 0.4,
-    sustain: 0.01,
-    release: 1.4
-  }
-}).connect(masterHighpass); // Kick bypasses sidechain to keep punch
-
-const snare = new Tone.NoiseSynth({
-  noise: { type: "white" },
-  envelope: {
-    attack: 0.001,
-    decay: 0.15,
-    sustain: 0
-  }
-}).connect(sidechain);
-
-// Hi-hat using filtered noise for more realistic sound
-const hihatFilter = new Tone.Filter({
-  frequency: 10000,
-  type: "highpass"
-}).connect(sidechain);
-
-const hihat = new Tone.NoiseSynth({
-  noise: {
-    type: "white"
-  },
-  envelope: {
-    attack: 0.001,
-    decay: 0.02,
-    sustain: 0,
-    release: 0.03
-  },
-  volume: -10
-}).connect(hihatFilter);
-
-// Acid with automated filter - trying to approximate 18dB slope with cascaded filters
-const acidFilter1 = new Tone.Filter({
-  frequency: 800,
-  type: "lowpass",
-  rolloff: -12,
-  Q: 4
-}).connect(sidechain);
-
-const acidFilter2 = new Tone.Filter({
-  frequency: 800,
-  type: "lowpass", 
-  rolloff: -12,  // Can't do -6, using -12 instead
-  Q: 2
-}).connect(acidFilter1);
-
-// Add distortion for that overdriven 303 sound
-const acidDistortion = new Tone.Distortion(0.3).connect(acidFilter2);
-
-const acid = new Tone.MonoSynth({
-  oscillator: { type: "sawtooth" },
-  envelope: {
-    attack: 0.003,  // Faster attack
-    decay: 0.2,     // Shorter decay
-    sustain: 0.1,   // Lower sustain for more plucky sound
-    release: 0.1
-  },
-  filterEnvelope: {
-    attack: 0.003,
-    decay: 0.4,     // Longer filter decay for that sweep
-    sustain: 0.2,
-    release: 0.2,
-    baseFrequency: 100,  // Start lower
-    octaves: 4      // More dramatic sweep
-  },
-  portamento: 0.05  // Add glide between notes!
-}).connect(acidDistortion);
-
-// Rave stabs with filter and reverb for space
-const stabReverb = new Tone.Reverb({
-  decay: 2,
-  wet: 0.3
-}).connect(sidechain);
-
-const stabFilter = new Tone.Filter({
-  frequency: 3000,  // Open up the filter more
-  type: "lowpass",
-  rolloff: -12,
-  Q: 2
-}).connect(stabReverb);
-
-// Genre-specific stab synths
-const technoStab = new Tone.PolySynth(Tone.Synth, {
-  oscillator: { 
-    type: "sawtooth",
-    partialCount: 3  // Fewer harmonics = softer sound
-  },
-  envelope: {
-    attack: 0.01,    // Quick attack
-    decay: 0.15,     // Slightly longer decay
-    sustain: 0,      // No sustain - just decay/release
-    release: 0.2     // Moderate release - musical but won't overlap too much
-  },
-  volume: -2       // Boost volume back up
-}).connect(stabFilter);
-
-// D&B Reese bass-style synth (detuned saws)
-const dnbReese = new Tone.PolySynth(Tone.Synth, {
-  oscillator: {
-    type: "sawtooth",
-    detune: 7  // Slight detune for movement
-  },
-  envelope: {
-    attack: 0.05,
-    decay: 0.3,
-    sustain: 0.7,
-    release: 0.5
-  },
-  volume: -4
-}).connect(stabFilter);
-
-// Tropical steel drum-style synth (metallic, bright attack)
-const tropicalPluck = new Tone.PolySynth(Tone.Synth, {
-  oscillator: {
-    type: "sine",  // Pure tone like steel drum
-    modulationType: "triangle",  // Add some metallic harmonics
-    modulationIndex: 2
-  },
-  envelope: {
-    attack: 0.001,   // Very quick attack for that steel drum "ping"
-    decay: 0.4,      // Let it ring a bit
-    sustain: 0.1,    // Small sustain
-    release: 0.3     // Natural ring-out
-  },
-  volume: 2  // Boost for presence
-}).connect(stabFilter);
-
-// Current active stab synth (will switch based on genre)
-let raveSynth = technoStab;  // Default to techno
-
-// Sub bass with EQ to prevent mud
-const subEQ = new Tone.EQ3({
-  low: 3,        // Boost the deep sub frequencies
-  mid: -6,       // Cut the muddy mids (100-200Hz)
-  high: -12,     // Remove any high frequency content
-  lowFrequency: 60,
-  highFrequency: 200
-}).connect(sidechain);  // Now goes through sidechain for ducking!
-
-// Sub bass - controlled power
-const subBass = new Tone.MonoSynth({
-  oscillator: { type: "sine" },
-  envelope: {
-    attack: 0.01,   // Faster attack for more punch
-    decay: 0.3,     // Longer decay
-    sustain: 0.6,   // Bit less sustain
-    release: 0.5
-  },
-  volume: -6      // Compromise between -12 and 0
-}).connect(subEQ);
-
-// Noise riser for tension
-const noiseRiser = new Tone.Noise("white").connect(
-  new Tone.Filter({
-    frequency: 200,
-    type: "highpass",
-    rolloff: -24
-  }).connect(
-    new Tone.Volume(-20).connect(sidechain)
-  )
-);
-const riserEnvelope = new Tone.Envelope({
-  attack: 8,
-  decay: 0,
-  sustain: 1,
-  release: 0.5
-});
-
-// Musical structures
-const scale = {
-  C: ["C", "D", "Eb", "F", "G", "Ab", "Bb"],
-  indices: { C: 0, D: 1, Eb: 2, F: 3, G: 4, Ab: 5, Bb: 6 }
-};
-
-// Extended chord progression with variations
-const chordProgressions = {
-  main: [
-    { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "Eb", "G"] },
-    { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["G", "Eb", "C"] },
-    { root: "Bb", chord: ["Bb3", "D4", "F4"], bass: "Bb0", melodicFocus: ["Bb", "F", "D"] },
-    { root: "Ab", chord: ["Ab3", "C4", "Eb4"], bass: "Ab0", melodicFocus: ["Ab", "Eb", "C"] }
-  ],
-  variation1: [
-    { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "G", "Eb"] },
-    { root: "F", chord: ["F3", "Ab3", "C4"], bass: "F0", melodicFocus: ["F", "Ab", "C"] },
-    { root: "G", chord: ["G3", "Bb3", "D4"], bass: "G0", melodicFocus: ["G", "D", "Bb"] },
-    { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "Eb", "G"] }
-  ],
-  variation2: [
-    { root: "C", chord: ["C4", "Eb4", "G4", "Bb4"], bass: "C1", melodicFocus: ["C", "Bb", "G"] }, // Cm7
-    { root: "Ab", chord: ["Ab3", "C4", "Eb4", "G4"], bass: "Ab0", melodicFocus: ["Ab", "Eb", "G"] }, // Abmaj7
-    { root: "F", chord: ["F3", "Ab3", "C4", "Eb4"], bass: "F0", melodicFocus: ["F", "C", "Ab"] }, // Fm7
-    { root: "G", chord: ["G3", "B3", "D4", "F4"], bass: "G0", melodicFocus: ["G", "B", "F"] } // G7
-  ],
-  breakdown: [
-    { root: "C", chord: ["C3"], bass: "C1", melodicFocus: ["C"] }, // Just root
-    { root: "C", chord: ["C3", "G3"], bass: "C1", melodicFocus: ["C", "G"] }, // Power chord
-    { root: "Ab", chord: ["Ab2"], bass: "Ab0", melodicFocus: ["Ab"] }, // Just root
-    { root: "G", chord: ["G2", "D3"], bass: "G0", melodicFocus: ["G", "D"] } // Power chord
-  ]
-};
-
-// Select progression based on section
-function getChordProgression(section) {
-  if (section === 'BREAK') return chordProgressions.breakdown;
-  if (section === 'DROP') return chordProgressions.variation2;
-  if (currentBar % 16 < 8) return chordProgressions.main;
-  return Math.random() > 0.5 ? chordProgressions.variation1 : chordProgressions.variation2;
-}
-
-// Genre configurations with appropriate BPM ranges and pattern sets
-const GENRE_CONFIGS = {
-  techno: {
-    name: 'Techno/Acid',
-    bpmMin: 120,
-    bpmMax: 150,
-    bpmDefault: 132,
-    patterns: ['detroit', 'berlin', 'chicago', 'fourOnFloor', 'syncopated']
-  },
-  dnb: {
-    name: 'Drum & Bass',
-    bpmMin: 160,
-    bpmMax: 180,
-    bpmDefault: 174,
-    patterns: ['dnb_basic', 'dnb_amen', 'dnb_jump', 'dnb_roll']
-  },
-  tropical: {
-    name: 'Tropical/Kygo',
-    bpmMin: 100,
-    bpmMax: 115,
-    bpmDefault: 110,
-    patterns: ['kygo_basic', 'kygo_bounce', 'kygo_minimal', 'kygo_clap']
-  },
-  dubstep: {
-    name: 'Dubstep',
-    bpmMin: 138,
-    bpmMax: 145,
-    bpmDefault: 140,
-    patterns: ['dubstep_basic', 'dubstep_half', 'dubstep_roll']
-  },
-  trance: {
-    name: 'Trance',
-    bpmMin: 135,
-    bpmMax: 145,
-    bpmDefault: 138,
-    patterns: ['trance_kick', 'trance_build', 'trance_uplifting']
-  }
-};
-
-// Current genre (can be changed via UI)
-let currentGenre = 'techno';
-
-// Pattern bank with classic techno/acid patterns
-const patternBank = {
-  kick: {
-    fourOnFloor: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
-    halfTime: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
-    syncopated: [1,0,0,0, 1,0,0,1, 0,0,1,0, 1,0,0,0],
-    minimal: [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
-    // Classic 909 kick patterns
-    detroit: [1,0,0,1, 1,0,0,0, 1,0,1,0, 1,0,0,0],  // Detroit techno style
-    berlin: [1,0,0,0, 1,0,1,0, 1,0,0,0, 1,0,0,0],   // Berlin minimal
-    chicago: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,1,0],  // Chicago acid house
-    fill: [1,0,1,0, 1,0,1,1, 1,1,1,0, 1,1,1,1],
-    // Drum & Bass patterns (breakbeat style)
-    dnb_basic: [1,0,0,0, 0,0,1,0, 0,0,1,0, 0,0,0,0],  // Basic D&B kick
-    dnb_amen: [1,0,0,1, 0,0,1,0, 0,1,0,0, 1,0,0,0],   // Amen-inspired
-    dnb_jump: [1,0,0,0, 0,0,0,1, 0,0,1,0, 0,0,0,1],    // Jump-up style
-    // Tropical/Kygo patterns (dembow/reggaeton influenced)
-    kygo_basic: [1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0],  // Basic tropical house
-    kygo_bounce: [1,0,0,0, 0,1,0,0, 1,0,0,0, 0,1,0,0], // Bouncy Kygo style
-    kygo_minimal: [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0], // Sparse tropical
-    // Dubstep patterns (half-time feel at 140 BPM)
-    dubstep_basic: [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0], // Classic dubstep
-    dubstep_half: [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],  // Ultra minimal
-    dubstep_roll: [1,0,0,0, 0,0,1,0, 0,0,1,0, 0,0,1,0],  // Rolling subs
-    // Trance patterns (driving four-on-floor)
-    trance_kick: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],   // Classic trance
-    trance_build: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],  // Build-up pattern
-    trance_uplifting: [1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1] // Uplifting variation
-  },
-  snare: {
-    backbeat: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
-    ghost: [0,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0],
-    detroit: [0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0],  // Off-beat snare
-    fill: [0,0,0,0, 1,0,1,0, 1,0,1,1, 1,1,1,1],
-    minimal: [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0],
-    // Drum & Bass snare patterns (heavy on 2 and 4)
-    dnb_basic: [0,0,1,0, 1,0,0,0, 0,1,0,0, 1,0,0,0],   // Classic D&B snare
-    dnb_amen: [0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,1,0],    // Amen break style
-    dnb_roll: [0,0,1,0, 1,0,1,1, 0,0,1,0, 1,1,1,1],    // Rolling snares
-    // Tropical/Kygo snare patterns (lighter, more sparse)
-    kygo_clap: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],   // Simple clap on 2&4
-    kygo_snap: [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0],   // Finger snaps
-    kygo_rim: [0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,1,0],    // Rimshot pattern
-    // Dubstep snare patterns (heavy on the 3)
-    dubstep_basic: [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0], // Classic dubstep snare
-    dubstep_trap: [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,1,0],  // Trap-influenced
-    dubstep_roll: [0,0,0,0, 0,0,0,0, 1,0,1,1, 0,0,0,0],  // Snare rolls
-    // Trance snare patterns (uplifting, driving)
-    trance_clap: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],   // Standard clap
-    trance_build: [0,0,0,0, 1,0,0,1, 0,0,1,0, 1,0,1,1],  // Building energy
-    trance_uplift: [0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0]  // Uplifting pattern
-  },
-  // Classic acid bassline patterns (rhythm only, notes added later)
-  acid: {
-    // Phuture - Acid Tracks style
-    phuture: [1,0,1,0, 1,0,0,1, 1,0,1,0, 0,1,0,1],
-    // Josh Wink - Higher State of Consciousness style  
-    wink: [1,1,0,1, 0,1,1,0, 1,0,1,1, 0,0,1,0],
-    // Hardfloor style
-    hardfloor: [1,0,0,1, 1,0,1,0, 0,1,0,1, 1,0,0,0],
-    // DJ Pierre style
-    pierre: [1,0,1,1, 0,0,1,0, 1,1,0,1, 0,0,1,0],
-    // Minimal acid
-    minimal: [1,0,0,0, 0,0,1,0, 0,0,0,0, 1,0,0,0],
-    // Random busy pattern
-    busy: [1,1,0,1, 1,0,1,1, 0,1,1,0, 1,0,1,1]
-  }
-};
-
-// State
-let currentBar = 0;
-window.currentBar = 0; // Expose globally for game
-let currentChordIndex = 0;
-let currentProgression = null;
-let acidSequence = [];
-let energyLevel = 50;
-let tensionLevel = 30;
-let lastSection = '';
-let isTransitioning = false;
-let riserActive = false;
-
-// Mute states - initialized from saved data
-const muteStates = {
-  kick: savedData.settings?.trackMutes?.kick || false,
-  snare: savedData.settings?.trackMutes?.snare || false,
-  hat: savedData.settings?.trackMutes?.hat || false,
-  acid: savedData.settings?.trackMutes?.acid || false,
-  stab: savedData.settings?.trackMutes?.stab || false,
-  sub: savedData.settings?.trackMutes?.sub || false
-};
-
-// Humanization - adds micro-timing variations
-function humanize(time, amount = 0.01) {
-  // Add random timing offset between -amount and +amount seconds
-  return time + (Math.random() - 0.5) * amount * 2;
-}
-
-// Visual feedback
-function flashIndicator(id) {
-  // Flash the minimized track square
-  const trackName = id.replace('Indicator', '');
-  const square = document.getElementById(trackName + 'Square');
-  if (square && !muteStates[trackName]) {
-    square.classList.add('flash');
-    setTimeout(() => square.classList.remove('flash'), 100);
-  }
-}
-
-// Generate melodic acid sequence using classic patterns
-function generateMelodicAcidSequence(chordInfo, section, previousSequence = []) {
-  const sequence = [];
-  const octave = section === 'DROP' ? 3 : 2;
-  
-  // Select rhythm pattern based on section
-  let rhythmPattern;
-  if (section === 'DROP') {
-    // Use classic acid patterns for drops
-    const patterns = [patternBank.acid.phuture, patternBank.acid.wink, patternBank.acid.hardfloor];
-    rhythmPattern = patterns[Math.floor(Math.random() * patterns.length)];
-  } else if (section === 'BUILD') {
-    rhythmPattern = patternBank.acid.pierre;
-  } else if (section === 'BREAK') {
-    rhythmPattern = patternBank.acid.minimal;
-  } else {
-    // Main section varies
-    rhythmPattern = Math.random() > 0.5 ? patternBank.acid.hardfloor : patternBank.acid.phuture;
-  }
-  
-  // Use chord tones as anchors
-  const chordTones = chordInfo.melodicFocus;
-  let lastNote = previousSequence.length > 0 ? previousSequence[previousSequence.length - 1] : null;
-  
-  for (let i = 0; i < 16; i++) {
-    if (rhythmPattern[i]) {
-      let note;
-      
-      // Strong beats (0, 4, 8, 12) favor chord tones
-      if (i % 4 === 0) {
-        note = chordTones[Math.floor(Math.random() * chordTones.length)] + octave;
-      } else if (lastNote && Math.random() > 0.3) {
-        // Stepwise motion from last note for that 303 feel
-        const lastPitch = lastNote.replace(/\d/, '');
-        const lastOctave = parseInt(lastNote.replace(/\D/g, ''));
-        const scaleIndex = scale.indices[lastPitch];
-        
-        if (scaleIndex !== undefined) {
-          // Classic 303 often moves in small steps
-          const direction = Math.random() > 0.5 ? 1 : -1;
-          const stepSize = Math.random() > 0.7 ? 2 : 1; // Occasionally jump a third
-          const newIndex = (scaleIndex + direction * stepSize + 7) % 7;
-          note = scale.C[newIndex] + lastOctave;
-        } else {
-          note = chordTones[Math.floor(Math.random() * chordTones.length)] + octave;
-        }
-      } else {
-        // Random scale note
-        note = scale.C[Math.floor(Math.random() * scale.C.length)] + octave;
-      }
-      
-      sequence.push(note);
-      lastNote = note;
-    } else {
-      sequence.push(null);
-    }
-  }
-  
-  return sequence;
-}
-
-// Generate drum fill
-function generateDrumFill() {
-  return {
-    kick: patternBank.kick.fill,
-    snare: patternBank.snare.fill,
-    hihat: new Array(16).fill(1) // Rapid hi-hats
-  };
-}
-
-// Get section
-function getSection(bar) {
-  const pos = bar % 64;
-  if (pos < 8) return 'INTRO';
-  if (pos < 16) return 'BUILD';
-  if (pos < 32) return 'MAIN';
-  if (pos < 40) return 'BREAK';
-  if (pos < 56) return 'DROP';
-  return 'OUTRO';
-}
-
-// Check if we're approaching a section change
-function isApproachingTransition(bar) {
-  const pos = bar % 64;
-  const transitionBars = [7, 15, 31, 39, 55, 63];
-  return transitionBars.includes(pos);
-}
-
-// Generate patterns based on section and energy
-function generatePatterns(section, bar, energy) {
-  const patterns = {};
-  const isFill = isApproachingTransition(bar);
-  
-  if (isFill) {
-    // Drum fill before section change
-    const fill = generateDrumFill();
-    patterns.kick = fill.kick;
-    patterns.snare = fill.snare;
-    patterns.hihat = fill.hihat;
-  } else {
-    // Use genre-specific patterns based on section
-    const genreConfig = GENRE_CONFIGS[currentGenre];
-    
-    if (section === 'DROP') {
-      // Drop section - use genre-specific intense patterns
-      if (currentGenre === 'dnb') {
-        patterns.kick = patternBank.kick.dnb_jump;
-        patterns.snare = patternBank.snare.dnb_roll;
-      } else if (currentGenre === 'tropical') {
-        patterns.kick = patternBank.kick.kygo_bounce;
-        patterns.snare = patternBank.snare.kygo_clap;
-      } else {
-        patterns.kick = Math.random() > 0.5 ? patternBank.kick.chicago : patternBank.kick.detroit;
-        patterns.snare = energy > 70 ? patternBank.snare.detroit : patternBank.snare.backbeat;
-      }
-    } else if (section === 'MAIN') {
-      // Main section - rotate through genre patterns
-      if (currentGenre === 'dnb') {
-        const dnbKicks = [patternBank.kick.dnb_basic, patternBank.kick.dnb_amen];
-        patterns.kick = dnbKicks[Math.floor((bar / 4) % dnbKicks.length)];
-        patterns.snare = patternBank.snare.dnb_basic;
-      } else if (currentGenre === 'tropical') {
-        patterns.kick = patternBank.kick.kygo_basic;
-        patterns.snare = patternBank.snare.kygo_rim;
-      } else if (currentGenre === 'dubstep') {
-        patterns.kick = patternBank.kick.dubstep_basic;
-        patterns.snare = patternBank.snare.dubstep_basic;
-      } else if (currentGenre === 'trance') {
-        patterns.kick = patternBank.kick.trance_kick;
-        patterns.snare = patternBank.snare.trance_clap;
-      } else {
-        const kickStyles = [patternBank.kick.fourOnFloor, patternBank.kick.berlin, patternBank.kick.detroit];
-        patterns.kick = kickStyles[Math.floor((bar / 4) % kickStyles.length)];
-        patterns.snare = patternBank.snare.backbeat;
-      }
-    } else if (section === 'BUILD') {
-      patterns.kick = patternBank.kick.halfTime;
-      patterns.snare = patternBank.snare.minimal;
-    } else if (section === 'BREAK') {
-      patterns.kick = patternBank.kick.minimal;
-      patterns.snare = new Array(16).fill(0);
-    } else {
-      patterns.kick = patternBank.kick.halfTime;
-      patterns.snare = patternBank.snare.minimal;
-    }
-    
-    // Hi-hat patterns based on genre
-    if (currentGenre === 'dnb') {
-      // D&B has rapid, intricate hi-hats
-      if (tensionLevel > 70) {
-        patterns.hihat = new Array(16).fill(1); // Constant ride at high tension
-      } else {
-        patterns.hihat = [1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1]; // D&B shuffle
-      }
-    } else if (currentGenre === 'tropical') {
-      // Tropical has sparse, laid-back hi-hats
-      if (section === 'DROP') {
-        patterns.hihat = [0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1]; // Shaker pattern
-      } else {
-        patterns.hihat = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]; // Quarter notes
-      }
-    } else if (currentGenre === 'dubstep') {
-      // Dubstep has minimal, sparse hi-hats
-      patterns.hihat = [0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0]; // Very sparse
-    } else if (currentGenre === 'trance') {
-      // Trance has steady, driving hi-hats
-      patterns.hihat = [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0]; // Steady 8ths
-    } else {
-      // Techno - dynamic based on energy AND tension
-      patterns.hihat = [];
-      const hihatDensity = (energy / 100) * 0.5 + (tensionLevel / 100) * 0.5;
-      for (let i = 0; i < 16; i++) {
-        // More rapid hits at high tension
-        if (tensionLevel > 70 && i % 2 === 1) {
-          patterns.hihat[i] = 1; // Constant 16ths at high tension
-        } else {
-          patterns.hihat[i] = Math.random() < hihatDensity ? 1 : 0;
-        }
-      }
-    }
-  }
-  
-  // Stab patterns that complement the acid line
-  // Look at where acid pattern has gaps and fill them
-  const acidDensity = acidSequence ? acidSequence.filter(n => n).length : 8;
-  
-  const stabPatterns = [
-    [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0], // Single hit on downbeat
-    [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0], // Single hit midway
-    [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,0], // Single hit on upbeat
-    new Array(16).fill(0) // Rest
-  ];
-  
-  // Simplified - sparse stabs for impact
-  if (section === 'BREAK') {
-    patterns.stab = stabPatterns[3]; // No stabs in break
-  } else if (section === 'DROP') {
-    // Hit on first bar of drop for impact
-    patterns.stab = (bar % 4 === 0) ? stabPatterns[0] : stabPatterns[3];
-  } else if (section === 'BUILD') {
-    // Occasional stab to build tension
-    patterns.stab = (bar % 2 === 1) ? stabPatterns[2] : stabPatterns[3];
-  } else if (section === 'MAIN') {
-    // Every other bar
-    patterns.stab = (bar % 2 === 0) ? stabPatterns[1] : stabPatterns[3];
-  } else {
-    // INTRO/OUTRO - very minimal
-    patterns.stab = (bar % 4 === 0) ? stabPatterns[1] : stabPatterns[3];
-  }
-  
-  return patterns;
-}
-
-// Sequences
-let kickLoop, snareLoop, hihatLoop, acidLoop, chordLoop, subLoop;
-
-function updatePatterns() {
-  const section = getSection(currentBar);
-  
-  // Update progression if needed
-  if (!currentProgression || currentBar % 8 === 0) {
-    currentProgression = getChordProgression(section);
-  }
-  const chordInfo = currentProgression[currentChordIndex % currentProgression.length];
-  
-  // Generate melodic acid sequence FIRST
-  if (currentBar % 2 === 0) {
-    acidSequence = generateMelodicAcidSequence(chordInfo, section, acidSequence);
-    // Pattern displays were removed with minimized UI
-  }
-  
-  // THEN generate patterns (so stabs can respond to acid)
-  const patterns = generatePatterns(section, currentBar, energyLevel);
-  
-  // Clear and recreate sequences
-  if (kickLoop) kickLoop.dispose();
-  if (snareLoop) snareLoop.dispose();
-  if (hihatLoop) hihatLoop.dispose();
-  if (acidLoop) acidLoop.dispose();
-  if (chordLoop) chordLoop.dispose();
-  if (subLoop) subLoop.dispose();
-  
-  // Kick with micro-timing
-  kickLoop = new Tone.Sequence((time, note) => {
-    if (note && !muteStates.kick) {
-      // Slight timing variation, but keep kick more stable
-      const humanTime = humanize(time, 0.003);
-      kick.triggerAttackRelease("C1", "8n", humanTime);
-      sidechain.ratio.setValueAtTime(20, humanTime);
-      sidechain.ratio.linearRampToValueAtTime(8, humanTime + 0.1);
-      Tone.Draw.schedule(() => {
-        flashIndicator('kickIndicator');
-        // Trigger game beat event
-        if (window.GameAPI && window.GameAPI.onBeat) {
-          window.GameAPI.onBeat();
-        }
-      }, humanTime);
-    }
-  }, patterns.kick, "16n");
-  
-  // Snare with more looseness
-  snareLoop = new Tone.Sequence((time, note) => {
-    if (note && !muteStates.snare) {
-      const humanTime = humanize(time, 0.005);
-      snare.triggerAttackRelease("8n", humanTime);
-      Tone.Draw.schedule(() => {
-        flashIndicator('snareIndicator');
-        // Trigger different enemy type on snare
-        if (window.GameAPI && window.GameAPI.onSnare) {
-          window.GameAPI.onSnare();
-        }
-      }, humanTime);
-    }
-  }, patterns.snare, "16n");
-  
-  // Hi-hat with most variation
-  hihatLoop = new Tone.Sequence((time, note) => {
-    if (note && !muteStates.hat) {
-      const humanTime = humanize(time, 0.008);
-      // Vary between closed and open hi-hats
-      const velocity = 0.3 + Math.random() * 0.4;
-      const duration = Math.random() > 0.8 ? "16n" : "32n"; // Occasional longer hat
-      hihat.triggerAttackRelease(duration, humanTime);
-      hihat.volume.setValueAtTime(-15 + (velocity * 10), humanTime); // Subtle volume variation
-      Tone.Draw.schedule(() => {
-        flashIndicator('hatIndicator');
-        // Spawn obstacles on some hi-hat hits
-        if (Math.random() < 0.2 && window.GameAPI && window.GameAPI.onHihat) {
-          window.GameAPI.onHihat();
-        }
-      }, humanTime);
-    }
-  }, patterns.hihat, "16n");
-  
-  // Acid with melodic sequence - slight timing variations and accent
-  acidLoop = new Tone.Sequence((time, note, index) => {
-    if (note && !muteStates.acid) {
-      const humanTime = humanize(time, 0.004);
-      // Add accent to some notes (first beat of each group and random others)
-      const isAccent = index % 4 === 0 || (Math.random() > 0.85 && tensionLevel > 50);
-      
-      if (isAccent) {
-        // Accent: louder with more filter modulation
-        acid.volume.value = 3;
-        acid.filterEnvelope.octaves = 5;
-        acidDistortion.wet.value = 0.7;
-      } else {
-        acid.volume.value = 0;
-        acid.filterEnvelope.octaves = 4;
-        acidDistortion.wet.value = 0.5;
-      }
-      
-      acid.triggerAttackRelease(note, "16n", humanTime);
-      Tone.Draw.schedule(() => {
-        flashIndicator('acidIndicator');
-        // Spawn power-up occasionally
-        if (Math.random() < 0.1 && window.GameAPI && window.GameAPI.onAcid) {
-          window.GameAPI.onAcid();
-        }
-      }, humanTime);
-    }
-  }, acidSequence, "16n");
-  
-  // Stabs with slight spread and filter variation
-  chordLoop = new Tone.Sequence((time, hit, index) => {
-    if (hit && !muteStates.stab) {
-      const humanTime = humanize(time, 0.006);
-      
-      // Vary the filter based on section
-      const currentSection = getSection(currentBar);
-      if (currentSection === 'DROP') {
-        stabFilter.frequency.setValueAtTime(3500, humanTime);
-      } else if (currentSection === 'BUILD') {
-        // Gradually open filter in builds
-        stabFilter.frequency.exponentialRampToValueAtTime(2500, humanTime + 0.2);
-      } else {
-        stabFilter.frequency.setValueAtTime(2000, humanTime);
-      }
-      
-      // Choose chord voicing based on what acid is doing
-      // If acid is playing high, play stabs lower and vice versa
-      const acidNote = acidSequence[index];
-      let chordToPlay = chordInfo.chord;
-      
-      if (acidNote && acidNote.includes('3')) {
-        // Acid is high, play stabs an octave lower
-        chordToPlay = chordInfo.chord.map(note => 
-          note.replace(/(\d)/, (match) => parseInt(match) - 1)
-        );
-      }
-      
-      // Simple - just play the chord once with slight strum
-      chordToPlay.forEach((note, i) => {
-        const noteTime = humanTime + i * 0.015; // Slight strum
-        raveSynth.triggerAttackRelease(note, "4n", noteTime); // Longer note for reverb tail
-      });
-      
-      Tone.Draw.schedule(() => {
-        flashIndicator('stabIndicator');
-        // Spawn drifter enemy
-        if (window.GameAPI && window.GameAPI.onStab) {
-          window.GameAPI.onStab();
-        }
-      }, humanTime);
-    }
-  }, patterns.stab, "16n");
-  
-  // Sub bass pattern - genre-specific
-  let subPattern;
-  if (currentGenre === 'dnb') {
-    // D&B: Long sustained sub-bass notes, often sliding
-    subPattern = [
-      chordInfo.bass, null, null, null,
-      null, null, null, null,
-      null, null, null, null,
-      chordInfo.bass, null, null, null
-    ];
-  } else if (currentGenre === 'tropical') {
-    // Tropical: Bouncing, syncopated bass following dembow rhythm
-    subPattern = [
-      chordInfo.bass, null, null, chordInfo.bass,
-      null, null, chordInfo.bass, null,
-      chordInfo.bass, null, null, chordInfo.bass,
-      null, null, chordInfo.bass, null
-    ];
-  } else {
-    // Techno: Offset from kick to avoid mud
-    subPattern = [
-      null, chordInfo.bass, null, null,  // Offset by one 16th
-      null, null, null, null,
-      null, chordInfo.bass, null, null,  // Offset by one 16th
-      null, null, null, null
-    ];
-  }
-  subLoop = new Tone.Sequence((time, note) => {
-    if (note && !muteStates.sub) {
-      const humanTime = humanize(time, 0.002); // Very slight timing variation
-      // Play longer note that sustains
-      subBass.triggerAttackRelease(note, "2n", humanTime);
-      // Add a subtle octave above for presence (only in drops)
-      const currentSection = getSection(currentBar);
-      if (currentSection === 'DROP' || currentSection === 'MAIN') {
-        const octaveUp = note.replace(/\d/, (match) => parseInt(match) + 1);
-        subBass.triggerAttackRelease(octaveUp, "2n", humanTime + 0.01, 0.3); // Quieter octave
-      }
-      Tone.Draw.schedule(() => {
-        flashIndicator('subIndicator');
-        // Pulse the grid
-        if (window.GameAPI && window.GameAPI.onSub) {
-          window.GameAPI.onSub();
-        }
-      }, humanTime);
-    }
-  }, subPattern, "16n");
-  
-  kickLoop.start(0);
-  snareLoop.start(0);
-  hihatLoop.start(0);
-  acidLoop.start(0);
-  chordLoop.start(0);
-  subLoop.start(0);
-}
-
-// Apply tension to parameters
-function applyTension() {
-  const now = Tone.now();
-  
-  // Both acid filters open with tension
-  const baseFreq = 300 + (tensionLevel * 15);
-  const targetFreq = baseFreq + (tensionLevel * 25);
-  acidFilter1.frequency.linearRampToValueAtTime(targetFreq, now + 0.5);
-  acidFilter2.frequency.linearRampToValueAtTime(targetFreq * 0.9, now + 0.5);  // Slightly offset
-  acidFilter1.Q.value = 4 + (tensionLevel / 100) * 12;
-  acidFilter2.Q.value = 2 + (tensionLevel / 100) * 4;
-  
-  // Increase distortion with tension
-  acidDistortion.distortion = 0.3 + (tensionLevel / 100) * 0.4;
-  
-  // Master highpass rises with extreme tension
-  if (tensionLevel > 80) {
-    masterHighpass.frequency.exponentialRampToValueAtTime(100 + (tensionLevel - 80) * 10, now + 0.5);
-  } else {
-    masterHighpass.frequency.exponentialRampToValueAtTime(20, now + 0.5);
-  }
-  
-  // Sidechain gets more aggressive
-  sidechain.ratio.value = 8 + (tensionLevel / 100) * 12;
-  
-  // Start/stop noise riser
-  if (tensionLevel > 60 && !riserActive) {
-    noiseRiser.start();
-    riserEnvelope.triggerAttack();
-    riserActive = true;
-  } else if (tensionLevel <= 60 && riserActive) {
-    riserEnvelope.triggerRelease();
-    setTimeout(() => noiseRiser.stop(), 500);
-    riserActive = false;
-  }
-  
-  // Riser volume follows tension
-  if (riserActive) {
-    noiseRiser.volume.value = -40 + (tensionLevel - 60) * 0.5;
-  }
-}
-
-// Automation curves for smooth transitions
-function applyAutomation(section, prevSection) {
-  const now = Tone.now();
-  
-  // Filter automation for both cascaded filters
-  if (section === 'DROP' && prevSection !== 'DROP') {
-    acidFilter1.frequency.exponentialRampToValueAtTime(2000, now + 2);
-    acidFilter2.frequency.exponentialRampToValueAtTime(1800, now + 2);
-    acidFilter1.Q.linearRampToValueAtTime(15, now + 2);
-    acidDistortion.distortion = 0.6;
-  } else if (section === 'BREAK') {
-    acidFilter1.frequency.exponentialRampToValueAtTime(400, now + 1);
-    acidFilter2.frequency.exponentialRampToValueAtTime(400, now + 1);
-    acidFilter1.Q.linearRampToValueAtTime(5, now + 1);
-    acidDistortion.distortion = 0.2;
-  } else if (section === 'BUILD') {
-    acidFilter1.frequency.exponentialRampToValueAtTime(1200, now + 4);
-    acidFilter2.frequency.exponentialRampToValueAtTime(1100, now + 4);
-  }
-}
-
-// Main evolution function
-function evolve() {
-  const section = getSection(currentBar);
-  const nextBar = (currentBar + 1) % 64;
-  const nextSection = getSection(nextBar);
-  
-  // Update displays
-  document.getElementById('section').textContent = section;
-  document.getElementById('bar').textContent = currentBar;
-  const currentChord = currentProgression ? currentProgression[currentChordIndex % currentProgression.length] : { root: 'C' };
-  document.getElementById('chord').textContent = currentChord.root + (currentChord.chord.length > 3 ? '7' : 'm');
-  
-  // Calculate next transition
-  const barsUntilNext = nextSection !== section ? 1 : 
-    nextBar < 8 ? 8 - nextBar :
-    nextBar < 16 ? 16 - nextBar :
-    nextBar < 32 ? 32 - nextBar :
-    nextBar < 40 ? 40 - nextBar :
-    nextBar < 56 ? 56 - nextBar :
-    64 - nextBar;
-  document.getElementById('nextSection').textContent = 
-    nextSection !== section ? `${nextSection} next bar` : 
-    `${getSection(currentBar + barsUntilNext)} in ${barsUntilNext} bars`;
-  
-  // Apply automation on section changes
-  if (section !== lastSection) {
-    applyAutomation(section, lastSection);
-    lastSection = section;
-  }
-  
-  // Update patterns every bar
-  if (currentBar % 1 === 0) {
-    updatePatterns();
-  }
-  
-  // Apply tension continuously
-  applyTension();
-  
-  // Vary chord progression rate based on section (already declared above)
-  if (section === 'DROP' || section === 'MAIN') {
-    // Change chord every 2 bars for more movement
-    if (currentBar % 2 === 0) {
-      currentChordIndex = (currentChordIndex + 1) % (currentProgression ? currentProgression.length : 4);
-    }
-  } else if (section === 'BREAK') {
-    // Stay on same chord for whole break - hypnotic
-    currentChordIndex = 0;
-  } else {
-    // Normal progression every 4 bars
-    if (currentBar % 4 === 0) {
-      currentChordIndex = (currentChordIndex + 1) % (currentProgression ? currentProgression.length : 4);
-    }
-  }
-  
-  currentBar = (currentBar + 1) % 64;
-  window.currentBar = currentBar;
-}
-
-// Schedule evolution
-Tone.Transport.scheduleRepeat(() => evolve(), "1m");
-
-// UI State Management
-const uiState = {
-  isPlaying: false,
-  settingsOpen: false,
-  gridVisible: false
-};
-
-function updatePlayPauseButton() {
-  const btn = document.getElementById('playPauseBtn');
-  if (!btn) return;
-  
-  // Use simple text that won't render as emojis
-  if (uiState.isPlaying) {
-    btn.textContent = '||';
-    btn.title = 'Pause';
-  } else {
-    btn.textContent = '▶';
-    btn.title = 'Play';
-  }
-}
-
-function updateSettingsButton() {
-  const btn = document.getElementById('expandBtn');
-  if (!btn) return;
-  
-  if (uiState.settingsOpen) {
-    btn.textContent = 'X';
-    btn.title = 'Close Settings';
-  } else {
-    btn.textContent = '☰';
-    btn.title = 'Settings';
-  }
-}
-
-function updateGridButton() {
-  const btn = document.getElementById('gridToggleBtn');
-  if (!btn) return;
-  
-  btn.textContent = '⊞';
-  
-  if (uiState.gridVisible) {
-    btn.style.color = '#0f0';
-  } else {
-    btn.style.color = '#666';
-  }
-}
-
-
-// Controls
-const playPauseBtn = document.getElementById('playPauseBtn');
-if (playPauseBtn) {
-  playPauseBtn.addEventListener('click', async () => {
-    // iOS audio unlock - critical for iPhone/iPad
-    if (typeof unlockIOSAudio === 'function') {
-      await unlockIOSAudio();
-    }
-
-    // Ensure proper audio context initialization
-    try {
-      await Tone.start();
-
-      // Mac-specific: ensure context is truly running
-      if (Tone.context.state === 'suspended') {
-        await Tone.context.resume();
-      }
-    } catch (error) {
-      console.error('Error initializing audio:', error);
-    }
-
-    // Check if game is running and handle game pause
-    const gameScene = window.gameScene;
-    if (gameScene && gameScene.scene.isActive()) {
-      if (Tone.Transport.state === 'started') {
-        // Pause both music and game
-        gameScene.pauseGame();
-      } else {
-        // Resume both music and game
-        gameScene.resumeGame();
-      }
-    } else {
-      // No game running, just handle music
-      if (Tone.Transport.state !== 'started') {
-        // Play
-        currentBar = 0;
-        window.currentBar = 0;
-        currentChordIndex = 0;
-        lastSection = '';
-        updatePatterns();
-        Tone.Transport.start();
-        document.getElementById('status').textContent = 'PLAYING';
-        uiState.isPlaying = true;
-        updatePlayPauseButton();
-      } else {
-        // Pause
-        Tone.Transport.pause();
-        document.getElementById('status').textContent = 'PAUSED';
-        uiState.isPlaying = false;
-        updatePlayPauseButton();
-      }
-    }
-  });
-}
-
-document.getElementById('bpmSlider').addEventListener('input', (e) => {
-  const bpm = parseInt(e.target.value);
-  Tone.Transport.bpm.value = bpm;
-  document.getElementById('bpmDisplay').textContent = bpm;
-  // Mark as custom and save
-  markCustomPreset();
-  saveGameDataDebounced({ 
-    settings: { 
-      musicPreset: 'custom',
-      customMusic: { bpm: bpm }
-    }
-  });
-});
-
-document.getElementById('energySlider').addEventListener('input', (e) => {
-  energyLevel = parseInt(e.target.value);
-  document.getElementById('energyDisplay').textContent = energyLevel;
-  // Mark as custom and save
-  markCustomPreset();
-  saveGameDataDebounced({ 
-    settings: { 
-      musicPreset: 'custom',
-      customMusic: { energy: energyLevel }
-    }
-  });
-});
-
-document.getElementById('tensionSlider').addEventListener('input', (e) => {
-  tensionLevel = parseInt(e.target.value);
-  document.getElementById('tensionDisplay').textContent = tensionLevel;
-  // Apply tension immediately when slider moves
-  if (Tone.Transport.state === 'started') {
-    applyTension();
-  }
-  // Mark as custom and save
-  markCustomPreset();
-  saveGameDataDebounced({ 
-    settings: { 
-      musicPreset: 'custom',
-      customMusic: { tension: tensionLevel }
-    }
-  });
-});
-
-// Sound selector
-document.getElementById('soundSelector').addEventListener('change', (e) => {
-  gameSounds.currentLaserSound = parseInt(e.target.value);
-  document.getElementById('soundDisplay').textContent = e.target.options[e.target.selectedIndex].text;
-  // Save laser sound selection
-  saveGameDataDebounced({ settings: { laserSound: gameSounds.currentLaserSound } });
-});
-
-// Music preset definitions
-const MUSIC_PRESETS = {
-  'chill': { energy: 30, tension: 20, description: 'Laid back minimal' },
-  'driving': { energy: 60, tension: 40, description: 'Classic driving' },
-  'peak': { energy: 85, tension: 70, description: 'Peak time energy' },
-  'acid': { energy: 75, tension: 90, description: '303 madness' },
-  'dark': { energy: 40, tension: 80, description: 'Dark & brooding' },
-  'hypnotic': { energy: 50, tension: 60, description: 'Repetitive & hypnotic' },
-  'anthem': { energy: 90, tension: 60, description: 'Stadium anthem' }
-};
-
-// Difficulty preset definitions
-const DIFFICULTY_PRESETS = {
-  'zen': { speedMult: 0.5, fireMult: 2.0, spawnMult: 0.5, description: 'Relaxed' },
-  'normal': { speedMult: 1.0, fireMult: 1.0, spawnMult: 1.0, description: 'Standard' },
-  'intense': { speedMult: 1.5, fireMult: 0.8, spawnMult: 1.3, description: 'Challenging' },
-  'chaos': { speedMult: 2.0, fireMult: 0.5, spawnMult: 2.0, description: 'Maximum chaos' }
-};
-
-let currentDifficulty = DIFFICULTY_PRESETS.normal;
-
-// Difficulty will be applied after savedData is loaded
-
-// Music preset selector
-document.getElementById('musicPresetSelector')?.addEventListener('change', (e) => {
-  const presetKey = e.target.value;
-  if (presetKey && MUSIC_PRESETS[presetKey]) {
-    const preset = MUSIC_PRESETS[presetKey];
-    
-    // Apply preset values (no BPM - let genre control that)
-    energyLevel = preset.energy;
-    tensionLevel = preset.tension;
-    
-    // Update sliders (energy and tension only)
-    document.getElementById('energySlider').value = preset.energy;
-    document.getElementById('energyDisplay').textContent = preset.energy;
-    document.getElementById('tensionSlider').value = preset.tension;
-    document.getElementById('tensionDisplay').textContent = preset.tension;
-    
-    // Update description
-    document.getElementById('musicPresetDisplay').textContent = preset.description;
-    
-    // Apply tension if playing
-    if (Tone.Transport.state === 'started') {
-      applyTension();
-    }
-    
-    // Save preset selection
-    saveGameDataDebounced({ settings: { musicPreset: presetKey } });
-  } else {
-    document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
-    // Save custom preset marker
-    saveGameDataDebounced({ settings: { musicPreset: 'custom' } });
-  }
-});
-
-// Difficulty selector
-document.getElementById('difficultySelector')?.addEventListener('change', (e) => {
-  const diffKey = e.target.value;
-  if (DIFFICULTY_PRESETS[diffKey]) {
-    currentDifficulty = DIFFICULTY_PRESETS[diffKey];
-    document.getElementById('difficultyDisplay').textContent = currentDifficulty.description;
-    
-    // Save difficulty setting
-    saveGameDataDebounced({ settings: { difficulty: diffKey } });
-    
-    // Track difficulty change
-    trackEvent('settings_change', {
-      setting_type: 'difficulty',
-      difficulty_level: diffKey,
-      multiplier: currentDifficulty.multiplier
-    });
-  }
-});
-
-// Update sliders to set preset to custom
-const markCustomPreset = () => {
-  document.getElementById('musicPresetSelector').value = '';
-  document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
-};
-
-// Note: markCustomPreset is now called within each slider's event handler
-
-// Genre switching handlers
-document.getElementById('genreTechno').addEventListener('click', () => switchGenre('techno'));
-document.getElementById('genreDnb').addEventListener('click', () => switchGenre('dnb'));
-document.getElementById('genreTropical').addEventListener('click', () => switchGenre('tropical'));
-document.getElementById('genreDubstep').addEventListener('click', () => switchGenre('dubstep'));
-document.getElementById('genreTrance').addEventListener('click', () => switchGenre('trance'));
-
-function switchGenre(genre) {
-  const previousGenre = currentGenre;
-  currentGenre = genre;
-  const config = GENRE_CONFIGS[genre];
-  
-  // Track genre change (only if actually changed)
-  if (previousGenre && previousGenre !== genre) {
-    trackEvent('settings_change', {
-      setting_type: 'genre',
-      genre_from: previousGenre,
-      genre_to: genre,
-      bpm: config.bpmDefault
-    });
-  }
-  
-  // Update BPM slider range and value
-  const bpmSlider = document.getElementById('bpmSlider');
-  bpmSlider.min = config.bpmMin;
-  bpmSlider.max = config.bpmMax;
-  bpmSlider.value = config.bpmDefault;
-  
-  // Update BPM
-  Tone.Transport.bpm.value = config.bpmDefault;
-  document.getElementById('bpmDisplay').textContent = config.bpmDefault;
-  
-  // Switch stab synth based on genre
-  if (genre === 'dnb') {
-    raveSynth = dnbReese;
-  } else if (genre === 'tropical') {
-    raveSynth = tropicalPluck;
-  } else if (genre === 'dubstep') {
-    raveSynth = dnbReese; // Use Reese for dubstep wobbles
-  } else if (genre === 'trance') {
-    raveSynth = technoStab; // Use saw stabs for trance
-  } else {
-    raveSynth = technoStab;
-  }
-  
-  // Adjust kick tuning for genre (only if instruments are loaded)
-  if (typeof kick !== 'undefined') {
-    if (genre === 'tropical') {
-      // 808-style deeper kick for tropical
-      kick.oscillator.frequency.value = 50;
-      kick.octaves = 6;
-    } else if (genre === 'dnb') {
-      // Punchy, tight kick for D&B
-      kick.oscillator.frequency.value = 65;
-      kick.octaves = 3;
-    } else if (genre === 'dubstep') {
-      // Deep sub kick for dubstep
-      kick.oscillator.frequency.value = 45;
-      kick.octaves = 7;
-    } else if (genre === 'trance') {
-      // Punchy trance kick
-      kick.oscillator.frequency.value = 60;
-      kick.octaves = 4;
-    } else {
-      // Classic 909 kick for techno
-      kick.oscillator.frequency.value = 60;
-      kick.octaves = 4;
-    }
-  }
-  
-  // Update button styles
-  const genreButtonMap = {
-    'techno': 'genreTechno',
-    'dnb': 'genreDnb',
-    'tropical': 'genreTropical', 
-    'dubstep': 'genreDubstep',
-    'trance': 'genreTrance'
-  };
-  
-  Object.keys(genreButtonMap).forEach(g => {
-    const btn = document.getElementById(genreButtonMap[g]);
-    if (btn) {
-      btn.style.setProperty('background', genre === g ? '#0f0' : '#333', 'important');
-      btn.style.setProperty('color', genre === g ? '#000' : '#0f0', 'important');
-    }
-  });
-  
-  // Force pattern update on next bar
-  updatePatterns();
-}
-
-// Initial BPM and genre - will be overridden by saved settings if they exist
-Tone.Transport.bpm.value = 132;
-// Set initial genre button highlighting
-switchGenre('techno');
-
-// Apply saved music settings after page loads
-window.addEventListener('load', () => {
-  if (savedData.settings) {
-    // Apply saved music preset or custom values
-    if (savedData.settings.musicPreset === 'custom' && savedData.settings.customMusic) {
-      // Apply custom BPM/energy/tension
-      const custom = savedData.settings.customMusic;
-      if (custom.bpm) {
-        Tone.Transport.bpm.value = custom.bpm;
-        document.getElementById('bpmSlider').value = custom.bpm;
-        document.getElementById('bpmDisplay').textContent = custom.bpm;
-      }
-      if (custom.energy !== undefined) {
-        energyLevel = custom.energy;
-        document.getElementById('energySlider').value = custom.energy;
-        document.getElementById('energyDisplay').textContent = custom.energy;
-      }
-      if (custom.tension !== undefined) {
-        tensionLevel = custom.tension;
-        document.getElementById('tensionSlider').value = custom.tension;
-        document.getElementById('tensionDisplay').textContent = custom.tension;
-      }
-      // Set preset selector to custom
-      document.getElementById('musicPresetSelector').value = '';
-      document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
-    } else if (savedData.settings.musicPreset && MUSIC_PRESETS[savedData.settings.musicPreset]) {
-      // Apply preset
-      const preset = MUSIC_PRESETS[savedData.settings.musicPreset];
-      energyLevel = preset.energy;
-      tensionLevel = preset.tension;
-      document.getElementById('musicPresetSelector').value = savedData.settings.musicPreset;
-      document.getElementById('musicPresetDisplay').textContent = preset.description;
-      document.getElementById('energySlider').value = preset.energy;
-      document.getElementById('energyDisplay').textContent = preset.energy;
-      document.getElementById('tensionSlider').value = preset.tension;
-      document.getElementById('tensionDisplay').textContent = preset.tension;
-    }
-    
-    // Apply saved difficulty UI
-    if (savedData.settings.difficulty) {
-      document.getElementById('difficultySelector').value = savedData.settings.difficulty;
-      document.getElementById('difficultyDisplay').textContent = currentDifficulty.description;
-    }
-    
-    // Apply saved laser sound UI
-    if (savedData.settings.laserSound !== undefined) {
-      document.getElementById('soundSelector').value = savedData.settings.laserSound;
-      const soundNames = ['Triangle', 'Acid', 'Chord', 'Echo', 'Pluck', 'Pew Pew'];
-      document.getElementById('soundDisplay').textContent = soundNames[savedData.settings.laserSound];
-    }
-    
-    // Apply mute states to UI
-    Object.keys(muteStates).forEach(track => {
-      const square = document.getElementById(track + 'Square');
-      if (square) {
-        if (muteStates[track]) {
-          square.classList.remove('active');
-          square.classList.add('muted');
-        } else {
-          square.classList.add('active');
-          square.classList.remove('muted');
-        }
-      }
-    });
-  }
-});
-
-// Track square handlers for minimized controls
-['kick', 'snare', 'hat', 'acid', 'stab', 'sub'].forEach(track => {
-  const square = document.getElementById(track + 'Square');
-  if (square) {
-    // Initialize as active (not muted)
-    square.classList.add('active');
-    
-    square.addEventListener('click', () => {
-      muteStates[track] = !muteStates[track];
-      if (muteStates[track]) {
-        square.classList.remove('active');
-        square.classList.add('muted');
-      } else {
-        square.classList.add('active');
-        square.classList.remove('muted');
-      }
-      // Save track mute state
-      saveGameDataDebounced({ settings: { trackMutes: { [track]: muteStates[track] } } });
-    });
-  }
-});
-
-// Expand/minimize panel with smooth animation
-const expandBtn = document.getElementById('expandBtn');
-const expandedPanel = document.getElementById('expandedPanel');
-const musicControls = document.getElementById('musicControls');
-
-// Handle touch events for transparency
-function addTouchHandlers(element) {
-  if (!element) return;
-  
-  let touchTimeout;
-  
-  // Only add touch handlers on actual touch devices
-  if ('ontouchstart' in window) {
-    element.addEventListener('touchstart', () => {
-      element.classList.add('touched');
-      clearTimeout(touchTimeout);
-    });
-    
-    element.addEventListener('touchend', () => {
-      // Keep opaque for a bit after touch ends
-      touchTimeout = setTimeout(() => {
-        element.classList.remove('touched');
-      }, 3000); // Stay visible for 3 seconds after touch
-    });
-  }
-  
-  // For desktop, ensure touched class is removed on mouse leave
-  element.addEventListener('mouseleave', () => {
-    // Remove immediately on desktop
-    element.classList.remove('touched');
-  });
-}
-
-// Add touch handlers to both panels
-addTouchHandlers(musicControls);
-addTouchHandlers(expandedPanel);
-
-// Grid toggle button handler
-const gridToggleBtn = document.getElementById('gridToggleBtn');
-if (gridToggleBtn) {
-  // Don't set initial color here - wait for game to initialize
-  gridToggleBtn.addEventListener('click', () => {
-    // Trigger grid toggle in the game
-    if (window.GameAPI && window.GameAPI.toggleGrid) {
-      window.GameAPI.toggleGrid();
-    }
-  });
-}
-
-if (expandBtn) {
-  expandBtn.addEventListener('click', (e) => {
-    e.stopPropagation(); // Prevent document click from firing
-    const musicControls = document.getElementById('musicControls');
-    
-    if (expandedPanel.classList.contains('expanded')) {
-      // Panel is open, close it
-      expandedPanel.classList.remove('expanded');
-      musicControls.classList.remove('settings-open');
-      uiState.settingsOpen = false;
-      updateSettingsButton();
-      
-      // Make player vulnerable again
-      const mainScene = game?.scene?.getScene('Main');
-      if (mainScene && mainScene.player) {
-        mainScene.isInvincible = false;
-      }
-    } else {
-      // Panel is closed, open it
-      expandedPanel.classList.add('expanded');
-      musicControls.classList.add('settings-open');
-      uiState.settingsOpen = true;
-      updateSettingsButton();
-      
-      // Make player invincible and flash
-      const mainScene = game?.scene?.getScene('Main');
-      if (mainScene && mainScene.player) {
-        mainScene.isInvincible = true;
-        
-        // Flash effect
-        mainScene.player.setTint(0xffff00);
-        mainScene.time.delayedCall(100, () => {
-          mainScene.player.setTint(0xffffff);
-          mainScene.time.delayedCall(100, () => {
-            mainScene.player.setTint(0xffff00);
-            mainScene.time.delayedCall(100, () => {
-              mainScene.player.clearTint();
-            });
-          });
-        });
-      }
-    }
-  });
-}
-
-// Close menu when clicking outside
-document.addEventListener('click', (e) => {
-  if (!uiState.settingsOpen) return;
-  
-  const panel = document.getElementById('expandedPanel');
-  const btn = document.getElementById('expandBtn');
-  const musicControls = document.getElementById('musicControls');
-  
-  // Check if click is outside panel, button, and music controls
-  if (!panel.contains(e.target) && !btn.contains(e.target) && !musicControls.contains(e.target)) {
-    panel.classList.remove('expanded');
-    musicControls.classList.remove('settings-open');
-    uiState.settingsOpen = false;
-    updateSettingsButton();
-    
-    // Make player vulnerable again
-    const mainScene = game?.scene?.getScene('Main');
-    if (mainScene && mainScene.player) {
-      mainScene.isInvincible = false;
-    }
-  }
-});
-
-// Close menu when game control keys are pressed
-document.addEventListener('keydown', (e) => {
-  if (!uiState.settingsOpen) return;
-  
-  // Game control keys that should close the menu
-  const gameKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 
-                    'a', 'd', 'w', 's', ' ', 'Escape'];
-  
-  if (gameKeys.includes(e.key) || gameKeys.includes(e.key.toLowerCase())) {
-    const panel = document.getElementById('expandedPanel');
-    const musicControls = document.getElementById('musicControls');
-    panel.classList.remove('expanded');
-    musicControls.classList.remove('settings-open');
-    uiState.settingsOpen = false;
-    updateSettingsButton();
-    
-    // Make player vulnerable again
-    const mainScene = game?.scene?.getScene('Main');
-    if (mainScene && mainScene.player) {
-      mainScene.isInvincible = false;
-    }
-  }
-});
-
-
-// Game sounds that blend with the music - route through sidechain for cohesion
-const gameReverb = new Tone.Reverb({
-  decay: 0.5,
-  wet: 0.2
-}).connect(sidechain);
-
-// Game sound effects - musical and in-key
-// Create off-screen distortion effect chain
-const offScreenDistortion = new Tone.Distortion(0.8).connect(sidechain);
-const offScreenFilter = new Tone.AutoFilter({
-  frequency: "8n",
-  baseFrequency: 200,
-  octaves: 3,
-  depth: 0.8
-}).connect(offScreenDistortion);
-offScreenFilter.start();
-
-const gameSounds = {
-  // Movement - subtle filter sweep in key
-  move: new Tone.MonoSynth({
-    oscillator: { type: "sine" },
-    envelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01 },
-    filter: { frequency: 2000, rolloff: -12, Q: 5 },
-    filterEnvelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01, baseFrequency: 800, octaves: 1 },
-    volume: -18
-  }).connect(gameReverb),
-  
-  // Off-screen womp effect
-  offScreenWomp: new Tone.MonoSynth({
-    oscillator: { type: "sawtooth" },
-    envelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.5 },
-    filter: { frequency: 100, rolloff: -24, Q: 10 },
-    filterEnvelope: { 
-      attack: 0.01, 
-      decay: 0.3, 
-      sustain: 0.2, 
-      release: 0.5, 
-      baseFrequency: 100, 
-      octaves: 4 
-    },
-    volume: -8
-  }).connect(offScreenFilter),
-  
-  // Jump charge sound - rising pitch
-  jumpCharge: new Tone.MonoSynth({
-    oscillator: { type: "sawtooth" },
-    envelope: { attack: 0.5, decay: 0, sustain: 1, release: 0.1 },
-    filter: { frequency: 200, rolloff: -24, Q: 8 },
-    filterEnvelope: { attack: 0, decay: 0, sustain: 1, release: 0.1 },
-    volume: -12
-  }).connect(gameReverb),
-  
-  // Multiple laser sounds that complement the music
-  laserSounds: [
-    // 0: Original - Triangle wave with filter sweep
-    new Tone.MonoSynth({
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.01 },
-      filter: { frequency: 3000, rolloff: -12 },
-      filterEnvelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01, baseFrequency: 1500, octaves: -1 },
-      volume: -12
-    }).connect(sidechain),
-    
-    // 1: Acid stab - mimics the 303 acid line
-    new Tone.MonoSynth({
-      oscillator: { type: "sawtooth" },
-      envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.02 },
-      filter: { frequency: 2000, rolloff: -24, Q: 8 },
-      filterEnvelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.02, baseFrequency: 800, octaves: 2 },
-      volume: -10
-    }).connect(acidFilter1), // Route through acid filter for consistency
-    
-    // 2: Chord stab - harmonizes with the techno stabs
-    new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "square4" },
-      envelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01 },
-      volume: -14
-    }).connect(stabReverb), // Use the stab reverb for space
-    
-    // 3: Echo Pulse - metallic sound with delay
-    new Tone.MonoSynth({
-      oscillator: { type: "pulse", width: 0.2 },
-      envelope: { attack: 0.001, decay: 0.04, sustain: 0.2, release: 0.05 },
-      filter: { frequency: 4000, rolloff: -12, Q: 3 },
-      filterEnvelope: { attack: 0.001, decay: 0.02, sustain: 0.5, release: 0.02, baseFrequency: 2000, octaves: 2 },
-      volume: -8
-    }).connect(new Tone.FeedbackDelay("16n", 0.5).connect(gameReverb)), // Add echo effect
-    
-    // 4: Pluck - organic melodic sound
-    new Tone.PluckSynth({
-      attackNoise: 0.8,
-      dampening: 4000,
-      resonance: 0.9,
-      volume: -10
-    }).connect(gameReverb),
-    
-    // 5: Pew Pew - classic laser with pitch sweep
-    new Tone.MonoSynth({
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.05 },
-      portamento: 0.08, // Glide between pitches
-      volume: -6
-    }).connect(sidechain)
-  ],
-  
-  currentLaserSound: savedData.settings?.laserSound || 0, // Load saved laser sound preference
-  
-  // Explosion - filtered noise burst that sounds like a snare hit
-  explosion: new Tone.NoiseSynth({
-    noise: { type: "pink" },
-    envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.02 },
-    volume: -8
-  }).connect(new Tone.Filter(1200, "highpass").connect(sidechain)),
-  
-  // Enemy destroy - distorted version of the enemy spawn sound
-  enemyDestroy: new Tone.MonoSynth({
-    oscillator: { type: "sawtooth" },
-    envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 },
-    filter: { frequency: 800, rolloff: -24, Q: 8 },
-    filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1, baseFrequency: 200, octaves: 2 },
-    volume: -10
-  }).connect(new Tone.Distortion(0.8).connect(sidechain)),
-  
-  // Obstacle hit - low thud with pitch bend
-  obstacleHit: new Tone.MonoSynth({
-    oscillator: { type: "sine" },
-    envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.05 },
-    portamento: 0.01,
-    volume: -8
-  }).connect(new Tone.Filter(400, "lowpass").connect(sidechain)),
-  
-  // Power-up - use same synth style as acid for consistency
-  powerUp: new Tone.MonoSynth({
-    oscillator: { type: "sawtooth" },
-    envelope: { attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.2 },
-    filter: { frequency: 2000, rolloff: -12, Q: 3 },
-    filterEnvelope: { attack: 0.001, decay: 0.2, sustain: 0.3, release: 0.2, baseFrequency: 400, octaves: 3 },
-    volume: -10
-  }).connect(acidFilter1) // Route through acid filter for consistency
-};
-
-// Helper to get notes in current scale
-function getGameNote(index) {
-  const scales = {
-    minor: ["C", "D", "Eb", "F", "G", "Ab", "Bb"],
-    dorian: ["C", "D", "Eb", "F", "G", "A", "Bb"],
-    phrygian: ["C", "Db", "Eb", "F", "G", "Ab", "Bb"]
-  };
-  const scale = scales.minor; // Default to minor
-  return scale[index % scale.length];
-}
-
-// Check if mobile device
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
-                 ('ontouchstart' in window) || 
-                 (navigator.maxTouchPoints > 0);
-
-// Initialize grid setting from saved data
-let gridEnabled = savedData.settings?.gridEnabled !== undefined ? savedData.settings.gridEnabled : true;
-
-// Apply mobile class to body for CSS styling
-if (isMobile) {
-  document.body.classList.add('mobile');
-  
-  // Initialize touch sensitivity selector (deferred until DOM is ready)
-  window.addEventListener('DOMContentLoaded', () => {
-    const touchSensitivityRow = document.getElementById('touchSensitivityRow');
-    if (touchSensitivityRow) {
-      touchSensitivityRow.style.display = 'flex';
-      
-      // Map slider positions to actual pixel values
-      const deadzoneValues = [17, 25, 30, 35, 40, 48];
-      const deadzoneLabels = ['Tight', 'Snappy', 'Normal', 'Relaxed', 'Loose', 'Lazy'];
-      
-      // Load saved sensitivity and convert to slider index
-      const savedPixels = savedData.settings?.touchSensitivity || 30;
-      let savedIndex = deadzoneValues.indexOf(savedPixels);
-      if (savedIndex === -1) savedIndex = 2; // Default to Normal (30px)
-      
-      const touchSlider = document.getElementById('touchSensitivitySlider');
-      const touchDisplay = document.getElementById('touchSensitivityDisplay');
-      
-      if (touchSlider && touchDisplay) {
-        touchSlider.value = savedIndex;
-        
-        // Set up display with fixed width to prevent jitter
-        touchDisplay.style.width = '60px';
-        touchDisplay.style.textAlign = 'center';
-        touchDisplay.style.display = 'inline-block';
-        
-        // Show text label based on slider index
-        const updateSensitivityDisplay = (index) => {
-          touchDisplay.textContent = deadzoneLabels[index] || 'Normal';
-        };
-        
-        updateSensitivityDisplay(savedIndex);
-        
-        // Handle both input (while sliding) and change (on release) events
-        const updateTouchSensitivity = (e) => {
-          const index = parseInt(e.target.value);
-          const newDeadzone = deadzoneValues[index];
-          
-          // Update the game's deadzone if a game scene is active
-          if (window.currentGameScene) {
-            window.currentGameScene.zoneDeadRadius = newDeadzone;
-          }
-          // Update display with text label
-          updateSensitivityDisplay(index);
-        };
-        
-        touchSlider.addEventListener('input', updateTouchSensitivity);
-        touchSlider.addEventListener('change', (e) => {
-          updateTouchSensitivity(e);
-          // Save actual pixel value
-          const pixels = deadzoneValues[parseInt(e.target.value)];
-          saveGameDataDebounced({ settings: { touchSensitivity: pixels } });
-        });
-      }
-    }
-  });
-}
-
-// Initialize game dimensions - use visualViewport for accurate mobile sizing
-let WIDTH = window.visualViewport ? window.visualViewport.width : window.innerWidth;
-let HEIGHT = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-const LANES = 5;
-let LANE_W = WIDTH/LANES;
-
-// Storage management section has been moved to the beginning of the script
-
-// Settings are now applied where each variable is defined
-// Game dimensions initialized based on viewport - adjust for mobile
-let PLAYER_Y = HEIGHT - (isMobile ? 90 : 60); // More space from bottom on mobile
-const ENEMY_SPEED_BASE = isMobile ? 150 : 200; // Slower on mobile for easier play
-const BULLET_SPEED = 520;
-const FIRE_COOLDOWN = 110;
-const HORIZONTAL_SHOOTING = true; // Enable horizontal shooting across lanes
-
-// Arc shot tuning parameters
-const ARC_SHOT_BASE_SAFE_DISTANCE = 0.4; // Base 40% of path immune to obstacles
-const ARC_SHOT_HEIGHT_BONUS = 0.3; // Additional 30% max based on jump height
-const ARC_SHOT_MAX_JUMP_HEIGHT = 360; // Reference for calculating height percentage
-// Smart scaling based on device and orientation
-let isLandscape = window.innerWidth > window.innerHeight;
-let MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1; // Smaller scale in landscape
-
-// PLAYER ANIMATION & CONTROL CONFIG
-// Critical: These timings affect gameplay - isMoving blocks shooting/collision during animations
-const PLAYER_CONFIG = {
-  // Ground movement animations (jello stretch effect)
-  movement: {
-    ground: {
-      // Phase 1: Anticipation stretch
-      stretch: {
-        scaleX: 1.8,      // Horizontal stretch factor
-        scaleY: 0.5,      // Vertical compression
-        duration: 60      // ms - CRITICAL: affects responsiveness
-      },
-      // Phase 2: Slingshot to position
-      slingshot: {
-        overshoot: 15,    // Pixels past target
-        scaleX: 0.6,      // Squash on arrival
-        scaleY: 1.5,      // Stretch vertically
-        duration: 80      // ms - CRITICAL: main movement time
-      },
-      // Phase 3: Bounce back
-      bounce: {
-        offset: 8,        // Pixels to bounce back
-        scaleX: 1.2,
-        scaleY: 0.85,
-        duration: 80      // ms
-      },
-      // Phase 4: Settle with wobble
-      settle: {
-        duration: 200,    // ms - CRITICAL: total time before can move again
-        elasticity: [0.4, 0.3]  // Elastic.easeOut params for wobbles
-      },
-      // Wobble physics
-      wobble: {
-        damping: 0.92,    // How quickly wobble settles
-        reactiveForce: 12 // Force applied opposite to movement
-      }
-    },
-    // Air movement (during jump)
-    air: {
-      duration: 200,      // ms - faster than ground movement
-      barrelRoll: {
-        angle: 360,       // Degrees of rotation
-        duration: 300     // ms - overlaps with movement
-      },
-      scalePulse: {
-        x: 1.5,
-        y: 0.7,
-        duration: 100     // ms
-      }
-    }
-  },
-  
-  // Jump animations
-  jump: {
-    regular: {
-      height: 120,        // Pixels above PLAYER_Y
-      duration: 250,      // ms - up phase (total is 2x with yoyo)
-      scaleX: 1.2,
-      scaleY: 1.2,
-      spinAngle: 360,     // Forward flip
-      spinDuration: 500   // ms - matches total jump time
-    },
-    // Super jump (charge mechanic)
-    super: {
-      chargeTime: 1000,   // ms - max charge duration
-      minHeight: 120,     // Minimum jump height (no charge)
-      maxHeight: 360,     // Maximum jump height (full charge)
-      // Charge animation
-      crouch: {
-        scaleX: 1.4,
-        scaleY: 0.6,
-        duration: 100     // ms to enter crouch
-      },
-      // Launch preparation
-      prelaunch: {
-        scaleX: 1.6,
-        scaleY: 0.3,
-        duration: 150     // ms before launch
-      },
-      // Variable based on charge
-      jumpDurationBase: 300,     // ms - base duration
-      jumpDurationPerCharge: 200, // ms - added per charge percent
-      // Landing sequence
-      landing: {
-        squashX: 2,
-        squashY: 0.3,
-        bounceHeight: 20,
-        bounceDuration: 100,
-        settleDuration: 400,
-        elasticParams: [0.2, 0.15]
-      }
-    }
-  },
-  
-  // Dash mechanics
-  dash: {
-    doubleTapWindow: 250,  // ms - window for double-tap detection
-    duration: 60,           // ms - same as stretch phase for consistency
-    trailCount: 2,          // Number of trail images
-    trailAlpha: [0.5, 0.3], // Alpha for each trail
-    trailFadeDuration: 200  // ms
-  },
-  
-  // Collision detection
-  collision: {
-    yThreshold: 40          // Pixels - how close obstacles need to be to player Y to trigger collision
-  },
-  
-  // Off-screen mechanics
-  offScreen: {
-    gracePeriod: 800,       // ms before rubber band kicks in
-    warningThreshold: 300,  // ms - when to show red warning
-    alpha: 0.7,             // Transparency when off-screen
-    snapBack: {
-      duration: 300,        // ms for rubber band animation
-      stretchX: 1.5,
-      stretchY: 0.7,
-      spinAngle: 360,
-      settleDuration: 200
-    }
-  },
-  
-  // Idle animations (jello physics)
-  idle: {
-    wobble: {
-      breathSpeed: 0.003,   // Phase increment per ms
-      breathScale: 0.03,    // Max scale change
-      squishScale: 0.02,    // Secondary frequency scale
-      randomImpulse: {
-        chance: 0.02,       // Per frame chance
-        force: 2            // Random force strength
-      }
-    }
-  },
-  
-  // Reaction animations (collecting power-ups, etc)
-  reactions: {
-    powerUp: {
-      wobbleX: 20,          // Random X force range
-      wobbleY: -15,         // Upward force
-      bounceCount: 2,
-      bounceScaleX: 1.4,
-      bounceScaleY: 0.7,
-      bounceDuration: 100,
-      settleDuration: 200
-    },
-    recoil: {               // When firing
-      wobbleY: 3,
-      scaleX: 0.9,
-      scaleY: 1.1,
-      duration: 50
-    }
-  }
-};
-
-// Startup screen scene
-class StartupScene extends Phaser.Scene {
-  constructor() {
-    super({ key: 'StartupScene' });
-  }
-  
-  create() {
-    // Use global WIDTH and HEIGHT which are updated on resize
-    // Ensure they're current
-    WIDTH = this.cameras.main.width;
-    HEIGHT = this.cameras.main.height;
-    
-    // Register resize handler with proper binding
-    this.scale.on('resize', this.resize, this);
-    
-    
-    // Black background
-    this.cameras.main.setBackgroundColor('#000');
-    
-    // Create grid effect in background
-    this.gridGraphics = this.add.graphics();
-    this.drawGrid();
-    
-    // Animated scan line effect
-    this.scanline = this.add.rectangle(0, 0, WIDTH, 3, 0x00ff00, 0.5);
-    this.scanlineTween = this.tweens.add({
-      targets: this.scanline,
-      y: HEIGHT,
-      duration: 3000,
-      repeat: -1,
-      ease: 'Linear'
-    });
-    
-    // Title with glow effect
-    const titleStyle = {
-      font: 'bold 72px monospace',
-      fill: '#00ffcc',
-      stroke: '#00ffcc',
-      strokeThickness: 2,
-      shadow: {
-        offsetX: 0,
-        offsetY: 0,
-        color: '#00ffcc',
-        blur: 20,
-        fill: true
-      }
-    };
-    
-    this.title = this.add.text(WIDTH/2, HEIGHT/3, 'BEATRIDER', titleStyle);
-    this.title.setOrigin(0.5);
-    
-    // Pulsing glow animation for title
-    this.tweens.add({
-      targets: this.title,
-      scaleX: 1.05,
-      scaleY: 1.05,
-      duration: 1000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
-    
-    // Subtitle with typewriter effect
-    const subtitleText = 'ENDLESS BEAT SURVIVOR';
-    this.subtitle = this.add.text(WIDTH/2, HEIGHT/3 + 80, '', {
-      font: '24px monospace',
-      fill: '#ff00ff',
-      stroke: '#ff00ff',
-      strokeThickness: 1
-    });
-    this.subtitle.setOrigin(0.5);
-    
-    // Typewriter effect
-    let charIndex = 0;
-    this.time.addEvent({
-      delay: 100,
-      callback: () => {
-        if(charIndex < subtitleText.length) {
-          this.subtitle.text += subtitleText[charIndex];
-          charIndex++;
-        }
-      },
-      repeat: subtitleText.length - 1
-    });
-    
-    // Instructions - different for mobile vs desktop
-    const instructions = isMobile ? [
-      'DRAG LEFT/RIGHT - MOVE',
-      'DRAG UP - JUMP', 
-      'DRAG DOWN THEN RELEASE - SUPER JUMP',
-      'HOLD SCREEN - AUTO FIRE'
-    ] : [
-      'ARROWS/A/D - MOVE',
-      'W/UP - JUMP',
-      'SPACE - FIRE',
-      'G - TOGGLE GRID'
-    ];
-    
-    this.instructions = [];
-    instructions.forEach((text, index) => {
-      const instruction = this.add.text(WIDTH/2, HEIGHT/2 + 40 + index * 30, text, {
-        font: '18px monospace',
-        fill: '#00ff00'
-      });
-      instruction.setOrigin(0.5);
-      instruction.setAlpha(0);
-      this.instructions.push(instruction);
-      
-      // Fade in with delay
-      this.tweens.add({
-        targets: instruction,
-        alpha: 1,
-        delay: 1500 + index * 200,
-        duration: 500
-      });
-    });
-    
-    // Check if tutorial has been completed
-    const tutorialCompleted = localStorage.getItem('beatrider_tutorial_completed') === 'true';
-    
-    // Press start message - different for mobile
-    const startMessage = isMobile ? 'TAP TO START' : 'PRESS SPACE TO START';
-    const startY = (WIDTH > HEIGHT) ? HEIGHT - 100 : HEIGHT - 150; // Move up more for tutorial button
-    this.startText = this.add.text(WIDTH/2, startY, startMessage, {
-      font: 'bold 28px monospace',
-      fill: '#ffff00',
-      stroke: '#ffff00',
-      strokeThickness: 1
-    });
-    this.startText.setOrigin(0.5);
-    
-    // Blinking effect
-    this.tweens.add({
-      targets: this.startText,
-      alpha: 0,
-      duration: 500,
-      yoyo: true,
-      repeat: -1
-    });
-    
-    // Tutorial button - place it above the start text, not below
-    const tutorialY = startY - 50;  // Above the start text
-    const tutorialMessage = tutorialCompleted ? '[REPLAY TUTORIAL]' : '[TUTORIAL MODE]';
-    this.tutorialText = this.add.text(WIDTH/2, tutorialY, tutorialMessage, {
-      font: '18px monospace',  // Slightly smaller
-      fill: '#00ff00',
-      stroke: '#00ff00',
-      strokeThickness: 1
-    });
-    this.tutorialText.setOrigin(0.5);
-    // Make the tutorial text interactive with a larger hit area
-    this.tutorialText.setInteractive({ useHandCursor: true });
-    this.tutorialText.setDepth(1000); // Ensure it's on top
-    
-    // Hover effect for tutorial button
-    this.tutorialText.on('pointerover', () => {
-      this.tutorialText.setScale(1.1);
-      this.tutorialText.setFill('#ffffff');
-    });
-    
-    this.tutorialText.on('pointerout', () => {
-      this.tutorialText.setScale(1.0);
-      this.tutorialText.setFill('#00ff00');
-    });
-    
-    // Subtle pulsing for tutorial button if not completed
-    if (!tutorialCompleted) {
-      this.tweens.add({
-        targets: this.tutorialText,
-        alpha: 0.6,
-        duration: 800,
-        yoyo: true,
-        repeat: -1
-      });
-    }
-    
-    // Retro computer boot sequence text
-    const bootLines = [
-      'INITIALIZING BEAT DETECTION SYSTEM...',
-      'LOADING MELODIC ALGORITHMS...',
-      'CALIBRATING PERSPECTIVE MATRIX...',
-      'SYNTHESIZERS ONLINE',
-      'SYSTEM READY'
-    ];
-    
-    this.bootTexts = [];
-    const bootY = 60;
-    bootLines.forEach((line, index) => {
-      this.time.delayedCall(index * 300, () => {
-        const bootText = this.add.text(40, bootY + index * 20, '> ' + line, {
-          font: '14px monospace',
-          fill: '#0f0'
-        });
-        
-        // Type-in effect for boot text
-        bootText.setAlpha(0);
-        this.bootTexts.push(bootText);
-        this.tweens.add({
-          targets: bootText,
-          alpha: 1,
-          duration: 200
-        });
-        
-        // Add a blinking cursor after the last line
-        if(index === bootLines.length - 1) {
-          const cursor = this.add.text(bootText.x + bootText.width + 5, bootText.y, '_', {
-            font: '14px monospace',
-            fill: '#0f0'
-          });
-          this.tweens.add({
-            targets: cursor,
-            alpha: 0,
-            duration: 400,
-            yoyo: true,
-            repeat: -1
-          });
-        }
-      });
-    });
-    
-    // About link - upper right corner
-    const aboutText = this.add.text(WIDTH - 30, 30, 'ABOUT', {
-      font: '14px monospace',
-      fill: '#00ff00'
-    });
-    aboutText.setOrigin(1, 0);
-    aboutText.setInteractive({ useHandCursor: true });
-    aboutText.setAlpha(0.6);
-    
-    // Hover effect
-    aboutText.on('pointerover', () => {
-      aboutText.setAlpha(1);
-    });
-    
-    aboutText.on('pointerout', () => {
-      aboutText.setAlpha(0.6);
-    });
-    
-    // Click to go to website
-    aboutText.on('pointerdown', () => {
-      window.open('../', '_blank');
-    });
-    
-    // Floating particles in background
-    this.particles = [];
-    for(let i = 0; i < 30; i++) {
-      const particle = this.add.circle(
-        Math.random() * WIDTH,
-        Math.random() * HEIGHT,
-        Math.random() * 2 + 1,
-        0x00ff00,
-        Math.random() * 0.3 + 0.1
-      );
-      
-      this.particles.push(particle);
-      
-      this.tweens.add({
-        targets: particle,
-        y: particle.y - HEIGHT - 100,
-        duration: Math.random() * 10000 + 10000,
-        repeat: -1,
-        delay: Math.random() * 5000
-      });
-    }
-    
-    // Start handler function
-    const startGame = async (tutorialMode = false) => {
-      // iOS audio unlock - critical for iPhone/iPad
-      if (typeof unlockIOSAudio === 'function') {
-        await unlockIOSAudio();
-      }
-
-      // Start Tone.js from user gesture with Mac-specific handling
-      if (typeof Tone !== 'undefined') {
-        try {
-          // Force audio context creation if needed
-          if (!Tone.context) {
-            console.log('Creating new audio context...');
-            Tone.context = new AudioContext();
-          }
-
-          // Ensure context is properly initialized
-          await Tone.start();
-
-          // Double-check context is running (Mac-specific issue)
-          if (Tone.context.state === 'suspended') {
-            console.log('Audio context suspended, resuming...');
-            await Tone.context.resume();
-          }
-
-          // Extra check for Canvas mode
-          const isCanvasMode = game.renderer.type === Phaser.CANVAS;
-          if (isCanvasMode) {
-            console.log('Canvas mode detected, ensuring audio is active...');
-            // Try multiple times to ensure audio starts
-            for (let i = 0; i < 3; i++) {
-              if (Tone.context.state !== 'running') {
-                await new Promise(resolve => setTimeout(resolve, 50));
-                await Tone.context.resume();
-              } else {
-                break;
-              }
-            }
-          }
-
-          // Small delay to ensure audio system is ready on Mac
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-        } catch (error) {
-          console.error('Error starting audio:', error);
-          // Try to recover
-          try {
-            await Tone.context.resume();
-          } catch (resumeError) {
-            console.error('Could not resume audio context:', resumeError);
-          }
-        }
-      }
-
-      // Transition to game with optional tutorial mode
-      this.cameras.main.fadeOut(500, 0, 0, 0);
-      this.time.delayedCall(500, () => {
-        this.scene.start('Main', { tutorialMode: tutorialMode });
-      });
-    };
-    
-    // Start normal game handler (always start regular game, tutorial is optional)
-    const startNormalGame = async () => {
-      // Always start regular game - tutorial is optional via clicking the tutorial text
-      await startGame(false);
-    };
-    
-    // Tutorial button handler - always starts tutorial
-    this.tutorialText.on('pointerdown', async (pointer) => {
-      pointer.event.stopPropagation(); // Stop this click from triggering other handlers
-      await startGame(true);
-    });
-    
-    // Listen for space key to start normal game (or tutorial if first time)
-    this.input.keyboard.once('keydown-SPACE', startNormalGame);
-    
-    // Touch/click handler that checks if tutorial was clicked
-    const handleStartClick = async (pointer) => {
-      // Check if click was on tutorial text
-      const bounds = this.tutorialText.getBounds();
-      if (bounds.contains(pointer.x, pointer.y)) {
-        return; // Tutorial text will handle this
-      }
-      await startNormalGame();
-    };
-    
-    // Touch/click to start - using pointerdown for better mobile support
-    this.input.on('pointerdown', handleStartClick);
-  }
-  
-  drawGrid() {
-    this.gridGraphics.clear();
-    this.gridGraphics.lineStyle(1, 0x00ff00, 0.1);
-    
-    // Vertical lines
-    for(let x = 0; x < WIDTH; x += 40) {
-      this.gridGraphics.lineBetween(x, 0, x, HEIGHT);
-    }
-    // Horizontal lines  
-    for(let y = 0; y < HEIGHT; y += 40) {
-      this.gridGraphics.lineBetween(0, y, WIDTH, y);
-    }
-  }
-  
-  resize(gameSize, baseSize, displaySize, resolution) {
-    // Check if cameras exist before accessing
-    if (!this.cameras || !this.cameras.main) {
-      return;
-    }
-    
-    // Update global dimensions using the actual camera dimensions
-    WIDTH = this.cameras.main.width;
-    HEIGHT = this.cameras.main.height;
-    
-    // Only update if we're the active scene
-    if (this.scene.isActive()) {
-      // Redraw grid with new dimensions
-      if (this.gridGraphics) {
-        this.drawGrid();
-      }
-      
-      // Update scanline
-      if (this.scanline) {
-        this.scanline.width = WIDTH;
-        // Reset scanline tween
-        if (this.scanlineTween) {
-          this.scanlineTween.remove();
-        }
-        this.scanlineTween = this.tweens.add({
-          targets: this.scanline,
-          y: HEIGHT,
-          duration: 3000,
-          repeat: -1,
-          ease: 'Linear'
-        });
-      }
-      
-      // Update title position
-      if (this.title) {
-        this.title.x = WIDTH / 2;
-        this.title.y = HEIGHT / 3;
-      }
-      
-      // Update subtitle position
-      if (this.subtitle) {
-        this.subtitle.x = WIDTH / 2;
-        this.subtitle.y = HEIGHT / 3 + 80;
-      }
-      
-      // Update instructions positions
-      if (this.instructions) {
-        this.instructions.forEach((instruction, index) => {
-          instruction.x = WIDTH / 2;
-          instruction.y = HEIGHT / 2 + 40 + index * 30;
-        });
-      }
-      
-      // Update start text position
-      if (this.startText) {
-        this.startText.x = WIDTH / 2;
-        const startY = (WIDTH > HEIGHT) ? HEIGHT - 50 : HEIGHT - 100; // Closer to bottom in landscape
-        this.startText.y = startY;
-      }
-      
-      // Update invisible button size
-      if (this.invisibleButton) {
-        this.invisibleButton.x = WIDTH / 2;
-        this.invisibleButton.y = HEIGHT / 2;
-        this.invisibleButton.width = WIDTH;
-        this.invisibleButton.height = HEIGHT;
-      }
-      
-      // Reposition particles
-      if (this.particles) {
-        this.particles.forEach(particle => {
-          // Stop current tween and restart with new dimensions
-          this.tweens.killTweensOf(particle);
-          particle.x = Math.random() * WIDTH;
-          particle.y = Math.random() * HEIGHT;
-          
-          this.tweens.add({
-            targets: particle,
-            y: particle.y - HEIGHT - 100,
-            duration: Math.random() * 10000 + 10000,
-            repeat: -1,
-            delay: Math.random() * 5000
-          });
-        });
-      }
-    }
-  }
-}
-
-// Pulse pattern definitions for grid movement
-// Logic: In non-chaos modes, grid pulses follow predictable patterns that players can learn.
-// Each musical section (INTRO, BUILD, MAIN, etc.) has a pattern intensity that matches its energy.
-// Patterns are applied to the existing sub bass hits (2 per bar) rather than creating new timing.
-// This creates a "dancing" grid that feels musical rather than random, while chaos mode stays unpredictable.
-// Patterns cycle every 8 bars within a section for variety without being overwhelming.
-// -1 = skip pulse, 0 = forward, 1 = left, 2 = right
-const pulsePatternPool = {
-  gentle: [
-    [1, 2],           // left, right
-    [2, 1],           // right, left  
-    [-1, 1],          // skip, left
-    [2, -1],          // right, skip
-    [1, -1],          // left, skip
-    [-1, 2]           // skip, right
-  ],
-  building: [
-    [0, 1],           // forward, left
-    [0, 2],           // forward, right
-    [1, 0],           // left, forward
-    [2, 0],           // right, forward
-    [0, -1],          // forward, skip
-    [1, 2]            // left, right
-  ],
-  intense: [
-    [0, 1, 2, 1],     // forward, left, right, left
-    [0, 2, 1, 2],     // forward, right, left, right
-    [1, 0, 2, 0],     // left, forward, right, forward
-    [2, 0, 1, 0],     // right, forward, left, forward
-    [1, 2, 0, 1],     // left, right, forward, left
-    [2, 1, 0, 2]      // right, left, forward, right
-  ]
-};
-
-// Map sections to pattern types
-const sectionPatternMap = {
-  'INTRO': 'gentle',
-  'BUILD': 'building', 
-  'MAIN': 'intense',
-  'BREAK': 'gentle',
-  'DROP': 'intense',
-  'OUTRO': 'gentle'
-};
-
-class Main extends Phaser.Scene {
+import Phaser from 'phaser';
+import * as Tone from 'tone';
+import { gameState, isMobile, LANES, ENEMY_SPEED_BASE, BULLET_SPEED, FIRE_COOLDOWN, HORIZONTAL_SHOOTING, ARC_SHOT_BASE_SAFE_DISTANCE, ARC_SHOT_HEIGHT_BONUS, ARC_SHOT_MAX_JUMP_HEIGHT, PLAYER_CONFIG, pulsePatternPool, sectionPatternMap, updateDimensions } from '../config.js';
+import { savedData, saveGameData, sessionHighScore, setSessionHighScore } from '../storage.js';
+import { currentBar, setCurrentBar, currentChordIndex, setCurrentChordIndex, lastSection, setLastSection, currentGenre, updatePatterns, getSection } from '../audio/music-engine.js';
+import { currentDifficulty, DIFFICULTY_PRESETS, uiState, updateGridButton, updatePlayPauseButton } from '../audio/music-ui.js';
+import { gameSounds, getGameNote } from '../audio/game-sounds.js';
+
+export default class Main extends Phaser.Scene {
   constructor() {
     super({ key: 'Main' });
     
@@ -3342,8 +46,8 @@ class Main extends Phaser.Scene {
       for(let i = 0; i < starCounts[layer]; i++) {
         this.stars[layer].push({
           // Stars spread across the whole screen area
-          baseX: Math.random() * WIDTH * 2 - WIDTH/2, // Can be off-screen horizontally
-          baseY: Math.random() * HEIGHT * 2 - HEIGHT, // Can go above and below screen
+          baseX: Math.random() * gameState.WIDTH * 2 - gameState.WIDTH/2, // Can be off-screen horizontally
+          baseY: Math.random() * gameState.HEIGHT * 2 - gameState.HEIGHT, // Can go above and below screen
           progress: Math.random(), // Random starting position along path
           speed: (layer + 1) * 0.3, // Different speeds for parallax
           size: starSizes[layer],
@@ -3357,8 +61,8 @@ class Main extends Phaser.Scene {
   updateStarfield(dt) {
     if (!this.starGraphics) return; // Safety check
     this.starGraphics.clear();
-    const vanishY = HEIGHT * 0.15;
-    const vanishX = WIDTH / 2;
+    const vanishY = gameState.HEIGHT * 0.15;
+    const vanishX = gameState.WIDTH / 2;
     
     // Update and draw each star layer
     for(let layer = 0; layer < 3; layer++) {
@@ -3369,8 +73,8 @@ class Main extends Phaser.Scene {
         // Wrap around when star passes the player
         if(star.progress > 1.2) {
           star.progress = 0;
-          star.baseX = Math.random() * WIDTH * 2 - WIDTH/2; // New random X spread
-          star.baseY = Math.random() * HEIGHT * 2 - HEIGHT; // New random Y spread
+          star.baseX = Math.random() * gameState.WIDTH * 2 - gameState.WIDTH/2; // New random X spread
+          star.baseY = Math.random() * gameState.HEIGHT * 2 - gameState.HEIGHT; // New random Y spread
         }
         
         // Calculate positions - stars follow same exponential curve as grid
@@ -3379,7 +83,7 @@ class Main extends Phaser.Scene {
         const x = vanishX + (star.baseX - vanishX) * curvedProgress;
         
         // Skip stars that are off-screen
-        if(x < -50 || x > WIDTH + 50) continue;
+        if(x < -50 || x > gameState.WIDTH + 50) continue;
         
         // Scale based on distance (smaller when far)
         const size = star.size * (0.1 + star.progress * 1.5);
@@ -3412,8 +116,8 @@ class Main extends Phaser.Scene {
     this.tutorialWaveStarted = false;
     
     // Initialize vanishing point
-    this.vanishX = WIDTH / 2;
-    this.vanishY = HEIGHT * 0.15;
+    this.vanishX = gameState.WIDTH / 2;
+    this.vanishY = gameState.HEIGHT * 0.15;
     
     // Track session start time and metrics
     this.sessionStartTime = Date.now();
@@ -3432,10 +136,10 @@ class Main extends Phaser.Scene {
     };
     
     // Track game start
-    trackEvent('game_start', {
+    window.trackEvent('game_start', {
       difficulty: currentDifficulty?.name || 'normal',
       genre: currentGenre || 'techno',
-      grid_enabled: gridEnabled,
+      grid_enabled: gameState.gridEnabled,
       high_score: sessionHighScore,
       tutorial_mode: this.isTutorial
     });
@@ -3504,7 +208,7 @@ class Main extends Phaser.Scene {
       Tone.Transport.bpm.value = 90; // 75% of normal 120 BPM
       
       // Create tutorial text overlay
-      this.tutorialText = this.add.text(WIDTH/2, 100, '', {
+      this.tutorialText = this.add.text(gameState.WIDTH/2, 100, '', {
         font: 'bold 24px monospace',
         fill: '#ffff00',
         stroke: '#000000',
@@ -3513,7 +217,7 @@ class Main extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(1000);
       
       // Tutorial progress text
-      this.tutorialProgressText = this.add.text(WIDTH/2, 140, '', {
+      this.tutorialProgressText = this.add.text(gameState.WIDTH/2, 140, '', {
         font: '18px monospace',
         fill: '#00ff00',
         stroke: '#000000',
@@ -3522,7 +226,7 @@ class Main extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(1000);
       
       // Skip tutorial button in upper right
-      this.skipTutorialButton = this.add.text(WIDTH - 20, 20, '[SKIP >>]', {
+      this.skipTutorialButton = this.add.text(gameState.WIDTH - 20, 20, '[SKIP >>]', {
         font: '20px monospace',
         fill: '#ffffff',
         stroke: '#000000',
@@ -3561,10 +265,10 @@ class Main extends Phaser.Scene {
           }
 
           // Reset music state
-          currentBar = 0;
+          setCurrentBar(0);
           window.currentBar = 0;
-          currentChordIndex = 0;
-          lastSection = '';
+          setCurrentChordIndex(0);
+          setLastSection('');
           updatePatterns();
 
           // Add a small delay before starting transport for Mac
@@ -3596,7 +300,7 @@ class Main extends Phaser.Scene {
     
     // Calculate sizes based on screen dimensions
     // Use smaller dimension as reference for consistent scaling
-    const screenReference = Math.min(WIDTH, HEIGHT);
+    const screenReference = Math.min(gameState.WIDTH, gameState.HEIGHT);
     const screenScale = screenReference / 800; // 800px as reference size
     
     // Base sizes scale with screen, with mobile getting a slight boost
@@ -3609,13 +313,13 @@ class Main extends Phaser.Scene {
     const baseObstacleH = Math.floor(22 * screenScale * mobileBoost);
     const basePowerUpSize = Math.floor(28 * screenScale * mobileBoost);
     
-    const playerSize = Math.floor(basePlayerSize * MOBILE_SCALE);
-    const enemySize = Math.floor(baseEnemySize * MOBILE_SCALE);
-    const bulletW = Math.floor(baseBulletW * MOBILE_SCALE);
-    const bulletH = Math.floor(baseBulletH * MOBILE_SCALE);
-    const obstacleW = Math.floor(baseObstacleW * MOBILE_SCALE);
-    const obstacleH = Math.floor(baseObstacleH * MOBILE_SCALE);
-    const powerUpSize = Math.floor(basePowerUpSize * MOBILE_SCALE);
+    const playerSize = Math.floor(basePlayerSize * gameState.MOBILE_SCALE);
+    const enemySize = Math.floor(baseEnemySize * gameState.MOBILE_SCALE);
+    const bulletW = Math.floor(baseBulletW * gameState.MOBILE_SCALE);
+    const bulletH = Math.floor(baseBulletH * gameState.MOBILE_SCALE);
+    const obstacleW = Math.floor(baseObstacleW * gameState.MOBILE_SCALE);
+    const obstacleH = Math.floor(baseObstacleH * gameState.MOBILE_SCALE);
+    const powerUpSize = Math.floor(basePowerUpSize * gameState.MOBILE_SCALE);
     
     // Store sizes for use in spawn functions
     this.enemyBaseSize = enemySize;
@@ -3659,7 +363,7 @@ class Main extends Phaser.Scene {
     gfx.fillStyle(0x00ff00,1).fillCircle(powerUpSize/2,powerUpSize/2,powerUpSize/2).generateTexture('powerUpTex',powerUpSize,powerUpSize).clear(); // Green power-up
     
     // Create star texture for break section collectibles
-    const starSize = Math.floor(40 * MOBILE_SCALE);
+    const starSize = Math.floor(40 * gameState.MOBILE_SCALE);
     const spikes = 5;
     const outerRadius = starSize / 2;
     const innerRadius = outerRadius * 0.4;
@@ -3696,7 +400,7 @@ class Main extends Phaser.Scene {
     gfx.generateTexture('drifterTex',enemySize,enemySize).destroy(); // Diamond drifter
 
     this.playerLane=2; 
-    this.player=this.add.image(this._laneX(this.playerLane), PLAYER_Y, 'playerTex');
+    this.player=this.add.image(this._laneX(this.playerLane), gameState.PLAYER_Y, 'playerTex');
     this.player.w = playerSize; // Add collision dimensions (scaled)
     this.player.h = playerSize;
     this.player.setDepth(500); // Much higher depth to ensure on top
@@ -3750,9 +454,9 @@ class Main extends Phaser.Scene {
     
     const scoreFontSize = isMobile ? '24px' : '16px';
     const gridFontSize = isMobile ? '18px' : '12px';
-    const scoreY = isMobile ? HEIGHT-36 : HEIGHT-24;
-    const highScoreY = isMobile ? HEIGHT-72 : HEIGHT-48;
-    const comboY = isMobile ? HEIGHT-108 : HEIGHT-72;
+    const scoreY = isMobile ? gameState.HEIGHT-36 : gameState.HEIGHT-24;
+    const highScoreY = isMobile ? gameState.HEIGHT-72 : gameState.HEIGHT-48;
+    const comboY = isMobile ? gameState.HEIGHT-108 : gameState.HEIGHT-72;
     
     // Create score labels and values separately for alignment
     const labelOffset = 10;
@@ -3781,10 +485,10 @@ class Main extends Phaser.Scene {
     this.comboMeter = this.add.graphics();
     this.comboMeterY = meterY;
     
-    this.gridVisible = gridEnabled; // Use persistent grid setting
+    this.gridVisible = gameState.gridEnabled; // Use persistent grid setting
     
     // Sync initial grid UI state
-    uiState.gridVisible = gridEnabled;
+    uiState.gridVisible = gameState.gridEnabled;
     updateGridButton();
 
     // Mobile controls setup
@@ -3911,13 +615,13 @@ class Main extends Phaser.Scene {
       toggleGrid: ()=>{ 
         // Toggle grid from external button - match G key behavior
         this.gridVisible = !this.gridVisible;
-        gridEnabled = this.gridVisible;
-        saveGameData({ settings: { gridEnabled: gridEnabled } });
+        gameState.gridEnabled = this.gridVisible;
+        saveGameData({ settings: { gridEnabled: gameState.gridEnabled } });
         
         // Track grid toggle
-        trackEvent('settings_change', {
+        window.trackEvent('settings_change', {
           setting_type: 'grid',
-          grid_enabled: gridEnabled
+          grid_enabled: gameState.gridEnabled
         });
         
         if (this.gridText) {
@@ -4033,8 +737,8 @@ class Main extends Phaser.Scene {
     this.input.on('pointerdown', (pointer) => {
       // Edge constraint - keep control center within screen bounds with padding
       const edgePadding = this.zoneRadius * 0.7; // Allow 30% of zone to go off-screen
-      this.touchStartX = Phaser.Math.Clamp(pointer.x, edgePadding, WIDTH - edgePadding);
-      this.touchStartY = Phaser.Math.Clamp(pointer.y, edgePadding, HEIGHT - edgePadding);
+      this.touchStartX = Phaser.Math.Clamp(pointer.x, edgePadding, gameState.WIDTH - edgePadding);
+      this.touchStartY = Phaser.Math.Clamp(pointer.y, edgePadding, gameState.HEIGHT - edgePadding);
       this.touchZoneActive = true;
       
       // Reset state
@@ -4232,8 +936,8 @@ class Main extends Phaser.Scene {
                   if (activePointer && activePointer.isDown) {
                     // Recenter with edge constraints
                     const edgePadding = this.zoneRadius * 0.7; // Allow 30% of zone to go off-screen
-                    this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
-                    this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, HEIGHT - edgePadding);
+                    this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, gameState.WIDTH - edgePadding);
+                    this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, gameState.HEIGHT - edgePadding);
                     
                     // Update visual zones at new position
                     if (this.zoneVisuals) {
@@ -4259,8 +963,8 @@ class Main extends Phaser.Scene {
                   if (activePointer && activePointer.isDown) {
                     // Recenter with edge constraints
                     const edgePadding = this.zoneRadius * 0.7; // Allow 30% of zone to go off-screen
-                    this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
-                    this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, HEIGHT - edgePadding);
+                    this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, gameState.WIDTH - edgePadding);
+                    this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, gameState.HEIGHT - edgePadding);
                     
                     // Update visual zones at new position
                     if (this.zoneVisuals) {
@@ -4715,7 +1419,7 @@ class Main extends Phaser.Scene {
     // Jump animation - higher jump to clear obstacles better
     this.tweens.add({
       targets: this.player,
-      y: PLAYER_Y - 120, // Higher jump
+      y: gameState.PLAYER_Y - 120, // Higher jump
       scaleX: 1.2,
       scaleY: 1.2,
       duration: 250,
@@ -4726,7 +1430,7 @@ class Main extends Phaser.Scene {
       },
       onComplete: () => {
         this.isJumping = false;
-        this.player.y = PLAYER_Y;
+        this.player.y = gameState.PLAYER_Y;
         // Animate rotation back to 0 if needed
         if(Math.abs(this.player.angle % 360) > 1) {
           this.tweens.add({
@@ -4759,8 +1463,8 @@ class Main extends Phaser.Scene {
           const activePointer = this.input.activePointer;
           if (activePointer && activePointer.isDown) {
             const edgePadding = this.zoneRadius * 0.7;
-            this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
-            this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, HEIGHT - edgePadding);
+            this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, gameState.WIDTH - edgePadding);
+            this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, gameState.HEIGHT - edgePadding);
           }
           
           // Start charge sound
@@ -4834,12 +1538,12 @@ class Main extends Phaser.Scene {
       // Continue the jump animation
       this.tweens.add({
         targets: this.player,
-        y: PLAYER_Y,
+        y: gameState.PLAYER_Y,
         duration: 250,
         ease: 'Quad.easeIn',
         onComplete: () => {
           this.isJumping = false;
-          this.player.y = PLAYER_Y;
+          this.player.y = gameState.PLAYER_Y;
           // Animate rotation back to 0 if needed
           if(Math.abs(this.player.angle % 360) > 1) {
             this.tweens.add({
@@ -5019,12 +1723,12 @@ class Main extends Phaser.Scene {
       // Continue the jump animation
       this.tweens.add({
         targets: this.player,
-        y: PLAYER_Y,
+        y: gameState.PLAYER_Y,
         duration: 250,
         ease: 'Quad.easeIn',
         onComplete: () => {
           this.isJumping = false;
-          this.player.y = PLAYER_Y;
+          this.player.y = gameState.PLAYER_Y;
           // Animate rotation back to 0 if needed
           if(Math.abs(this.player.angle % 360) > 1) {
             this.tweens.add({
@@ -5277,7 +1981,7 @@ class Main extends Phaser.Scene {
         // Main jump tween with wobble
         this.tweens.add({
           targets: this.player,
-          y: PLAYER_Y - jumpHeight,
+          y: gameState.PLAYER_Y - jumpHeight,
           duration: jumpDuration,
           ease: 'Cubic.easeOut',
           onUpdate: (tween) => {
@@ -5309,7 +2013,7 @@ class Main extends Phaser.Scene {
               targets: this.player,
               scaleX: 0.7,
               scaleY: 1.5,
-              y: PLAYER_Y - 20,
+              y: gameState.PLAYER_Y - 20,
               duration: 100,
               ease: 'Quad.easeOut',
               onComplete: () => {
@@ -5318,13 +2022,13 @@ class Main extends Phaser.Scene {
                   targets: this.player,
                   scaleX: 1.3,
                   scaleY: 0.7,
-                  y: PLAYER_Y,
+                  y: gameState.PLAYER_Y,
                   duration: 80,
                   ease: 'Quad.easeIn',
                   onComplete: () => {
                     // Allow jumping after first bounce
                     this.isJumping = false;
-                    this.player.y = PLAYER_Y;
+                    this.player.y = gameState.PLAYER_Y;
                     
                     // Handle rotation reset and queued actions here
                     if(Math.abs(this.player.angle % 360) > 1) {
@@ -5358,8 +2062,8 @@ class Main extends Phaser.Scene {
                       const activePointer = this.input.activePointer;
                       if (activePointer && activePointer.isDown) {
                         const edgePadding = this.zoneRadius * 0.7;
-                        this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, WIDTH - edgePadding);
-                        this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, HEIGHT - edgePadding);
+                        this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, gameState.WIDTH - edgePadding);
+                        this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, gameState.HEIGHT - edgePadding);
                       }
                       
                       // Squash animation when starting crouch
@@ -5441,7 +2145,7 @@ class Main extends Phaser.Scene {
   _laneX(lane, progress = 1){ 
     // Interpolate X position between vanishing point and lane position based on progress
     // Use the same vanishing point as the grid
-    const vanishX = this.vanishX || WIDTH / 2;
+    const vanishX = this.vanishX || gameState.WIDTH / 2;
     // Clamp off-screen lanes to be partially visible
     let clampedLane = lane;
     if(lane < 0) {
@@ -5449,11 +2153,11 @@ class Main extends Phaser.Scene {
     } else if(lane >= LANES) {
       clampedLane = LANES - 0.3; // Show 30% of ship on right edge
     }
-    const bottomLaneX = clampedLane * LANE_W + LANE_W / 2;
+    const bottomLaneX = clampedLane * gameState.LANE_W + gameState.LANE_W / 2;
     return vanishX + (bottomLaneX - vanishX) * progress;
   }
   _spawnEnemy(lane, speed, texture='enemyTex'){ 
-    const vanishY = HEIGHT * 0.15; // Same horizon as grid
+    const vanishY = gameState.HEIGHT * 0.15; // Same horizon as grid
     const e=this.add.image(this._laneX(lane, 0), vanishY, texture); // Start at vanishing point
     e.lane = lane;
     e.progress = 0; // 0 = at horizon, 1 = at player
@@ -5530,15 +2234,15 @@ class Main extends Phaser.Scene {
     // Create pause overlay
     this.pauseOverlay = this.add.graphics();
     this.pauseOverlay.fillStyle(0x000000, 0.5);
-    this.pauseOverlay.fillRect(0, 0, WIDTH, HEIGHT);
+    this.pauseOverlay.fillRect(0, 0, gameState.WIDTH, gameState.HEIGHT);
     this.pauseOverlay.setDepth(10000);
     
     // Calculate responsive font sizes
-    const baseFontSize = Math.min(WIDTH, HEIGHT) * 0.08;
-    const smallFontSize = Math.min(WIDTH, HEIGHT) * 0.04;
+    const baseFontSize = Math.min(gameState.WIDTH, gameState.HEIGHT) * 0.08;
+    const smallFontSize = Math.min(gameState.WIDTH, gameState.HEIGHT) * 0.04;
     
     // Add PAUSED text
-    this.pauseText = this.add.text(WIDTH/2, HEIGHT/2 - 60, 'PAUSED', {
+    this.pauseText = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2 - 60, 'PAUSED', {
       font: `${baseFontSize}px monospace`,
       fill: '#ffffff'
     });
@@ -5546,7 +2250,7 @@ class Main extends Phaser.Scene {
     this.pauseText.setDepth(10001);
     
     // Add high score display (on top) - centered with proper spacing
-    this.pauseHighScoreText = this.add.text(WIDTH/2, HEIGHT/2, `High Score: ${sessionHighScore}`, {
+    this.pauseHighScoreText = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2, `High Score: ${sessionHighScore}`, {
       font: `${smallFontSize}px monospace`,
       fill: '#ff0'
     });
@@ -5554,7 +2258,7 @@ class Main extends Phaser.Scene {
     this.pauseHighScoreText.setDepth(10001);
     
     // Add current score display (below) - centered with proper spacing
-    this.pauseScoreText = this.add.text(WIDTH/2, HEIGHT/2 + 40, `Score: ${this.score}`, {
+    this.pauseScoreText = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2 + 40, `Score: ${this.score}`, {
       font: `${smallFontSize}px monospace`,
       fill: '#0f0'
     });
@@ -5562,7 +2266,7 @@ class Main extends Phaser.Scene {
     this.pauseScoreText.setDepth(10001);
     
     // Add instruction text
-    this.pauseInstructionText = this.add.text(WIDTH/2, HEIGHT/2 + 80, 'Press SPACE or tap to continue', {
+    this.pauseInstructionText = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2 + 80, 'Press SPACE or tap to continue', {
       font: `${smallFontSize * 0.7}px monospace`,
       fill: '#888888'
     });
@@ -5570,7 +2274,7 @@ class Main extends Phaser.Scene {
     this.pauseInstructionText.setDepth(10001);
     
     // Add feedback UI in upper right corner (moved down to avoid SKIP button)
-    const feedbackContainer = this.add.container(WIDTH - 100, 100);
+    const feedbackContainer = this.add.container(gameState.WIDTH - 100, 100);
     feedbackContainer.setDepth(10002);
     this.pauseFeedbackContainer = feedbackContainer; // Store for cleanup
     
@@ -5632,7 +2336,7 @@ class Main extends Phaser.Scene {
       });
       
       // Track feedback
-      trackEvent('pause_feedback_given', {
+      window.trackEvent('pause_feedback_given', {
         type: feedbackType,
         score: this.score,
         survival_time: Math.floor((this.time.now - this.gameStartTime) / 1000)
@@ -5669,7 +2373,7 @@ class Main extends Phaser.Scene {
       shareLink.on('pointerdown', (pointer) => {
         this.isHandlingFeedback = true; // Also set flag here
         
-        trackEvent('feedback_form_opened_from_pause', {
+        window.trackEvent('feedback_form_opened_from_pause', {
           initial_feedback: feedbackType,
           score: this.score
         });
@@ -5820,7 +2524,7 @@ class Main extends Phaser.Scene {
     
     const sessionTime = this.sessionStartTime ? Math.floor((Date.now() - this.sessionStartTime) / 1000) : 0;
     
-    trackEvent('game_over', {
+    window.trackEvent('game_over', {
       score: this.score,
       score_bucket: scoreBucket,
       high_score: sessionHighScore,
@@ -5831,12 +2535,12 @@ class Main extends Phaser.Scene {
       control_type: window.controlType,
       difficulty: currentDifficulty?.name || 'normal',
       genre: currentGenre || 'techno',
-      grid_enabled: gridEnabled
+      grid_enabled: gameState.gridEnabled
     });
     
     // Track specific achievement for scores > 100
     if (this.score > 100) {
-      trackEvent('achievement_unlocked', {
+      window.trackEvent('achievement_unlocked', {
         achievement: 'score_over_100',
         score: this.score
       });
@@ -5845,18 +2549,18 @@ class Main extends Phaser.Scene {
     // Darken the screen - very high depth to be above everything
     const overlay = this.add.graphics();
     overlay.fillStyle(0x000000, 0.7);
-    overlay.fillRect(0, 0, WIDTH, HEIGHT);
+    overlay.fillRect(0, 0, gameState.WIDTH, gameState.HEIGHT);
     overlay.setAlpha(0);
     overlay.setDepth(20000); // Above everything else
     
     // Check if new high score (before resetting)
     const beatHighScore = this.score > sessionHighScore;
     if(beatHighScore) {
-      sessionHighScore = this.score;
+      setSessionHighScore(this.score);
       saveGameData({ highScore: sessionHighScore });
       
       // Track new high score separately
-      trackEvent('new_high_score', {
+      window.trackEvent('new_high_score', {
         score: this.score,
         previous_high: this.sessionHighScore || 0,
         improvement: this.score - (this.sessionHighScore || 0)
@@ -5864,7 +2568,7 @@ class Main extends Phaser.Scene {
     }
     
     // Calculate responsive text sizes based on screen dimensions
-    const screenRef = Math.min(WIDTH, HEIGHT);
+    const screenRef = Math.min(gameState.WIDTH, gameState.HEIGHT);
     const isMobile = /Android|webOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
     
     // Scale based on screen size with mobile boost
@@ -5875,7 +2579,7 @@ class Main extends Phaser.Scene {
     const tinyFontSize = `${Math.floor(screenRef * 0.025 * mobileMult)}px`;
     
     // Score display
-    const scoreLabel = this.add.text(WIDTH/2, HEIGHT/2 - screenRef * 0.08, 'SCORE', {
+    const scoreLabel = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2 - screenRef * 0.08, 'SCORE', {
       font: `${medFontSize} monospace`,
       fill: '#0f0'
     });
@@ -5883,7 +2587,7 @@ class Main extends Phaser.Scene {
     scoreLabel.setAlpha(0);
     scoreLabel.setDepth(20001); // Above overlay
     
-    const scoreText = this.add.text(WIDTH/2, HEIGHT/2, this.score.toString(), {
+    const scoreText = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2, this.score.toString(), {
       font: `${bigFontSize} monospace`,
       fill: beatHighScore ? '#ffff00' : '#00ffcc'
     });
@@ -5895,7 +2599,7 @@ class Main extends Phaser.Scene {
     // High score message
     let congratsText = null;
     if(beatHighScore) {
-      congratsText = this.add.text(WIDTH/2, HEIGHT/2 + screenRef * 0.1, 'NEW HIGH SCORE!', {
+      congratsText = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2 + screenRef * 0.1, 'NEW HIGH SCORE!', {
         font: `${medFontSize} monospace`,
         fill: '#ff00ff'
       });
@@ -5915,7 +2619,7 @@ class Main extends Phaser.Scene {
         ease: 'Sine.inOut'
       });
     } else {
-      const highScoreText = this.add.text(WIDTH/2, HEIGHT/2 + screenRef * 0.1, `HIGH SCORE: ${sessionHighScore}`, {
+      const highScoreText = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2 + screenRef * 0.1, `HIGH SCORE: ${sessionHighScore}`, {
         font: `${smallFontSize} monospace`,
         fill: '#ff0'
       });
@@ -5932,8 +2636,8 @@ class Main extends Phaser.Scene {
     }
     
     // Survival stats - time and points/second
-    const statsY = beatHighScore ? HEIGHT/2 + screenRef * 0.15 : HEIGHT/2 + screenRef * 0.13;
-    const survivalStatsText = this.add.text(WIDTH/2, statsY, 
+    const statsY = beatHighScore ? gameState.HEIGHT/2 + screenRef * 0.15 : gameState.HEIGHT/2 + screenRef * 0.13;
+    const survivalStatsText = this.add.text(gameState.WIDTH/2, statsY, 
       `Survived: ${survivalTimeString}  •  ${pointsPerSecond} pts/sec`, {
       font: `${tinyFontSize} monospace`,
       fill: '#00ffcc'
@@ -5953,7 +2657,7 @@ class Main extends Phaser.Scene {
     
     // Restart instruction with countdown
     const restartY = statsY + screenRef * 0.06;
-    const restartText = this.add.text(WIDTH/2, restartY, 'RESTARTING IN 3...', {
+    const restartText = this.add.text(gameState.WIDTH/2, restartY, 'RESTARTING IN 3...', {
       font: `${smallFontSize} monospace`,
       fill: '#00ffcc'  // Brighter cyan color for visibility
     });
@@ -6196,12 +2900,12 @@ class Main extends Phaser.Scene {
     });
   }
   _spawnObstacle(lane){
-    const vanishY = HEIGHT * 0.15;
+    const vanishY = gameState.HEIGHT * 0.15;
     const baseX = this._laneX(lane, 0);
     
     // Calculate dimensions
-    const obstacleW = Math.floor(80 * (Math.min(WIDTH, HEIGHT) / 800) * (isMobile ? 1.2 : 1.0) * MOBILE_SCALE);
-    const obstacleH = Math.floor(22 * (Math.min(WIDTH, HEIGHT) / 800) * (isMobile ? 1.2 : 1.0) * MOBILE_SCALE);
+    const obstacleW = Math.floor(80 * (Math.min(gameState.WIDTH, gameState.HEIGHT) / 800) * (isMobile ? 1.2 : 1.0) * gameState.MOBILE_SCALE);
+    const obstacleH = Math.floor(22 * (Math.min(gameState.WIDTH, gameState.HEIGHT) / 800) * (isMobile ? 1.2 : 1.0) * gameState.MOBILE_SCALE);
     const poleWidth = Math.floor(obstacleW * 0.15);
     const shieldGap = 2;
     
@@ -6211,9 +2915,9 @@ class Main extends Phaser.Scene {
     o.lane = lane;
     o.progress = 0;
     o.vy = ENEMY_SPEED_BASE * 0.7;
-    o.baseSize = Math.floor(60 * MOBILE_SCALE);
+    o.baseSize = Math.floor(60 * gameState.MOBILE_SCALE);
     o.w = o.baseSize;
-    o.h = Math.floor(22 * MOBILE_SCALE);
+    o.h = Math.floor(22 * gameState.MOBILE_SCALE);
     o.setScale(0.1);
     o.setDepth(150); // Put obstacles in front of enemies for now
     o.trailPoints = [];
@@ -6245,12 +2949,12 @@ class Main extends Phaser.Scene {
   }
   
   _spawnPowerUp(lane){
-    const vanishY = HEIGHT * 0.15;
+    const vanishY = gameState.HEIGHT * 0.15;
     const p = this.add.image(this._laneX(lane, 0), vanishY, 'powerUpTex');
     p.lane = lane;
     p.progress = 0;
     p.vy = ENEMY_SPEED_BASE * 1.2;
-    p.baseSize = Math.floor(20 * MOBILE_SCALE);
+    p.baseSize = Math.floor(20 * gameState.MOBILE_SCALE);
     p.setScale(0.1);
     p.setDepth(100); // Same depth as enemies - between shield and poles
     this.powerUps.push(p);
@@ -6563,7 +3267,7 @@ class Main extends Phaser.Scene {
     this.tutorialTimer = null; // Reset any timers
     
     // Flash success message
-    const successText = this.add.text(WIDTH/2, HEIGHT/2, 'EXCELLENT!', {
+    const successText = this.add.text(gameState.WIDTH/2, gameState.HEIGHT/2, 'EXCELLENT!', {
       font: 'bold 48px monospace',
       fill: '#00ff00',
       stroke: '#000000',
@@ -6658,7 +3362,7 @@ class Main extends Phaser.Scene {
   }
   
   _spawnDrifter(lane){
-    const vanishY = HEIGHT * 0.15;
+    const vanishY = gameState.HEIGHT * 0.15;
     const d = this.add.image(this._laneX(lane, 0), vanishY, 'drifterTex');
     d.lane = lane;
     d.targetLane = lane; // Will change
@@ -6738,8 +3442,8 @@ class Main extends Phaser.Scene {
     }
     
     // Always update vanishing point based on current dimensions
-    this.vanishX = WIDTH / 2;
-    this.vanishY = HEIGHT * 0.15;  // Move horizon much higher
+    this.vanishX = gameState.WIDTH / 2;
+    this.vanishY = gameState.HEIGHT * 0.15;  // Move horizon much higher
     
     // Safety check - recreate if destroyed
     if(!this.gridGraphics.scene) {
@@ -6757,7 +3461,7 @@ class Main extends Phaser.Scene {
     
     // Draw curved lane lines that match the exponential perspective
     for(let lane = 0; lane <= LANES; lane++){
-      const bottomX = lane * LANE_W;
+      const bottomX = lane * gameState.LANE_W;
       this.gridGraphics.lineStyle(1, 0x00ff00, 0.2);
       
       // Draw lane as a series of connected segments following the curve
@@ -6766,7 +3470,7 @@ class Main extends Phaser.Scene {
       
       for(let t = 0.1; t <= 1; t += 0.1){
         // Use same exponential curve as objects
-        const y = this.vanishY + (HEIGHT - this.vanishY) * Math.pow(t, 2.5);
+        const y = this.vanishY + (gameState.HEIGHT - this.vanishY) * Math.pow(t, 2.5);
         // Interpolate X position along the curve
         const x = this.vanishX + (bottomX - this.vanishX) * t;
         
@@ -6775,23 +3479,23 @@ class Main extends Phaser.Scene {
         lastY = y;
       }
       // Final segment to bottom
-      this.gridGraphics.lineBetween(lastX, lastY, bottomX, HEIGHT);
+      this.gridGraphics.lineBetween(lastX, lastY, bottomX, gameState.HEIGHT);
     }
     
     // Draw horizontal lines with exponential spacing (Beamrider style)
     for(let i = 0; i < numLines; i++){
       // Calculate position with perspective - exponential spacing
       const t = (i + this.gridOffset % 1) / numLines;
-      const y = this.vanishY + (HEIGHT - this.vanishY) * Math.pow(t, 2.5); // Exponential curve for perspective
+      const y = this.vanishY + (gameState.HEIGHT - this.vanishY) * Math.pow(t, 2.5); // Exponential curve for perspective
       
-      if(y < this.vanishY || y > HEIGHT) continue;
+      if(y < this.vanishY || y > gameState.HEIGHT) continue;
       
       // Width increases as lines get closer
-      const width = WIDTH * (0.1 + t * 1.5);
+      const width = gameState.WIDTH * (0.1 + t * 1.5);
       const alpha = 0.3 - t * 0.2; // Fade in distance
       
       this.gridGraphics.lineStyle(2, 0x00ff00, alpha);
-      this.gridGraphics.lineBetween(WIDTH/2 - width/2, y, WIDTH/2 + width/2, y);
+      this.gridGraphics.lineBetween(gameState.WIDTH/2 - width/2, y, gameState.WIDTH/2 + width/2, y);
     }
   }
   _fire(){ 
@@ -6876,8 +3580,8 @@ class Main extends Phaser.Scene {
     
     // Calculate progress based on player's current Y position
     // When jumping, player.y is higher (smaller), so we need to adjust progress
-    const vanishY = HEIGHT * 0.15;
-    const normalizedY = (this.player.y - vanishY) / (HEIGHT - vanishY);
+    const vanishY = gameState.HEIGHT * 0.15;
+    const normalizedY = (this.player.y - vanishY) / (gameState.HEIGHT - vanishY);
     // Inverse the exponential curve formula to get progress from Y position
     b.progress = Math.pow(normalizedY, 1/2.5);
     
@@ -6895,8 +3599,8 @@ class Main extends Phaser.Scene {
       b.isHorizontal = true;
       b.startLane = this.playerLane;
       b.currentLane = this.playerLane < 0 ? -0.5 : 4.5; // Start just outside visible area
-      b.w = Math.floor(12 * MOBILE_SCALE); // Wider for horizontal
-      b.h = Math.floor(6 * MOBILE_SCALE); // Shorter for horizontal
+      b.w = Math.floor(12 * gameState.MOBILE_SCALE); // Wider for horizontal
+      b.h = Math.floor(6 * gameState.MOBILE_SCALE); // Shorter for horizontal
       b.setRotation(direction > 0 ? Math.PI/2 : -Math.PI/2); // Rotate 90 degrees for horizontal orientation
     } else {
       // Normal vertical shooting
@@ -6904,14 +3608,14 @@ class Main extends Phaser.Scene {
       b.isHorizontal = false;
     }
     
-    b.w = b.w || Math.floor(6 * MOBILE_SCALE); 
-    b.h = b.h || Math.floor(12 * MOBILE_SCALE);
+    b.w = b.w || Math.floor(6 * gameState.MOBILE_SCALE); 
+    b.h = b.h || Math.floor(12 * gameState.MOBILE_SCALE);
     
     // If jumping, give bullet an arc trajectory with safe distance
     if(this.isJumping && !isOffScreen) {
       b.isArcShot = true;
       // Calculate safe distance based on jump height
-      const jumpHeight = Math.abs(this.player.y - PLAYER_Y);
+      const jumpHeight = Math.abs(this.player.y - gameState.PLAYER_Y);
       const jumpPercent = Math.min(jumpHeight / ARC_SHOT_MAX_JUMP_HEIGHT, 1);
       b.safeDistance = ARC_SHOT_BASE_SAFE_DISTANCE + (jumpPercent * ARC_SHOT_HEIGHT_BONUS);
       b.startY = this.player.y; // Launch from jump height
@@ -7009,8 +3713,8 @@ class Main extends Phaser.Scene {
     // Handle grid toggle even when paused
     if(Phaser.Input.Keyboard.JustDown(this.keys.G)){
       this.gridVisible = !this.gridVisible;
-      gridEnabled = this.gridVisible; // Save to persistent setting
-      saveGameData({ settings: { gridEnabled: gridEnabled } });
+      gameState.gridEnabled = this.gridVisible; // Save to persistent setting
+      saveGameData({ settings: { gridEnabled: gameState.gridEnabled } });
       if(!this.gridVisible && this.gridGraphics) {
         this.gridGraphics.clear();
       } else if(this.gridVisible && this.isPaused) {
@@ -7446,7 +4150,7 @@ class Main extends Phaser.Scene {
       // Track keyboard if space is pressed
       if(this.keys.SPACE.isDown && (window.controlType === 'unknown' || window.controlType === 'touch')) {
         window.controlType = 'keyboard';
-        trackEvent('control_type_detected', {
+        window.trackEvent('control_type_detected', {
           type: 'keyboard',
           platform: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop'
         });
@@ -7455,12 +4159,12 @@ class Main extends Phaser.Scene {
     }
 
     // Update enemies with perspective
-    const vanishY = HEIGHT * 0.15;
+    const vanishY = gameState.HEIGHT * 0.15;
     for(let i=this.enemies.length-1; i>=0; i--){
       const e=this.enemies[i]; 
       
       // Move along perspective curve - add pulse shift
-      e.progress += (e.vy * dt/1000) / (HEIGHT * 0.8) + pulseShift;
+      e.progress += (e.vy * dt/1000) / (gameState.HEIGHT * 0.8) + pulseShift;
       
       // Handle drifting enemies
       if(e.isDrifter){
@@ -7477,7 +4181,7 @@ class Main extends Phaser.Scene {
       }
       
       // Calculate position on exponential curve (same as grid)
-      const y = vanishY + (HEIGHT - vanishY) * Math.pow(e.progress, 2.5);
+      const y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(e.progress, 2.5);
       e.y = y;
       
       // Update X position along perspective lane + pulse shift
@@ -7561,7 +4265,7 @@ class Main extends Phaser.Scene {
         
         // Save highscore before restarting
         if(this.score > sessionHighScore) {
-          sessionHighScore = this.score;
+          setSessionHighScore(this.score);
         }
         
         // Create dramatic explosion for enemy hit with proper scale
@@ -7699,8 +4403,8 @@ class Main extends Phaser.Scene {
     // Update obstacles
     for(let i=this.obstacles.length-1; i>=0; i--){
       const o=this.obstacles[i];
-      o.progress += (o.vy * dt/1000) / (HEIGHT * 0.8) + pulseShift;
-      const y = vanishY + (HEIGHT - vanishY) * Math.pow(o.progress, 2.5);
+      o.progress += (o.vy * dt/1000) / (gameState.HEIGHT * 0.8) + pulseShift;
+      const y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(o.progress, 2.5);
       o.y = y;
       o.x = this._laneX(o.lane, o.progress) + pulseXShift;
       const scale = 0.1 + o.progress * 1.2;
@@ -7756,7 +4460,7 @@ class Main extends Phaser.Scene {
           
           // Save highscore before restarting
           if(this.score > sessionHighScore) {
-            sessionHighScore = this.score;
+            setSessionHighScore(this.score);
           }
           
           // Create splat effect for hitting wall
@@ -7796,8 +4500,8 @@ class Main extends Phaser.Scene {
     // Update power-ups
     for(let i=this.powerUps.length-1; i>=0; i--){
       const p=this.powerUps[i];
-      p.progress += (p.vy * dt/1000) / (HEIGHT * 0.8) + pulseShift;
-      const y = vanishY + (HEIGHT - vanishY) * Math.pow(p.progress, 2.5);
+      p.progress += (p.vy * dt/1000) / (gameState.HEIGHT * 0.8) + pulseShift;
+      const y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(p.progress, 2.5);
       p.y = y;
       p.x = this._laneX(p.lane, p.progress) + pulseXShift;
       const scale = 0.1 + p.progress * 1.2;
@@ -7877,7 +4581,7 @@ class Main extends Phaser.Scene {
         
         // Update position using current lane and constant progress
         b.x = this._laneX(b.currentLane, b.progress);
-        b.y = vanishY + (HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
+        b.y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
         
         // Remove if bullet has crossed all lanes
         if((b.vx > 0 && b.currentLane > 5) || (b.vx < 0 && b.currentLane < -1)) {
@@ -7888,20 +4592,20 @@ class Main extends Phaser.Scene {
       } else {
         // Normal vertical bullet movement
         // Move backward along perspective curve
-        b.progress -= (Math.abs(b.vy) * dt/1000) / (HEIGHT * 0.8);
+        b.progress -= (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
         
         // Calculate base position on exponential curve
-        let y = vanishY + (HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
+        let y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
         
         // Apply arc trajectory if this is a jump shot
         if(b.isArcShot) {
           // Update arc distance based on bullet speed
-          b.arcDistance += (Math.abs(b.vy) * dt/1000) / (HEIGHT * 0.8);
+          b.arcDistance += (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
           const distanceTraveled = b.arcDistance;
-          const normalY = vanishY + (HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
-          const normalStartY = vanishY + (HEIGHT - vanishY) * Math.pow(1.0, 2.5); // Where normal bullets start
-          const perspectiveOffset = normalStartY - PLAYER_Y; // How much the curve differs from player position
-          const jumpHeight = PLAYER_Y - b.startY; // Positive when jumping
+          const normalY = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
+          const normalStartY = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(1.0, 2.5); // Where normal bullets start
+          const perspectiveOffset = normalStartY - gameState.PLAYER_Y; // How much the curve differs from player position
+          const jumpHeight = gameState.PLAYER_Y - b.startY; // Positive when jumping
           
           // Log first frame of arc shot
           if (!b.arcLogged) {
@@ -7920,7 +4624,7 @@ class Main extends Phaser.Scene {
             // But we need to calculate where that is in screen Y
             const progressAtB = 1.0 - b.safeDistance;
             // This is the Y position for that progress value on the perspective curve
-            const pointB = vanishY + (HEIGHT - vanishY) * Math.pow(progressAtB, 2.5);
+            const pointB = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(progressAtB, 2.5);
             
             // Linear interpolation from A to B
             y = pointA + (pointB - pointA) * arcProgress;
@@ -7928,8 +4632,8 @@ class Main extends Phaser.Scene {
             // Check at boundary
             if (arcProgress > 0.99 && !b.boundaryChecked) {
               const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should be pointB)
-              const nextFrameProgress = b.progress - (Math.abs(b.vy) * dt/1000) / (HEIGHT * 0.8);
-              const nextFrameY = vanishY + (HEIGHT - vanishY) * Math.pow(nextFrameProgress, 2.5) - perspectiveOffset;
+              const nextFrameProgress = b.progress - (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
+              const nextFrameY = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(nextFrameProgress, 2.5) - perspectiveOffset;
               b.boundaryChecked = true;
             }
             
@@ -7937,7 +4641,7 @@ class Main extends Phaser.Scene {
             if (arcProgress > 0.98 && !b.almostTransition) {
               const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should equal pointB)
               const normalStartProgress = 1.0 - b.safeDistance;
-              const normalStartY = vanishY + (HEIGHT - vanishY) * Math.pow(normalStartProgress, 2.5) - perspectiveOffset;
+              const normalStartY = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(normalStartProgress, 2.5) - perspectiveOffset;
               b.almostTransition = true;
             }
           } else {
@@ -8093,7 +4797,7 @@ class Main extends Phaser.Scene {
               if(this.combo >= 4) {
                 const flash = this.add.graphics();
                 flash.fillStyle(this.combo >= 6 ? 0xff00ff : 0xffff00, 0.3);
-                flash.fillRect(0, 0, WIDTH, HEIGHT);
+                flash.fillRect(0, 0, gameState.WIDTH, gameState.HEIGHT);
                 this.tweens.add({
                   targets: flash,
                   alpha: 0,
@@ -8116,7 +4820,7 @@ class Main extends Phaser.Scene {
             }
             // Update highscore if beaten
             if(this.score > sessionHighScore) {
-              sessionHighScore = this.score;
+              setSessionHighScore(this.score);
               saveGameData({ highScore: sessionHighScore });
               this.highScoreText.setText(sessionHighScore.toString());
               this.highScoreText.setColor('#0ff'); // Cyan when beating high score
@@ -8155,27 +4859,22 @@ class Main extends Phaser.Scene {
   
   resize(gameSize, baseSize, displaySize, resolution) {
     // Update global dimensions using the actual camera dimensions
-    WIDTH = this.cameras.main.width;
-    HEIGHT = this.cameras.main.height;
-    LANE_W = WIDTH / LANES;
-    PLAYER_Y = HEIGHT - (isMobile ? 90 : 60);
-    isLandscape = WIDTH > HEIGHT;
-    MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1;
+    updateDimensions(this.cameras.main.width, this.cameras.main.height);
     
     // Update vanishing point for consistent perspective
-    this.vanishX = WIDTH / 2;
-    this.vanishY = HEIGHT * 0.15;
+    this.vanishX = gameState.WIDTH / 2;
+    this.vanishY = gameState.HEIGHT * 0.15;
     
     // Update player position
     if (this.player) {
       this.player.x = this._laneX(this.playerLane);
-      this.player.y = PLAYER_Y;
+      this.player.y = gameState.PLAYER_Y;
     }
     
     // Update UI text positions
-    const scoreY = isMobile ? HEIGHT-36 : HEIGHT-24;
-    const highScoreY = isMobile ? HEIGHT-72 : HEIGHT-48;
-    const comboY = isMobile ? HEIGHT-108 : HEIGHT-72;
+    const scoreY = isMobile ? gameState.HEIGHT-36 : gameState.HEIGHT-24;
+    const highScoreY = isMobile ? gameState.HEIGHT-72 : gameState.HEIGHT-48;
+    const comboY = isMobile ? gameState.HEIGHT-108 : gameState.HEIGHT-72;
     
     // Update score label and value positions
     if (this.scoreLabel) {
@@ -8266,96 +4965,3 @@ class Main extends Phaser.Scene {
     }
   }
 }
-
-// Detect Mac browsers which have WebGL performance issues
-const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
-const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-const isChrome = /Chrome/.test(navigator.userAgent);
-
-// Force Canvas on Mac browsers due to WebGL performance issues
-const useCanvas = isMac && (isSafari || isChrome);
-
-// Log which renderer we're using
-console.log('Platform:', isMac ? 'Mac' : 'Other', '| Browser:', isSafari ? 'Safari' : isChrome ? 'Chrome' : 'Other');
-console.log('Renderer:', useCanvas ? 'Canvas (Mac optimization)' : 'WebGL/Auto');
-
-// Initialize Phaser game with proper scale configuration
-const game = new Phaser.Game({
-  // Force Canvas mode on Mac browsers for better performance (WebGL has issues)
-  type: useCanvas ? Phaser.CANVAS : Phaser.AUTO,
-  parent: 'gameContainer',
-  scene: [StartupScene, Main],
-
-  // Add performance preference for high-performance GPU when using WebGL
-  render: {
-    powerPreference: 'high-performance',
-    antialias: false,
-    pixelArt: false
-  },
-
-  scale: {
-    mode: Phaser.Scale.RESIZE,
-    parent: 'gameContainer',
-    width: window.visualViewport ? window.visualViewport.width : window.innerWidth,
-    height: window.visualViewport ? window.visualViewport.height : window.innerHeight,
-    autoCenter: Phaser.Scale.CENTER_BOTH
-  }
-});
-
-// Don't start audio here - wait for user interaction
-// Audio will be initialized when the user clicks to start the game
-
-// Wait for game to be fully initialized before setting up resize handlers
-setTimeout(() => {
-  // Register the resize handler on the scale manager
-  if (game && game.scale) {
-    // This is the proper way to listen for Phaser resize events
-    game.scale.on('resize', (gameSize) => {
-      const mainScene = game.scene.getScene('Main');
-      if (mainScene && mainScene.resize) {
-        mainScene.resize(gameSize);
-      }
-    });
-    
-    // Also add a window resize listener as backup
-    window.addEventListener('resize', () => {
-      if (game && game.scale) {
-        game.scale.refresh();
-      }
-    });
-    
-    // Handle visual viewport changes (mobile browser UI showing/hiding)
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', () => {
-        if (game && game.scale) {
-          game.scale.refresh();
-        }
-      });
-    }
-    
-    // Check orientation changes
-    window.addEventListener('orientationchange', () => {
-      setTimeout(() => {
-        if (game && game.scale) {
-          game.scale.refresh();
-        }
-      }, 100);
-    });
-  }
-}, 500); // Give more time for initialization
-
-// Register service worker for PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('../sw.js')
-      .then(registration => {
-      })
-      .catch(error => {
-      });
-  });
-}
-
-// Removed - now handled by Phaser's scale manager
-</script>
-</body>
-</html>
