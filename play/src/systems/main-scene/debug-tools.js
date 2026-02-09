@@ -55,11 +55,16 @@ export function updateDebugHudSystem() {
   if (this.time.now - this.lastDebugHudUpdateAt < MAIN_SCENE_TUNING.debug.hudUpdateMs) return;
   this.lastDebugHudUpdateAt = this.time.now;
 
+  const player = this.stateSlices?.player;
+  const flow = this.stateSlices?.flow;
+  const input = this.stateSlices?.input;
+  const combat = this.stateSlices?.combat;
+
   const text = [
-    `paused=${!!this.isPaused} gameOver=${!!this.isShowingGameOver}`,
-    `lane=${this.playerLane} moving=${!!this.isMoving} dashing=${!!this.isDashing} jumping=${!!this.isJumping}`,
-    `charging=${!!this.isChargingJump} charge=${(this.jumpChargeAmount || 0).toFixed(2)} touch=${!!this.touchZoneActive}`,
-    `combo=${this.combo} beats=${this.beats} score=${this.score}`,
+    `paused=${!!(flow?.paused ?? this.isPaused)} gameOver=${!!(flow?.gameOver ?? this.isShowingGameOver)}`,
+    `lane=${player?.lane ?? this.playerLane} moving=${!!(player?.moving ?? this.isMoving)} dashing=${!!(player?.dashing ?? this.isDashing)} jumping=${!!(player?.jumping ?? this.isJumping)}`,
+    `charging=${!!(player?.charging ?? this.isChargingJump)} charge=${((input?.jumpChargeAmount ?? this.jumpChargeAmount) || 0).toFixed(2)} touch=${!!(input?.touchActive ?? this.touchZoneActive)}`,
+    `combo=${combat?.combo ?? this.combo} beats=${combat?.beats ?? this.beats} score=${combat?.score ?? this.score}`,
     `assist=${!!this.adaptiveState?.isAssisting} spawnMul=${(this.adaptiveState?.currentSpawnMultiplier ?? 1).toFixed(2)} speedMul=${(this.adaptiveState?.currentSpeedMultiplier ?? 1).toFixed(2)}`,
     `${MAIN_SCENE_TUNING.debug.toggleKey}: toggle debug HUD`
   ].join('\n');

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { gameState, MAIN_SCENE_TUNING } from '../../config.js';
+import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function handleMobilePointerDown(pointer) {
   const edgePadding = this.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
@@ -40,9 +41,9 @@ export function handleMobilePointerDown(pointer) {
 
     if (startZone === 'leftMove' || startZone === 'rightMove') {
       if (startZone === 'leftMove') {
-        this.moveLeft();
+        dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_LEFT, { source: 'touch' });
       } else {
-        this.moveRight();
+        dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_RIGHT, { source: 'touch' });
       }
       this.lastMoveTime = this.time.now;
       this.currentZone = startZone;

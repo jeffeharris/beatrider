@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, MAIN_SCENE_TUNING } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function handleMobilePointerMove(pointer) {
   if (!pointer.isDown || !this.touchZoneActive) return;
@@ -104,7 +105,7 @@ export function handleMobilePointerMove(pointer) {
       case 'leftMove':
         if ((this.currentZone === 'center' || this.currentZone === 'jump') && canMove) {
           this.laneBeforeMove = this.playerLane;
-          this.moveLeft();
+          dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_LEFT, { source: 'touch' });
           this.lastMoveTime = currentTime;
 
           this.time.delayedCall(MAIN_SCENE_TUNING.touch.recenterDelayMs, () => {
@@ -127,7 +128,7 @@ export function handleMobilePointerMove(pointer) {
       case 'rightMove':
         if ((this.currentZone === 'center' || this.currentZone === 'jump') && canMove) {
           this.laneBeforeMove = this.playerLane;
-          this.moveRight();
+          dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_RIGHT, { source: 'touch' });
           this.lastMoveTime = currentTime;
 
           this.time.delayedCall(MAIN_SCENE_TUNING.touch.recenterDelayMs, () => {
@@ -158,7 +159,7 @@ export function handleMobilePointerMove(pointer) {
             this.isMoving = false;
           }
 
-          this.dashLeft();
+          dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.DASH_LEFT, { source: 'touch' });
           this.lastMoveTime = currentTime;
         }
         break;
@@ -174,14 +175,14 @@ export function handleMobilePointerMove(pointer) {
             this.isMoving = false;
           }
 
-          this.dashRight();
+          dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.DASH_RIGHT, { source: 'touch' });
           this.lastMoveTime = currentTime;
         }
         break;
 
       case 'jump':
         if (this.currentZone !== 'jump' && !this.isJumping && !this.isChargingJump) {
-          this.jump();
+          dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.JUMP, { source: 'touch' });
         }
         break;
 
@@ -233,9 +234,9 @@ export function handleMobilePointerMove(pointer) {
     const timeSinceLastMove = now - this.lastMoveTime;
     if (timeSinceLastMove > repeatThreshold && !this.isMoving && !this.isDashing) {
       if (this.currentZone === 'leftMove') {
-        this.moveLeft();
+        dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_LEFT, { source: 'touch' });
       } else {
-        this.moveRight();
+        dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_RIGHT, { source: 'touch' });
       }
       this.lastMoveTime = now;
     }

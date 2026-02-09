@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { LANES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function handleMovementInputAndOffscreen(dt) {
   if (!this.playerCanControl) {
@@ -16,12 +17,12 @@ export function handleMovementInputAndOffscreen(dt) {
         this.player.setScale(1, 1);
         this.isMoving = false;
       }
-      this.dashLeft();
+      dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.DASH_LEFT, { source: 'keyboard' });
       this.lastLeftPress = 0;
       this.laneBeforeKeyboardMove = undefined;
     } else {
       this.laneBeforeKeyboardMove = this.playerLane;
-      this.moveLeft();
+      dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_LEFT, { source: 'keyboard' });
       this.lastLeftPress = now;
     }
   } else if (Phaser.Input.Keyboard.JustDown(this.keys.RIGHT) || Phaser.Input.Keyboard.JustDown(this.keys.D)) {
@@ -34,12 +35,12 @@ export function handleMovementInputAndOffscreen(dt) {
         this.player.setScale(1, 1);
         this.isMoving = false;
       }
-      this.dashRight();
+      dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.DASH_RIGHT, { source: 'keyboard' });
       this.lastRightPress = 0;
       this.laneBeforeKeyboardMove = undefined;
     } else {
       this.laneBeforeKeyboardMove = this.playerLane;
-      this.moveRight();
+      dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_RIGHT, { source: 'keyboard' });
       this.lastRightPress = now;
     }
   }
@@ -175,7 +176,7 @@ export function handleCrouchChargeAndJump(dt) {
     } catch (e) {}
 
     if (!this.isJumping) {
-      this.superJump(chargePercent);
+      dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.SUPER_JUMP, { chargePercent, source: 'keyboard' });
     } else {
       this.queuedSuperJumpCharge = chargePercent;
     }
@@ -189,7 +190,7 @@ export function handleCrouchChargeAndJump(dt) {
     (Phaser.Input.Keyboard.JustDown(this.keys.UP) || Phaser.Input.Keyboard.JustDown(this.keys.W)) &&
     !this.isCrouching
   ) {
-    this.jump();
+    dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.JUMP, { source: 'keyboard' });
   }
 }
 
@@ -202,6 +203,8 @@ export function handleFiringInput() {
         platform: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop'
       });
     }
-    this._fire();
+    dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.FIRE, {
+      source: this.keys.SPACE.isDown ? 'keyboard' : 'touch'
+    });
   }
 }

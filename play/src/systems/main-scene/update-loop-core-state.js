@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { gameState } from '../../config.js';
 import { saveGameData } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
+import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function updateTutorialAndAdaptiveState(dt) {
   if (this.isTutorial) {
@@ -52,7 +53,9 @@ export function handlePauseAndGridInput() {
 
   if (this.isPaused) {
     if ((this.keys.SPACE.isDown || this.isTouchFiring) && !this.isHandlingFeedback) {
-      this.resumeGame();
+      dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.RESUME, {
+        source: this.keys.SPACE.isDown ? 'keyboard' : 'touch'
+      });
       this.fireBlockTime = this.time.now + 100;
     }
     return false;

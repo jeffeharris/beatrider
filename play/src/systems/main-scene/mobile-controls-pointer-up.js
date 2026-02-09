@@ -1,4 +1,5 @@
 import { gameSounds } from '../../audio/game-sounds.js';
+import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function handleMobilePointerUp() {
   if (this.touchIndicator) {
@@ -16,12 +17,12 @@ export function handleMobilePointerUp() {
     const chargePercent = this.jumpChargeAmount;
     if (chargePercent > 0.3) {
       if (!this.isJumping) {
-        this.superJump(chargePercent);
+        dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.SUPER_JUMP, { chargePercent, source: 'touch' });
       } else {
         this.queuedSuperJumpCharge = chargePercent;
       }
     } else if (!this.isJumping) {
-      this.jump();
+      dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.JUMP, { source: 'touch' });
     }
 
     this.chargeGlow.setVisible(false);
