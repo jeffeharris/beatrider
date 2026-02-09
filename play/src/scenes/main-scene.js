@@ -12,6 +12,7 @@ import { updateZoneVisualsSystem, setupMobileControlsSystem } from '../systems/m
 import { moveLeftSystem, moveRightSystem, jumpSystem, dashLeftSystem, dashRightSystem, checkDashCollisionSystem, superJumpSystem } from '../systems/main-scene/movement.js';
 import { pauseGameSystem, resumeGameSystem, showGameOverScreenSystem } from '../systems/main-scene/pause-gameover.js';
 import { createSplatEffectSystem, createDeathExplosionSystem, createExplosionSystem } from '../systems/main-scene/fx.js';
+import { spawnEnemySystem, spawnObstacleSystem, spawnFloatingStarSystem, spawnPowerUpSystem, spawnDrifterSystem } from '../systems/main-scene/spawn.js';
 
 export default class Main extends Phaser.Scene {
   constructor() {
@@ -655,18 +656,7 @@ export default class Main extends Phaser.Scene {
     return vanishX + (bottomLaneX - vanishX) * progress;
   }
   _spawnEnemy(lane, speed, texture='enemyTex'){ 
-    const vanishY = gameState.HEIGHT * 0.15; // Same horizon as grid
-    const e=this.add.image(this._laneX(lane, 0), vanishY, texture); // Start at vanishing point
-    e.lane = lane;
-    e.progress = 0; // 0 = at horizon, 1 = at player
-    e.vy=speed; 
-    e.baseSize = texture === 'fastEnemyTex' ? this.fastEnemyBaseSize : this.enemyBaseSize;
-    e.w=e.baseSize; e.h=e.baseSize; 
-    e.enemyType = texture; // Track enemy type
-    e.setScale(0.1); // Start tiny at horizon
-    e.setDepth(100); // Between shield (10) and poles (200)
-    e.trailPoints = []; // Store trail history
-    this.enemies.push(e); 
+    return spawnEnemySystem.call(this, lane, speed, texture);
   }
   
   _createSplatEffect(x, y) {
@@ -681,64 +671,15 @@ export default class Main extends Phaser.Scene {
     return createExplosionSystem.call(this, x, y, color, particleCount, scale);
   }
   _spawnObstacle(lane){
-    const vanishY = gameState.HEIGHT * 0.15;
-    const baseX = this._laneX(lane, 0);
-    
-    // Calculate dimensions
-    const obstacleW = Math.floor(80 * (Math.min(gameState.WIDTH, gameState.HEIGHT) / 800) * (isMobile ? 1.2 : 1.0) * gameState.MOBILE_SCALE);
-    const obstacleH = Math.floor(22 * (Math.min(gameState.WIDTH, gameState.HEIGHT) / 800) * (isMobile ? 1.2 : 1.0) * gameState.MOBILE_SCALE);
-    const poleWidth = Math.floor(obstacleW * 0.15);
-    const shieldGap = 2;
-    
-    // For now, just use the original simple obstacle texture
-    // The layering effect doesn't work with containers as I tried
-    const o = this.add.image(baseX, vanishY, 'obstacleTex');
-    o.lane = lane;
-    o.progress = 0;
-    o.vy = ENEMY_SPEED_BASE * 0.7;
-    o.baseSize = Math.floor(60 * gameState.MOBILE_SCALE);
-    o.w = o.baseSize;
-    o.h = Math.floor(22 * gameState.MOBILE_SCALE);
-    o.setScale(0.1);
-    o.setDepth(150); // Put obstacles in front of enemies for now
-    o.trailPoints = [];
-    o.isObstacle = true;
-    
-    this.obstacles.push(o);
-    
-    // If we're in break section, spawn a star above this obstacle
-    // During tutorial wave 6, always spawn stars. After tutorial, only in actual break sections
-    if(this.isBreakSection) {
-      // Always spawn stars during tutorial wave 6, or in normal game breaks
-      if ((this.isTutorial && this.tutorialWave === 6) || !this.isTutorial) {
-        this._spawnFloatingStar(o);
-      }
-    }
+    return spawnObstacleSystem.call(this, lane);
   }
   
   _spawnFloatingStar(obstacle) {
-    const star = this.add.image(obstacle.x, obstacle.y - 25, 'starTex');
-    star.attachedObstacle = obstacle;
-    star.setScale(1.0); // Start at normal size, let update handle perspective scaling
-    star.setDepth(160); // Above obstacles
-    star.collected = false;
-    star.rotationSpeed = 0.05; // Spinning speed
-    star.floatOffset = 0;
-    star.floatSpeed = 0.003;
-    
-    this.floatingStars.push(star);
+    return spawnFloatingStarSystem.call(this, obstacle);
   }
   
   _spawnPowerUp(lane){
-    const vanishY = gameState.HEIGHT * 0.15;
-    const p = this.add.image(this._laneX(lane, 0), vanishY, 'powerUpTex');
-    p.lane = lane;
-    p.progress = 0;
-    p.vy = ENEMY_SPEED_BASE * 1.2;
-    p.baseSize = Math.floor(20 * gameState.MOBILE_SCALE);
-    p.setScale(0.1);
-    p.setDepth(100); // Same depth as enemies - between shield and poles
-    this.powerUps.push(p);
+    return spawnPowerUpSystem.call(this, lane);
   }
   
   handleTutorialSpawn() {
@@ -762,23 +703,7 @@ export default class Main extends Phaser.Scene {
   }
   
   _spawnDrifter(lane){
-    const vanishY = gameState.HEIGHT * 0.15;
-    const d = this.add.image(this._laneX(lane, 0), vanishY, 'drifterTex');
-    d.lane = lane;
-    d.targetLane = lane; // Will change
-    d.progress = 0;
-    d.vy = ENEMY_SPEED_BASE * 0.8;
-    d.baseSize = this.enemyBaseSize; // Use screen-relative size
-    // Smaller collision box for diamonds - about 70% of visual size for tighter timing
-    d.w = d.baseSize * 0.7; 
-    d.h = d.baseSize * 0.7;
-    d.enemyType = 'drifterTex';
-    d.isDrifter = true;
-    d.driftTimer = 0;
-    d.setScale(0.1);
-    d.setDepth(100); // Between shield (10) and poles (200)
-    d.trailPoints = []; // Initialize trail points
-    this.enemies.push(d); // Add to enemies array for collision
+    return spawnDrifterSystem.call(this, lane);
   }
   
   _pulseGrid(){
