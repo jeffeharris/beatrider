@@ -2,6 +2,11 @@ import * as Tone from 'tone';
 import { gameState } from '../../config.js';
 import { saveGameData, sessionHighScore, setSessionHighScore } from '../../storage.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
+import {
+  applyPoints,
+  resolveComboFromWindow,
+  updateMaxComboReached
+} from './score-combo-state.js';
 
 export function updateBulletsSystem(dt) {
 const { combat } = this.stateSlices;
@@ -194,20 +199,27 @@ for(let i=this.bullets.length-1; i>=0; i--){
           basePoints = 25; // Yellow fast enemies worth more
         }
         
-        // Check for combo
         const currentTime = this.time.now;
-        if(currentTime - this.lastKillTime < this.comboWindow) {
-          // Within combo window - increase multiplier
-          combat.combo = Math.min(combat.combo + 1, this.maxCombo);
-        } else {
-          // Combo expired - reset to 1
-          combat.combo = 1;
-        }
+        combat.combo = resolveComboFromWindow({
+          currentCombo: combat.combo,
+          nowMs: currentTime,
+          lastKillTimeMs: this.lastKillTime,
+          comboWindowMs: this.comboWindow,
+          maxCombo: this.maxCombo
+        });
         this.lastKillTime = currentTime;
-        
-        // Apply combo multiplier
-        const points = basePoints * combat.combo;
-        combat.score += points;
+        this.maxComboReached = updateMaxComboReached({
+          currentMaxComboReached: this.maxComboReached,
+          combo: combat.combo
+        });
+
+        const scoreResult = applyPoints({
+          currentScore: combat.score,
+          basePoints,
+          comboMultiplier: combat.combo
+        });
+        const points = scoreResult.pointsAwarded;
+        combat.score = scoreResult.nextScore;
         this.scoreText.setText(combat.score.toString());
         
         // Show combo text with animation

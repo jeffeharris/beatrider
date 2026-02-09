@@ -3,6 +3,11 @@ import * as Tone from 'tone';
 import { gameState } from '../../config.js';
 import { sessionHighScore, setSessionHighScore } from '../../storage.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import {
+  applyPoints,
+  resolveComboForChain,
+  updateMaxComboReached
+} from './score-combo-state.js';
 
 export function updateObstaclesStarsPowerUpsSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
@@ -38,9 +43,21 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
       if(obstacle.progress > 0.94 && obstacle.progress < 0.97) {
         // Collect the star!
         star.collected = true;
-        combat.score += 50;
-        combat.combo = Math.min(combat.combo + 1, 8);
+        combat.combo = resolveComboForChain({
+          currentCombo: combat.combo,
+          maxCombo: this.maxCombo
+        });
+        this.maxComboReached = updateMaxComboReached({
+          currentMaxComboReached: this.maxComboReached,
+          combo: combat.combo
+        });
         this.lastKillTime = this.time.now;
+        const scoreResult = applyPoints({
+          currentScore: combat.score,
+          basePoints: 50,
+          comboMultiplier: 1
+        });
+        combat.score = scoreResult.nextScore;
         this.scoreText.setText(combat.score.toString());
         
         // Track for tutorial
@@ -228,7 +245,12 @@ for(let i=this.powerUps.length-1; i>=0; i--){
   if(p.progress > 0.93 && p.progress < 0.98 && p.lane === playerState.lane){
     p.destroy();
     this.powerUps.splice(i,1);
-    combat.score += 10;
+    const scoreResult = applyPoints({
+      currentScore: combat.score,
+      basePoints: 10,
+      comboMultiplier: 1
+    });
+    combat.score = scoreResult.nextScore;
     this.scoreText.setText(combat.score.toString()); // Update score display
     
     // Track for tutorial
