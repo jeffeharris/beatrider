@@ -16,6 +16,7 @@ import { spawnEnemySystem, spawnObstacleSystem, spawnFloatingStarSystem, spawnPo
 import { pulseGridSystem, drawPerspectiveGridSystem, fireSystem } from '../systems/main-scene/grid-fire.js';
 import { updateMainLoopSystem } from '../systems/main-scene/update-loop.js';
 import { createMainSceneSystem } from '../systems/main-scene/create-setup.js';
+import { resizeMainSceneSystem } from '../systems/main-scene/resize.js';
 
 export default class Main extends Phaser.Scene {
   constructor() {
@@ -177,67 +178,7 @@ export default class Main extends Phaser.Scene {
   }
 
   resize(gameSize, baseSize, displaySize, resolution) {
-    // Update global dimensions using the actual camera dimensions
-    updateDimensions(this.cameras.main.width, this.cameras.main.height);
-    
-    // Update vanishing point for consistent perspective
-    this.vanishX = gameState.WIDTH / 2;
-    this.vanishY = gameState.HEIGHT * 0.15;
-    
-    // Update player position
-    if (this.player) {
-      this.player.x = this._laneX(this.playerLane);
-      this.player.y = gameState.PLAYER_Y;
-    }
-    
-    // Update UI text positions
-    const scoreY = isMobile ? gameState.HEIGHT-36 : gameState.HEIGHT-24;
-    const highScoreY = isMobile ? gameState.HEIGHT-72 : gameState.HEIGHT-48;
-    const comboY = isMobile ? gameState.HEIGHT-108 : gameState.HEIGHT-72;
-    
-    // Update score label and value positions
-    if (this.scoreLabel) {
-      this.scoreLabel.y = scoreY;
-    }
-    if (this.scoreText) {
-      this.scoreText.y = scoreY;
-    }
-    
-    // Update high score label and value positions
-    if (this.highScoreLabel) {
-      this.highScoreLabel.y = highScoreY;
-    }
-    if (this.highScoreText) {
-      this.highScoreText.y = highScoreY;
-    }
-    
-    if (this.comboText) {
-      this.comboText.y = comboY;
-    }
-    
-    // Update combo meter position
-    if (this.comboMeterBg) {
-      const meterY = comboY + 30;
-      this.comboMeterY = meterY;
-      this.comboMeterBg.clear();
-      this.comboMeterBg.fillStyle(0x333333, 0.5);
-      this.comboMeterBg.fillRect(10, meterY, 200, 8);
-    }
-    
-    // Recreate starfield with new dimensions
-    if (this.stars) {
-      this.createStarfield();
-    }
-    
-    // Update grid if visible
-    if (this.gridVisible && this.gridGraphics) {
-      this._drawPerspectiveGrid();
-    }
-    
-    // Update mobile controls positions if they exist
-    if (this.mobileControls) {
-      this.setupMobileControls();
-    }
+    return resizeMainSceneSystem.call(this, gameSize, baseSize, displaySize, resolution);
   }
   
   updateTrails(dt) {
