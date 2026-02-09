@@ -5,9 +5,8 @@ import { gameSounds } from '../../audio/game-sounds.js';
 import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function handleMobilePointerMove(pointer) {
-  const player = this.stateSlices?.player;
-  const input = this.stateSlices?.input;
-  if (!pointer.isDown || !(input?.touchActive ?? this.touchZoneActive)) return;
+  const { player, input } = this.stateSlices;
+  if (!pointer.isDown || !input.touchActive) return;
 
   if (this.touchIndicator && this.touchIndicator.visible) {
     this.touchIndicator.setPosition(pointer.x, pointer.y);
@@ -17,19 +16,18 @@ export function handleMobilePointerMove(pointer) {
   const dx = pointer.x - this.touchStartX;
   const dy = pointer.y - this.touchStartY;
 
-  if ((player?.charging ?? this.isChargingJump) && !this.usingTimeBasedCharge) {
+  if (player.charging && !this.usingTimeBasedCharge) {
     const currentPullDistance = Math.max(0, dy);
     this.maxPullDistance = Math.max(this.maxPullDistance, currentPullDistance);
 
     const maxPullThreshold = this.zoneRadius * 2.25;
     const newCharge = Math.min(this.maxPullDistance / maxPullThreshold, 1.0);
-    if (input) input.jumpChargeAmount = newCharge;
-    else this.jumpChargeAmount = newCharge;
+    input.jumpChargeAmount = newCharge;
 
     this.chargeGlow.clear();
     this.chargeGlow.setPosition(this.player.x, this.player.y);
 
-    const charge = input?.jumpChargeAmount ?? this.jumpChargeAmount;
+    const charge = input.jumpChargeAmount;
     const pulseSpeed = 10 + charge * 20;
     const pulse = Math.sin(currentTime * pulseSpeed * 0.001) * 0.2 + 0.8;
     const glowRadius = 30 + charge * 50 * pulse;
@@ -80,7 +78,7 @@ export function handleMobilePointerMove(pointer) {
     }
   }
 
-  if (newZone !== (input?.currentZone ?? this.currentZone)) {
+  if (newZone !== input.currentZone) {
     if (this.touchIndicator) {
       switch (newZone) {
         case 'leftDash':
@@ -103,18 +101,18 @@ export function handleMobilePointerMove(pointer) {
     }
 
     const timeSinceLastMove = currentTime - this.lastMoveTime;
-    const canMove = !(player?.moving ?? this.isMoving) && !(player?.dashing ?? this.isDashing) && timeSinceLastMove > this.moveCooldown;
-    const canDash = !(player?.dashing ?? this.isDashing);
+    const canMove = !player.moving && !player.dashing && timeSinceLastMove > this.moveCooldown;
+    const canDash = !player.dashing;
 
     switch (newZone) {
       case 'leftMove':
-        if (((input?.currentZone ?? this.currentZone) === 'center' || (input?.currentZone ?? this.currentZone) === 'jump') && canMove) {
-          this.laneBeforeMove = player?.lane ?? this.playerLane;
+        if ((input.currentZone === 'center' || input.currentZone === 'jump') && canMove) {
+          this.laneBeforeMove = player.lane;
           dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_LEFT, { source: 'touch' });
           this.lastMoveTime = currentTime;
 
           this.time.delayedCall(MAIN_SCENE_TUNING.touch.recenterDelayMs, () => {
-            if (input?.touchActive ?? this.touchZoneActive) {
+            if (input.touchActive) {
               const activePointer = this.input.activePointer;
               if (activePointer && activePointer.isDown) {
                 const edgePadding = this.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
@@ -131,13 +129,13 @@ export function handleMobilePointerMove(pointer) {
         break;
 
       case 'rightMove':
-        if (((input?.currentZone ?? this.currentZone) === 'center' || (input?.currentZone ?? this.currentZone) === 'jump') && canMove) {
-          this.laneBeforeMove = player?.lane ?? this.playerLane;
+        if ((input.currentZone === 'center' || input.currentZone === 'jump') && canMove) {
+          this.laneBeforeMove = player.lane;
           dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_RIGHT, { source: 'touch' });
           this.lastMoveTime = currentTime;
 
           this.time.delayedCall(MAIN_SCENE_TUNING.touch.recenterDelayMs, () => {
-            if (input?.touchActive ?? this.touchZoneActive) {
+            if (input.touchActive) {
               const activePointer = this.input.activePointer;
               if (activePointer && activePointer.isDown) {
                 const edgePadding = this.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
@@ -157,13 +155,11 @@ export function handleMobilePointerMove(pointer) {
         if (canDash) {
           if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < MAIN_SCENE_TUNING.touch.dashFromMoveWindowMs) {
             this.tweens.killTweensOf(this.player);
-            if (player) player.lane = this.laneBeforeMove;
-            else this.playerLane = this.laneBeforeMove;
-            this.player.x = this._laneX(player?.lane ?? this.playerLane);
+            player.lane = this.laneBeforeMove;
+            this.player.x = this._laneX(player.lane);
             this.player.setScale(1, 1);
             this.laneBeforeMove = null;
-            if (player) player.moving = false;
-            else this.isMoving = false;
+            player.moving = false;
           }
 
           dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.DASH_LEFT, { source: 'touch' });
@@ -175,13 +171,11 @@ export function handleMobilePointerMove(pointer) {
         if (canDash) {
           if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < MAIN_SCENE_TUNING.touch.dashFromMoveWindowMs) {
             this.tweens.killTweensOf(this.player);
-            if (player) player.lane = this.laneBeforeMove;
-            else this.playerLane = this.laneBeforeMove;
-            this.player.x = this._laneX(player?.lane ?? this.playerLane);
+            player.lane = this.laneBeforeMove;
+            this.player.x = this._laneX(player.lane);
             this.player.setScale(1, 1);
             this.laneBeforeMove = null;
-            if (player) player.moving = false;
-            else this.isMoving = false;
+            player.moving = false;
           }
 
           dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.DASH_RIGHT, { source: 'touch' });
@@ -190,18 +184,17 @@ export function handleMobilePointerMove(pointer) {
         break;
 
       case 'jump':
-        if ((input?.currentZone ?? this.currentZone) !== 'jump' && !(player?.jumping ?? this.isJumping) && !(player?.charging ?? this.isChargingJump)) {
+        if (input.currentZone !== 'jump' && !player.jumping && !player.charging) {
           dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.JUMP, { source: 'touch' });
         }
         break;
 
       case 'crouch':
-        if (!(player?.charging ?? this.isChargingJump)) {
-          if (player?.jumping ?? this.isJumping) {
+        if (!player.charging) {
+          if (player.jumping) {
             this.queuedCrouchOnLanding = true;
           } else {
-            if (player) player.charging = true;
-            else this.isChargingJump = true;
+            player.charging = true;
             this.chargeGlow.setVisible(true);
 
             try {
@@ -212,16 +205,14 @@ export function handleMobilePointerMove(pointer) {
         break;
     }
 
-    if ((input?.currentZone ?? this.currentZone) === 'crouch') {
+    if (input.currentZone === 'crouch') {
       if (
         newZone === 'leftMove' || newZone === 'rightMove' ||
         newZone === 'leftDash' || newZone === 'rightDash'
       ) {
-        if (player?.charging ?? this.isChargingJump) {
-          if (player) player.charging = false;
-          else this.isChargingJump = false;
-          if (input) input.jumpChargeAmount = 0;
-          else this.jumpChargeAmount = 0;
+        if (player.charging) {
+          player.charging = false;
+          input.jumpChargeAmount = 0;
           this.maxPullDistance = 0;
           this.chargeGlow.setVisible(false);
         }
@@ -233,10 +224,9 @@ export function handleMobilePointerMove(pointer) {
       }
     }
 
-    if (input) input.currentZone = newZone;
-    else this.currentZone = newZone;
+    input.currentZone = newZone;
     this.zoneHoldTimer = 0;
-  } else if ((input?.currentZone ?? this.currentZone) === 'leftMove' || (input?.currentZone ?? this.currentZone) === 'rightMove') {
+  } else if (input.currentZone === 'leftMove' || input.currentZone === 'rightMove') {
     const now = this.time.now;
     this.zoneHoldTimer += now - (this.lastZoneCheckTime || now);
 
@@ -245,8 +235,8 @@ export function handleMobilePointerMove(pointer) {
       : this.zoneRepeatDelay;
 
     const timeSinceLastMove = now - this.lastMoveTime;
-    if (timeSinceLastMove > repeatThreshold && !(player?.moving ?? this.isMoving) && !(player?.dashing ?? this.isDashing)) {
-      if ((input?.currentZone ?? this.currentZone) === 'leftMove') {
+    if (timeSinceLastMove > repeatThreshold && !player.moving && !player.dashing) {
+      if (input.currentZone === 'leftMove') {
         dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_LEFT, { source: 'touch' });
       } else {
         dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.MOVE_RIGHT, { source: 'touch' });

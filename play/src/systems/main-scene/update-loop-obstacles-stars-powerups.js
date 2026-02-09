@@ -5,9 +5,7 @@ import { sessionHighScore, setSessionHighScore } from '../../storage.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 
 export function updateObstaclesStarsPowerUpsSystem(dt, pulseShift, pulseXShift) {
-const playerState = this.stateSlices?.player;
-const flow = this.stateSlices?.flow;
-const combat = this.stateSlices?.combat;
+const { player: playerState, flow, combat } = this.stateSlices;
 const vanishY = gameState.HEIGHT * 0.15;
 for(let i=this.floatingStars.length-1; i>=0; i--){
   const star = this.floatingStars[i];
@@ -35,20 +33,15 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
     // Check collection - player must be jumping and in the same lane
     // Uses same collision timing as obstacles (0.94-0.97) so you collect the star
     // at the exact moment you'd hit the obstacle if you weren't jumping
-    if(!star.collected && (playerState?.jumping ?? this.isJumping) && obstacle.lane === (playerState?.lane ?? this.playerLane)) {
+    if(!star.collected && playerState.jumping && obstacle.lane === playerState.lane) {
       // Same collision window as obstacles
       if(obstacle.progress > 0.94 && obstacle.progress < 0.97) {
         // Collect the star!
         star.collected = true;
-        if (combat) {
-          combat.score += 50;
-          combat.combo = Math.min(combat.combo + 1, 8);
-        } else {
-          this.score += 50;
-          this.combo = Math.min(this.combo + 1, 8);
-        }
+        combat.score += 50;
+        combat.combo = Math.min(combat.combo + 1, 8);
         this.lastKillTime = this.time.now;
-        this.scoreText.setText((combat?.score ?? this.score).toString());
+        this.scoreText.setText(combat.score.toString());
         
         // Track for tutorial
         if (this.isTutorial) {
@@ -56,8 +49,8 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
         }
         
         // Show combo text
-        if((combat?.combo ?? this.combo) > 1) {
-          this.comboText.setText(`${combat?.combo ?? this.combo}x COMBO! +50`);
+        if(combat.combo > 1) {
+          this.comboText.setText(`${combat.combo}x COMBO! +50`);
           this.comboText.setAlpha(1);
         }
         
@@ -169,22 +162,21 @@ for(let i=this.obstacles.length-1; i>=0; i--){
   
   // Check collision with player (can jump over obstacles!)
   // 3D collision: obstacles only collide when near player (0.94-0.97), can step behind them after
-  if(o.progress > 0.94 && o.progress < 0.97 && o.lane === (playerState?.lane ?? this.playerLane)) {
-    if ((playerState?.jumping ?? this.isJumping) || this.isStretching) {
+  if(o.progress > 0.94 && o.progress < 0.97 && o.lane === playerState.lane) {
+    if (playerState.jumping || playerState.stretching) {
       // Successfully jumped over obstacle - track for tutorial
       if (this.isTutorial && !o.tutorialCounted) {
         o.tutorialCounted = true; // Only count once per obstacle
         this.tutorialProgress.jumpsMade++;
       }
-    } else if (!(flow?.invincible ?? this.isInvincible)) {
+    } else if (!flow.invincible) {
       // Hit obstacle - game over
       // Set invincible immediately to prevent multiple deaths
-      if (flow) flow.invincible = true;
-      else this.isInvincible = true;
+      flow.invincible = true;
       
       // Save highscore before restarting
-      if((combat?.score ?? this.score) > sessionHighScore) {
-        setSessionHighScore(combat?.score ?? this.score);
+      if(combat.score > sessionHighScore) {
+        setSessionHighScore(combat.score);
       }
       
       // Create splat effect for hitting wall
@@ -233,25 +225,19 @@ for(let i=this.powerUps.length-1; i>=0; i--){
   p.angle += dt * 0.2; // Rotate
   
   // Check collection - slightly more forgiving than enemy collision
-  if(p.progress > 0.93 && p.progress < 0.98 && p.lane === this.playerLane){
+  if(p.progress > 0.93 && p.progress < 0.98 && p.lane === playerState.lane){
     p.destroy();
     this.powerUps.splice(i,1);
-    if (combat) combat.score += 10;
-    else this.score += 10;
-    this.scoreText.setText((combat?.score ?? this.score).toString()); // Update score display
+    combat.score += 10;
+    this.scoreText.setText(combat.score.toString()); // Update score display
     
     // Track for tutorial
     if (this.isTutorial) {
       this.tutorialProgress.powerUpsCollected = (this.tutorialProgress.powerUpsCollected || 0) + 1;
     }
     
-    if (combat) {
-      combat.rapidFire = true;
-      combat.rapidFireTimer = 5000;
-    } else {
-      this.rapidFire = true;
-      this.rapidFireTimer = 5000;
-    }
+    combat.rapidFire = true;
+    combat.rapidFireTimer = 5000;
     this.player.setTint(0x00ff00); // Green tint
     
     // Add jello wobble reaction for power-up
@@ -292,12 +278,10 @@ for(let i=this.powerUps.length-1; i>=0; i--){
 }
 
 // Update rapid fire timer
-if(combat?.rapidFire ?? this.rapidFire){
-  if (combat) combat.rapidFireTimer -= dt;
-  else this.rapidFireTimer -= dt;
-  if((combat?.rapidFireTimer ?? this.rapidFireTimer) <= 0){
-    if (combat) combat.rapidFire = false;
-    else this.rapidFire = false;
+if(combat.rapidFire){
+  combat.rapidFireTimer -= dt;
+  if(combat.rapidFireTimer <= 0){
+    combat.rapidFire = false;
     this.player.clearTint();
   }
 }

@@ -3,8 +3,8 @@ import * as Tone from 'tone';
 import { gameSounds } from '../../audio/game-sounds.js';
 
 export function updateIdleWobble(dt) {
-  const player = this.stateSlices?.player;
-  if (!(player?.moving ?? this.isMoving) && !(player?.jumping ?? this.isJumping) && !(player?.dashing ?? this.isDashing) && this.player) {
+  const { player } = this.stateSlices;
+  if (!player.moving && !player.jumping && !player.dashing && this.player) {
     this.idleWobblePhase += dt * 0.003;
     const breathScale = 1 + Math.sin(this.idleWobblePhase) * 0.03;
     const squishScale = 1 - Math.cos(this.idleWobblePhase * 2) * 0.02;
@@ -27,19 +27,17 @@ export function updateIdleWobble(dt) {
 }
 
 export function updateTimeBasedTouchCharge(dt) {
-  const player = this.stateSlices?.player;
-  const input = this.stateSlices?.input;
-  if ((player?.charging ?? this.isChargingJump) && this.usingTimeBasedCharge) {
+  const { player, input } = this.stateSlices;
+  if (player.charging && this.usingTimeBasedCharge) {
     const currentTime = this.time.now;
     const elapsed = currentTime - this.touchChargeStartTime;
     const charge = Math.min(elapsed / this.maxChargeTime, 1.0);
-    if (input) input.jumpChargeAmount = charge;
-    else this.jumpChargeAmount = charge;
+    input.jumpChargeAmount = charge;
 
     this.chargeGlow.clear();
     this.chargeGlow.setPosition(this.player.x, this.player.y);
 
-    const currentCharge = input?.jumpChargeAmount ?? this.jumpChargeAmount;
+    const currentCharge = input.jumpChargeAmount;
     const pulseSpeed = 10 + currentCharge * 20;
     const pulse = Math.sin(currentTime * pulseSpeed * 0.001) * 0.2 + 0.8;
     const glowRadius = 30 + currentCharge * 50 * pulse;
@@ -66,8 +64,8 @@ export function updateTimeBasedTouchCharge(dt) {
 }
 
 export function updateComboMeter() {
-  const combat = this.stateSlices?.combat;
-  const combo = combat?.combo ?? this.combo;
+  const { combat } = this.stateSlices;
+  const combo = combat.combo;
   if (combo > 1) {
     const timeSinceKill = this.time.now - this.lastKillTime;
     const timeRemaining = Math.max(0, this.comboWindow - timeSinceKill);
@@ -86,8 +84,7 @@ export function updateComboMeter() {
     this.comboMeter.fillRect(10, this.comboMeterY, 200 * meterPercent, 8);
 
     if (timeRemaining <= 0) {
-      if (combat) combat.combo = 1;
-      else this.combo = 1;
+      combat.combo = 1;
       this.comboMeterBg.setVisible(false);
       this.comboMeter.clear();
     }

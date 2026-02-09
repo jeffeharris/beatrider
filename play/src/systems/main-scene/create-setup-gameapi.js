@@ -5,12 +5,10 @@ import { getSection } from '../../audio/music-engine.js';
 import { currentDifficulty, uiState, updateGridButton } from '../../audio/music-ui.js';
 
 export function setupSceneGameApi() {
-  const flow = this.stateSlices?.flow;
-  const combat = this.stateSlices?.combat;
+  const { flow, combat } = this.stateSlices;
   window.GameAPI = {
     onBeat: () => {
-      if (combat) combat.beats++;
-      else this.beats++;
+      combat.beats++;
 
       if (this.isTutorial) {
         this.handleTutorialSpawn();
@@ -25,7 +23,7 @@ export function setupSceneGameApi() {
         }
       }
 
-      const baseSpeed = (ENEMY_SPEED_BASE + Math.floor((combat?.beats ?? this.beats) / 16) * 30) * currentDifficulty.speedMult;
+      const baseSpeed = (ENEMY_SPEED_BASE + Math.floor(combat.beats / 16) * 30) * currentDifficulty.speedMult;
       const speed = baseSpeed * this.adaptiveState.currentSpeedMultiplier;
 
       const lane = Phaser.Math.Between(0, LANES - 1);
@@ -46,7 +44,7 @@ export function setupSceneGameApi() {
         }
       }
 
-      const baseSpeed = (ENEMY_SPEED_BASE * 1.5 + Math.floor((combat?.beats ?? this.beats) / 16) * 30) * currentDifficulty.speedMult;
+      const baseSpeed = (ENEMY_SPEED_BASE * 1.5 + Math.floor(combat.beats / 16) * 30) * currentDifficulty.speedMult;
       const speed = baseSpeed * this.adaptiveState.currentSpeedMultiplier;
       const lane = Phaser.Math.Between(0, LANES - 1);
       this._spawnEnemy(lane, speed, 'fastEnemyTex');
@@ -117,7 +115,7 @@ export function setupSceneGameApi() {
       }
       if (!this.gridVisible && this.gridGraphics) {
         this.gridGraphics.clear();
-      } else if (this.gridVisible && (flow?.paused ?? this.isPaused)) {
+      } else if (this.gridVisible && flow.paused) {
         this._drawPerspectiveGrid();
       }
       uiState.gridVisible = this.gridVisible;

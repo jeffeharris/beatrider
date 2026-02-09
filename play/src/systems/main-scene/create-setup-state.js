@@ -2,6 +2,7 @@ import { gameState } from '../../config.js';
 import { sessionHighScore } from '../../storage.js';
 import { currentGenre } from '../../audio/music-engine.js';
 import { currentDifficulty } from '../../audio/music-ui.js';
+import { initializeMainSceneStateSlices } from './state-slices.js';
 
 export function initCreateSceneState(data) {
   this.isTutorial = data?.tutorialMode || false;
@@ -50,6 +51,7 @@ export function initCreateSceneState(data) {
   this.isShowingGameOver = false;
   this.isInvincible = false;
   this.playerCanControl = true;
+  initializeMainSceneStateSlices.call(this);
 
   window.gameScene = this;
   window.currentGameScene = this;
@@ -59,15 +61,15 @@ export function setupVisibilityAndShutdownHandlers() {
   if (this.visibilityHandler) return;
 
   this.visibilityHandler = () => {
-    const flow = this.stateSlices?.flow;
+    const { flow } = this.stateSlices;
     if (document.hidden) {
-      if (!(flow?.paused ?? this.isPaused) && !(flow?.gameOver ?? this.isShowingGameOver)) {
+      if (!flow.paused && !flow.gameOver) {
         this.pauseGame();
         this.wasAutoPaused = true;
       }
     } else if (this.wasAutoPaused) {
       this.wasAutoPaused = false;
-      if ((flow?.paused ?? this.isPaused) && this.pauseOverlay) {
+      if (flow.paused && this.pauseOverlay) {
         this.pauseOverlay.setVisible(true);
         this.pauseText.setVisible(true);
       }

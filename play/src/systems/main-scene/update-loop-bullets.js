@@ -4,7 +4,7 @@ import { saveGameData, sessionHighScore, setSessionHighScore } from '../../stora
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
 
 export function updateBulletsSystem(dt) {
-const combat = this.stateSlices?.combat;
+const { combat } = this.stateSlices;
 const vanishY = gameState.HEIGHT * 0.15;
 for(let i=this.bullets.length-1; i>=0; i--){
   const b=this.bullets[i]; 
@@ -198,30 +198,24 @@ for(let i=this.bullets.length-1; i>=0; i--){
         const currentTime = this.time.now;
         if(currentTime - this.lastKillTime < this.comboWindow) {
           // Within combo window - increase multiplier
-          if (combat) {
-            combat.combo = Math.min(combat.combo + 1, this.maxCombo);
-          } else {
-            this.combo = Math.min(this.combo + 1, this.maxCombo);
-          }
+          combat.combo = Math.min(combat.combo + 1, this.maxCombo);
         } else {
           // Combo expired - reset to 1
-          if (combat) combat.combo = 1;
-          else this.combo = 1;
+          combat.combo = 1;
         }
         this.lastKillTime = currentTime;
         
         // Apply combo multiplier
-        const points = basePoints * (combat?.combo ?? this.combo);
-        if (combat) combat.score += points;
-        else this.score += points;
-        this.scoreText.setText((combat?.score ?? this.score).toString());
+        const points = basePoints * combat.combo;
+        combat.score += points;
+        this.scoreText.setText(combat.score.toString());
         
         // Show combo text with animation
-        if((combat?.combo ?? this.combo) > 1) {
-          this.comboText.setText(`${combat?.combo ?? this.combo}x COMBO! +${points}`);
+        if(combat.combo > 1) {
+          this.comboText.setText(`${combat.combo}x COMBO! +${points}`);
           this.comboText.setAlpha(1);
           // Pulse effect based on combo level
-          const currentCombo = combat?.combo ?? this.combo;
+          const currentCombo = combat.combo;
           const comboColor = currentCombo >= 6 ? '#ff00ff' : currentCombo >= 4 ? '#ffff00' : '#00ffff';
           this.comboText.setColor(comboColor);
           this.comboText.setScale(1 + (currentCombo * 0.05));
@@ -236,9 +230,9 @@ for(let i=this.bullets.length-1; i>=0; i--){
           });
           
           // Screen flash for high combos
-          if((combat?.combo ?? this.combo) >= 4) {
+          if(combat.combo >= 4) {
             const flash = this.add.graphics();
-            flash.fillStyle((combat?.combo ?? this.combo) >= 6 ? 0xff00ff : 0xffff00, 0.3);
+            flash.fillStyle(combat.combo >= 6 ? 0xff00ff : 0xffff00, 0.3);
             flash.fillRect(0, 0, gameState.WIDTH, gameState.HEIGHT);
             this.tweens.add({
               targets: flash,
@@ -249,7 +243,7 @@ for(let i=this.bullets.length-1; i>=0; i--){
           }
           
           // Bonus sound effects for combo milestones
-          if((combat?.combo ?? this.combo) === 4 || (combat?.combo ?? this.combo) === 6 || (combat?.combo ?? this.combo) === 8) {
+          if(combat.combo === 4 || combat.combo === 6 || combat.combo === 8) {
             try {
               const now = Tone.now();
               // Ascending arpeggio for combo milestone
@@ -261,8 +255,8 @@ for(let i=this.bullets.length-1; i>=0; i--){
           }
         }
         // Update highscore if beaten
-        if((combat?.score ?? this.score) > sessionHighScore) {
-          setSessionHighScore(combat?.score ?? this.score);
+        if(combat.score > sessionHighScore) {
+          setSessionHighScore(combat.score);
           saveGameData({ highScore: sessionHighScore });
           this.highScoreText.setText(sessionHighScore.toString());
           this.highScoreText.setColor('#0ff'); // Cyan when beating high score

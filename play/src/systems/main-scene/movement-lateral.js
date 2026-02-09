@@ -2,36 +2,32 @@ import { LANES, PLAYER_CONFIG } from '../../config.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
 
 export function moveLeftSystem() {
-  const player = this.stateSlices?.player;
-  const combat = this.stateSlices?.combat;
-  if(player?.moving ?? this.isMoving) return;
+  const { player, combat } = this.stateSlices;
+  if(player.moving) return;
   // Block movement if already off-screen
-  if((player?.lane ?? this.playerLane) < 0 || (player?.lane ?? this.playerLane) >= LANES) return;
-  const previousLane = player?.lane ?? this.playerLane;
-  if (player) player.lane = Math.max(-1, player.lane - 1);
-  else this.playerLane = Math.max(-1, this.playerLane - 1); // Can go to -1 (off-screen left)
-  const targetX = this._laneX(player?.lane ?? this.playerLane);
+  if(player.lane < 0 || player.lane >= LANES) return;
+  const previousLane = player.lane;
+  player.lane = Math.max(-1, player.lane - 1); // Can go to -1 (off-screen left)
+  const targetX = this._laneX(player.lane);
   
   // Play womp sound when entering off-screen
-  if((player?.lane ?? this.playerLane) === -1 && previousLane === 0) {
+  if(player.lane === -1 && previousLane === 0) {
     try {
       gameSounds.offScreenWomp.triggerAttackRelease("C2", "4n");
     } catch(e) {}
   }
   
   // Check if we're jumping for special animation
-  if(player?.jumping ?? this.isJumping) {
+  if(player.jumping) {
     // Mid-air twirl animation
-    if (player) player.moving = true;
-    else this.isMoving = true;
+    player.moving = true;
     this.tweens.add({
       targets: this.player,
       x: targetX,
       duration: PLAYER_CONFIG.movement.air.duration,
       ease: 'Quad.easeOut',
       onComplete: () => {
-        if (player) player.moving = false;
-        else this.isMoving = false;
+        player.moving = false;
       }
     });
     
@@ -54,13 +50,8 @@ export function moveLeftSystem() {
     });
   } else {
     // Ground movement - jello stretchy animation
-    if (player) {
-      player.moving = true;
-      player.stretching = true;
-    } else {
-      this.isMoving = true;
-      this.isStretching = true; // Only immune during stretch phase
-    }
+    player.moving = true;
+    player.stretching = true;
     const cfg = PLAYER_CONFIG.movement.ground;
     
     // Add reactive wobble force
@@ -74,8 +65,7 @@ export function moveLeftSystem() {
       duration: cfg.stretch.duration,
       ease: 'Cubic.easeOut',
       onComplete: () => {
-        if (player) player.stretching = false;
-        else this.isStretching = false; // Stretch phase complete, no longer immune
+        player.stretching = false; // Stretch phase complete, no longer immune
         // Slingshot to position with overshoot
         this.tweens.add({
           targets: this.player,
@@ -86,9 +76,8 @@ export function moveLeftSystem() {
           ease: 'Power2',
           onComplete: () => {
             // Skip bounce if dash is starting or in progress
-            if (this.isDashStarting || (player?.dashing ?? this.isDashing)) {
-              if (player) player.moving = false;
-              else this.isMoving = false;
+            if (this.isDashStarting || player.dashing) {
+              player.moving = false;
               return;
             }
             // Bounce back with secondary wobble
@@ -100,8 +89,7 @@ export function moveLeftSystem() {
               duration: cfg.bounce.duration,
               ease: 'Sine.easeInOut',
               onComplete: () => {
-                if (player) player.moving = false;
-                else this.isMoving = false; // Can shoot after bounce completes
+                player.moving = false; // Can shoot after bounce completes
                 // Final settle with jello wobbles (purely visual)
                 this.tweens.add({
                   targets: this.player,
@@ -121,9 +109,8 @@ export function moveLeftSystem() {
   }
   
   // Reset rubber band timer when moving off-screen
-  if((player?.lane ?? this.playerLane) < 0 || (player?.lane ?? this.playerLane) >= LANES){
-    if (combat) combat.offScreenTimer = PLAYER_CONFIG.offScreen.gracePeriod;
-    else this.offScreenTimer = PLAYER_CONFIG.offScreen.gracePeriod;
+  if(player.lane < 0 || player.lane >= LANES){
+    combat.offScreenTimer = PLAYER_CONFIG.offScreen.gracePeriod;
     this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
     // Reset off-screen shooting counters when entering off-screen
     if(previousLane >= 0 && previousLane < LANES) {
@@ -136,42 +123,38 @@ export function moveLeftSystem() {
   }
   // Play movement sound
   try {
-    const note = getGameNote(Math.max(0, Math.min(4, player?.lane ?? this.playerLane))) + "5";
+    const note = getGameNote(Math.max(0, Math.min(4, player.lane))) + "5";
     gameSounds.move.triggerAttackRelease(note, "32n");
   } catch(e) {}
 }
 
 export function moveRightSystem() {
-  const player = this.stateSlices?.player;
-  const combat = this.stateSlices?.combat;
-  if(player?.moving ?? this.isMoving) return;
+  const { player, combat } = this.stateSlices;
+  if(player.moving) return;
   // Block movement if already off-screen
-  if((player?.lane ?? this.playerLane) < 0 || (player?.lane ?? this.playerLane) >= LANES) return;
-  const previousLane = player?.lane ?? this.playerLane;
-  if (player) player.lane = Math.min(LANES, player.lane + 1);
-  else this.playerLane = Math.min(LANES, this.playerLane + 1); // Can go to 5 (off-screen right)
-  const targetX = this._laneX(player?.lane ?? this.playerLane);
+  if(player.lane < 0 || player.lane >= LANES) return;
+  const previousLane = player.lane;
+  player.lane = Math.min(LANES, player.lane + 1); // Can go to 5 (off-screen right)
+  const targetX = this._laneX(player.lane);
   
   // Play womp sound when entering off-screen
-  if((player?.lane ?? this.playerLane) === LANES && previousLane === LANES - 1) {
+  if(player.lane === LANES && previousLane === LANES - 1) {
     try {
       gameSounds.offScreenWomp.triggerAttackRelease("C2", "4n");
     } catch(e) {}
   }
   
   // Check if we're jumping for special animation
-  if(player?.jumping ?? this.isJumping) {
+  if(player.jumping) {
     // Mid-air twirl animation
-    if (player) player.moving = true;
-    else this.isMoving = true;
+    player.moving = true;
     this.tweens.add({
       targets: this.player,
       x: targetX,
       duration: PLAYER_CONFIG.movement.air.duration,
       ease: 'Quad.easeOut',
       onComplete: () => {
-        if (player) player.moving = false;
-        else this.isMoving = false;
+        player.moving = false;
       }
     });
     
@@ -194,13 +177,8 @@ export function moveRightSystem() {
     });
   } else {
     // Ground movement - jello stretchy animation
-    if (player) {
-      player.moving = true;
-      player.stretching = true;
-    } else {
-      this.isMoving = true;
-      this.isStretching = true; // Only immune during stretch phase
-    }
+    player.moving = true;
+    player.stretching = true;
     const cfg = PLAYER_CONFIG.movement.ground;
     
     // Add reactive wobble force
@@ -214,8 +192,7 @@ export function moveRightSystem() {
       duration: cfg.stretch.duration,
       ease: 'Cubic.easeOut',
       onComplete: () => {
-        if (player) player.stretching = false;
-        else this.isStretching = false; // Stretch phase complete, no longer immune
+        player.stretching = false; // Stretch phase complete, no longer immune
         // Slingshot to position with overshoot
         this.tweens.add({
           targets: this.player,
@@ -226,9 +203,8 @@ export function moveRightSystem() {
           ease: 'Power2',
           onComplete: () => {
             // Skip bounce if dash is starting or in progress
-            if (this.isDashStarting || (player?.dashing ?? this.isDashing)) {
-              if (player) player.moving = false;
-              else this.isMoving = false;
+            if (this.isDashStarting || player.dashing) {
+              player.moving = false;
               return;
             }
             // Bounce back with secondary wobble
@@ -240,8 +216,7 @@ export function moveRightSystem() {
               duration: cfg.bounce.duration,
               ease: 'Sine.easeInOut',
               onComplete: () => {
-                if (player) player.moving = false;
-                else this.isMoving = false; // Can shoot after bounce completes
+                player.moving = false; // Can shoot after bounce completes
                 // Final settle with jello wobbles (purely visual)
                 this.tweens.add({
                   targets: this.player,
@@ -261,9 +236,8 @@ export function moveRightSystem() {
   }
   
   // Reset rubber band timer when moving off-screen
-  if((player?.lane ?? this.playerLane) < 0 || (player?.lane ?? this.playerLane) >= LANES){
-    if (combat) combat.offScreenTimer = PLAYER_CONFIG.offScreen.gracePeriod;
-    else this.offScreenTimer = PLAYER_CONFIG.offScreen.gracePeriod;
+  if(player.lane < 0 || player.lane >= LANES){
+    combat.offScreenTimer = PLAYER_CONFIG.offScreen.gracePeriod;
     this.player.setAlpha(PLAYER_CONFIG.offScreen.alpha);
     // Reset off-screen shooting counters when entering off-screen
     if(previousLane >= 0 && previousLane < LANES) {
@@ -276,7 +250,7 @@ export function moveRightSystem() {
   }
   // Play movement sound
   try {
-    const note = getGameNote(Math.max(0, Math.min(4, player?.lane ?? this.playerLane))) + "5";
+    const note = getGameNote(Math.max(0, Math.min(4, player.lane))) + "5";
     gameSounds.move.triggerAttackRelease(note, "32n");
   } catch(e) {}
 }

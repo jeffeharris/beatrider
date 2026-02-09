@@ -2,7 +2,6 @@ import { gameState, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../con
 import { sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
-import { initializeMainSceneStateSlices } from './state-slices.js';
 
 export function initializeSceneWorldAndHUD() {
   this.trails = [];
@@ -184,6 +183,5 @@ export function initializeSceneWorldAndHUD() {
   updateGridButton();
 
   this.setupMobileControls();
-  initializeMainSceneStateSlices.call(this);
   setupDebugToolsSystem.call(this);
 }

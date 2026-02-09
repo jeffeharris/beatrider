@@ -93,12 +93,10 @@ export function drawPerspectiveGridSystem() {
 }
 
 export function fireSystem() {
-  const player = this.stateSlices?.player;
-  const flow = this.stateSlices?.flow;
-  const combat = this.stateSlices?.combat;
-  if (!(flow?.playerCanControl ?? this.playerCanControl) || (player?.moving ?? this.isMoving)) return;
+  const { player, flow, combat } = this.stateSlices;
+  if (!flow.playerCanControl || player.moving) return;
 
-  const lane = player?.lane ?? this.playerLane;
+  const lane = player.lane;
   const isOffScreen = lane < 0 || lane >= LANES;
   if (!HORIZONTAL_SHOOTING && isOffScreen) return;
 
@@ -109,12 +107,12 @@ export function fireSystem() {
   const now = this.time.now;
   if (this.fireBlockTime && now < this.fireBlockTime) return;
 
-  const cooldown = ((combat?.rapidFire ?? this.rapidFire) ? FIRE_COOLDOWN / 3 : FIRE_COOLDOWN) * currentDifficulty.fireMult;
+  const cooldown = (combat.rapidFire ? FIRE_COOLDOWN / 3 : FIRE_COOLDOWN) * currentDifficulty.fireMult;
   if (now - this.lastShotAt < cooldown) return;
   this.lastShotAt = now;
 
   this.wobbleVelocity.y = 3;
-  if (!(player?.jumping ?? this.isJumping)) {
+  if (!player.jumping) {
     this.tweens.add({
       targets: this.player,
       scaleX: 0.9,
@@ -130,7 +128,7 @@ export function fireSystem() {
   b.setDepth(50);
 
   let bulletColor = 0xffffff;
-  switch (combat?.combo ?? this.combo) {
+  switch (combat.combo) {
     case 1: bulletColor = 0xffffff; break;
     case 2: bulletColor = 0xccffcc; break;
     case 3: bulletColor = 0x00ff00; break;
@@ -142,7 +140,7 @@ export function fireSystem() {
     default: bulletColor = 0xff00ff; break;
   }
 
-  if (player?.jumping ?? this.isJumping) {
+  if (player.jumping) {
     const jumpHeight = Math.max(0, this.groundY - this.player.y);
     const heightPercent = Math.min(1, jumpHeight / 200);
     if (heightPercent > 0.5) {
@@ -156,7 +154,7 @@ export function fireSystem() {
 
   b.lastX = this.player.x;
   b.lastY = this.player.y;
-  b.rotationSpeed = (combat?.combo ?? this.combo) >= 6 ? 0.3 : 0;
+  b.rotationSpeed = combat.combo >= 6 ? 0.3 : 0;
 
   const vanishY = gameState.HEIGHT * 0.15;
   const normalizedY = (this.player.y - vanishY) / (gameState.HEIGHT - vanishY);
@@ -180,7 +178,7 @@ export function fireSystem() {
   b.w = b.w || Math.floor(6 * gameState.MOBILE_SCALE);
   b.h = b.h || Math.floor(12 * gameState.MOBILE_SCALE);
 
-  if ((player?.jumping ?? this.isJumping) && !isOffScreen) {
+  if (player.jumping && !isOffScreen) {
     b.isArcShot = true;
     const jumpHeight = Math.abs(this.player.y - gameState.PLAYER_Y);
     const jumpPercent = Math.min(jumpHeight / ARC_SHOT_MAX_JUMP_HEIGHT, 1);
@@ -190,7 +188,7 @@ export function fireSystem() {
     b.arcDistance = 0;
   }
 
-  if (combat?.rapidFire ?? this.rapidFire) {
+  if (combat.rapidFire) {
     b.vy *= 1.5;
     if (Math.random() < 0.3) {
       try {

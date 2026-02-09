@@ -5,12 +5,12 @@ import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function updateTutorialAndAdaptiveState(dt) {
-  const flow = this.stateSlices?.flow;
+  const { flow } = this.stateSlices;
   if (this.isTutorial) {
     this.updateTutorialProgress();
   }
 
-  if (this.adaptiveState.isAssisting && !(flow?.paused ?? this.isPaused) && !(flow?.gameOver ?? this.isShowingGameOver)) {
+  if (this.adaptiveState.isAssisting && !flow.paused && !flow.gameOver) {
     const assistDuration = (this.time.now - this.adaptiveState.assistStartTime) / 1000;
 
     if (assistDuration > 90) {
@@ -28,12 +28,11 @@ export function updateTutorialAndAdaptiveState(dt) {
 }
 
 export function handlePauseAndGridInput() {
-  const flow = this.stateSlices?.flow;
-  const input = this.stateSlices?.input;
+  const { flow, input } = this.stateSlices;
 
   if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
-    if (flow?.gameOver ?? this.isShowingGameOver) return true;
-    if (!(flow?.paused ?? this.isPaused)) {
+    if (flow.gameOver) return true;
+    if (!flow.paused) {
       this.pauseGame();
     } else {
       this.resumeGame();
@@ -47,7 +46,7 @@ export function handlePauseAndGridInput() {
 
     if (!this.gridVisible && this.gridGraphics) {
       this.gridGraphics.clear();
-    } else if (this.gridVisible && (flow?.paused ?? this.isPaused)) {
+    } else if (this.gridVisible && flow.paused) {
       this._drawPerspectiveGrid();
     }
 
@@ -55,8 +54,8 @@ export function handlePauseAndGridInput() {
     updateGridButton();
   }
 
-  if (flow?.paused ?? this.isPaused) {
-    if ((this.keys.SPACE.isDown || (input?.touchFiring ?? this.isTouchFiring)) && !this.isHandlingFeedback) {
+  if (flow.paused) {
+    if ((this.keys.SPACE.isDown || input.touchFiring) && !this.isHandlingFeedback) {
       dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.RESUME, {
         source: this.keys.SPACE.isDown ? 'keyboard' : 'touch'
       });

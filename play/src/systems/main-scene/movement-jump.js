@@ -4,11 +4,9 @@ import { gameState, MAIN_SCENE_TUNING } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 
 export function jumpSystem() {
-  const player = this.stateSlices?.player;
-  const input = this.stateSlices?.input;
-  if(player?.jumping ?? this.isJumping) return;
-  if (player) player.jumping = true;
-  else this.isJumping = true;
+  const { player, input } = this.stateSlices;
+  if(player.jumping) return;
+  player.jumping = true;
   
   // Jump animation - higher jump to clear obstacles better
   this.tweens.add({
@@ -23,8 +21,7 @@ export function jumpSystem() {
       // Player has reached apex and is starting to fall - allow jumping again
     },
     onComplete: () => {
-      if (player) player.jumping = false;
-      else this.isJumping = false;
+      player.jumping = false;
       this.player.y = gameState.PLAYER_Y;
       // Animate rotation back to 0 if needed
       if(Math.abs(this.player.angle % 360) > 1) {
@@ -39,17 +36,15 @@ export function jumpSystem() {
       }
       
       // Check if we should start charging based on queued crouch
-      if (this.queuedCrouchOnLanding && (input?.currentZone ?? this.currentZone) === 'crouch') {
-        if (player) player.charging = true;
-        else this.isChargingJump = true;
+      if (this.queuedCrouchOnLanding && input.currentZone === 'crouch') {
+        player.charging = true;
         this.chargeGlow.setVisible(true);
         this.queuedCrouchOnLanding = false;
         
         // Start time-based charging like keyboard
         this.touchChargeStartTime = this.time.now;
         this.usingTimeBasedCharge = true;
-        if (input) input.jumpChargeAmount = 0;
-        else this.jumpChargeAmount = 0;
+        input.jumpChargeAmount = 0;
         this.maxPullDistance = 0;
         // Start charge sound
         try {
@@ -108,11 +103,9 @@ export function jumpSystem() {
 }
 
 export function superJumpSystem(chargePercent = 1.0) {
-  const player = this.stateSlices?.player;
-  const input = this.stateSlices?.input;
-  if(player?.jumping ?? this.isJumping) return;
-  if (player) player.jumping = true;
-  else this.isJumping = true;
+  const { player, input } = this.stateSlices;
+  if(player.jumping) return;
+  player.jumping = true;
   
   // Track super jumps for tutorial (only count if charged enough)
   if (this.isTutorial && this.tutorialWave === 5 && chargePercent > 0.3) {
@@ -230,8 +223,7 @@ export function superJumpSystem(chargePercent = 1.0) {
                 ease: 'Quad.easeIn',
                 onComplete: () => {
                   // Allow jumping after first bounce
-                  if (player) player.jumping = false;
-                  else this.isJumping = false;
+                  player.jumping = false;
                   this.player.y = gameState.PLAYER_Y;
                   
                   // Handle rotation reset and queued actions here
@@ -247,17 +239,15 @@ export function superJumpSystem(chargePercent = 1.0) {
                   }
                   
                   // Check if we should start charging based on queued crouch
-                  if (this.queuedCrouchOnLanding && (input?.currentZone ?? this.currentZone) === 'crouch') {
-                    if (player) player.charging = true;
-                    else this.isChargingJump = true;
+                  if (this.queuedCrouchOnLanding && input.currentZone === 'crouch') {
+                    player.charging = true;
                     this.chargeGlow.setVisible(true);
                     this.queuedCrouchOnLanding = false;
                     
                     // Start time-based charging like keyboard
                     this.touchChargeStartTime = this.time.now;
                     this.usingTimeBasedCharge = true;
-                    if (input) input.jumpChargeAmount = 0;
-                    else this.jumpChargeAmount = 0;
+                    input.jumpChargeAmount = 0;
                     this.maxPullDistance = 0;
                     // Start charge sound
                     try {
