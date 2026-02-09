@@ -1,8 +1,6 @@
 import Phaser from 'phaser';
 import StartupScene from './scenes/startup-scene.js';
-import Main from './scenes/main-scene.js';
 import { useCanvas, isMac, isSafariBrowser, isChrome } from './config.js';
-import { setupMusicUI } from './audio/music-ui.js';
 
 // ============================================
 // ANALYTICS
@@ -55,7 +53,7 @@ console.log('Renderer:', useCanvas ? 'Canvas (Mac optimization)' : 'WebGL/Auto')
 const game = window.game = new Phaser.Game({
   type: useCanvas ? Phaser.CANVAS : Phaser.AUTO,
   parent: 'gameContainer',
-  scene: [StartupScene, Main],
+  scene: [StartupScene],
 
   render: {
     powerPreference: 'high-performance',
@@ -115,10 +113,8 @@ setTimeout(() => {
 }, 500);
 
 // ============================================
-// MUSIC UI
+// MUSIC UI (loaded dynamically after user gesture in StartupScene)
 // ============================================
-
-setupMusicUI();
 
 // ============================================
 // SERVICE WORKER (PWA)

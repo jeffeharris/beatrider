@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import * as Tone from 'tone';
 import { gameState, isMobile } from '../config.js';
 import { unlockIOSAudio } from '../audio/ios-unlock.js';
 
@@ -264,10 +263,11 @@ export default class StartupScene extends Phaser.Scene {
       });
     }
 
-    // Start handler function
-    const startGame = async (tutorialMode = false) => {
-      // iOS audio unlock - critical for iPhone/iPad
-      await unlockIOSAudio();
+    // Dynamically load Tone.js and initialize audio context.
+    // Called inside user gesture so AudioContext is allowed by browsers.
+    const initializeAudio = async (Tone) => {
+      // iOS audio unlock - pass Tone so it can call Tone.start()/context.resume()
+      await unlockIOSAudio(Tone);
 
       // Start Tone.js from user gesture with Mac-specific handling
       try {
@@ -293,9 +293,6 @@ export default class StartupScene extends Phaser.Scene {
             }
           }
         }
-
-        await new Promise(resolve => setTimeout(resolve, 100));
-
       } catch (error) {
         console.error('Error starting audio:', error);
         try {
@@ -304,12 +301,44 @@ export default class StartupScene extends Phaser.Scene {
           console.error('Could not resume audio context:', resumeError);
         }
       }
+    };
 
-      // Transition to game with optional tutorial mode
-      this.cameras.main.fadeOut(500, 0, 0, 0);
-      this.time.delayedCall(500, () => {
-        this.scene.start('Main', { tutorialMode: tutorialMode });
-      });
+    let gameStarting = false;
+
+    const startGame = async (tutorialMode = false) => {
+      if (gameStarting) return;
+      gameStarting = true;
+
+      try {
+        if (this.startText) this.startText.setText('LOADING...');
+
+        // Dynamically import Tone, MainScene, and music UI in parallel.
+        // This defers all AudioContext creation until this user gesture.
+        const [Tone, { default: MainScene }, { setupMusicUI }] = await Promise.all([
+          import('tone'),
+          import('./main-scene.js'),
+          import('../audio/music-ui.js')
+        ]);
+
+        // Fire-and-forget audio init (don't block game start on audio)
+        initializeAudio(Tone).catch((error) => {
+          console.error('Audio init failed:', error);
+        });
+
+        // Register the dynamically-loaded Main scene and wire up music UI
+        this.scene.add('Main', MainScene, false);
+        setupMusicUI();
+
+        // Transition to game
+        this.cameras.main.fadeOut(500, 0, 0, 0);
+        this.time.delayedCall(500, () => {
+          this.scene.start('Main', { tutorialMode });
+        });
+      } catch (error) {
+        console.error('Failed to load game modules:', error);
+        gameStarting = false;
+        if (this.startText) this.startText.setText('LOAD ERROR - TAP TO RETRY');
+      }
     };
 
     // Start normal game handler
