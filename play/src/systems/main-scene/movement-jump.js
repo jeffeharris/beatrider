@@ -2,296 +2,268 @@ import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, MAIN_SCENE_TUNING } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { beginJumpState, finalizeJumpState, resolveLandingQueuedActions } from './jump-state.js';
+
+function resetPlayerRotation(scene) {
+  if (Math.abs(scene.player.angle % 360) > 1) {
+    scene.tweens.add({
+      targets: scene.player,
+      angle: 0,
+      duration: 200,
+      ease: 'Cubic.easeOut'
+    });
+  } else {
+    scene.player.angle = 0;
+  }
+}
+
+function refreshTouchChargeAnchor(scene) {
+  const activePointer = scene.input.activePointer;
+  if (!activePointer || !activePointer.isDown) return;
+
+  const edgePadding = scene.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
+  scene.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, gameState.WIDTH - edgePadding);
+  scene.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, gameState.HEIGHT - edgePadding);
+}
+
+function startQueuedTouchCharge(scene, player, input) {
+  player.charging = true;
+  scene.chargeGlow.setVisible(true);
+
+  scene.touchChargeStartTime = scene.time.now;
+  scene.usingTimeBasedCharge = true;
+  input.jumpChargeAmount = 0;
+  scene.maxPullDistance = 0;
+
+  try {
+    gameSounds.jumpCharge.triggerAttack('C2');
+  } catch (e) {}
+
+  refreshTouchChargeAnchor(scene);
+
+  scene.tweens.add({
+    targets: scene.player,
+    scaleX: MAIN_SCENE_TUNING.jump.queuedCrouchScaleX,
+    scaleY: MAIN_SCENE_TUNING.jump.queuedCrouchScaleY,
+    duration: MAIN_SCENE_TUNING.jump.queuedCrouchDurationMs,
+    ease: 'Power2'
+  });
+}
+
+function finalizeLanding(scene, player, input) {
+  finalizeJumpState(player);
+  scene.player.y = gameState.PLAYER_Y;
+  resetPlayerRotation(scene);
+
+  const queued = resolveLandingQueuedActions({
+    queuedCrouchOnLanding: scene.queuedCrouchOnLanding,
+    currentZone: input.currentZone,
+    queuedSuperJumpCharge: scene.queuedSuperJumpCharge
+  });
+
+  scene.queuedCrouchOnLanding = queued.nextQueuedCrouchOnLanding;
+  scene.queuedSuperJumpCharge = queued.nextQueuedSuperJumpCharge;
+
+  if (queued.shouldStartQueuedCharge) {
+    startQueuedTouchCharge(scene, player, input);
+  }
+
+  if (queued.queuedSuperJumpCharge !== null) {
+    scene.time.delayedCall(MAIN_SCENE_TUNING.jump.queuedSuperJumpDelayMs, () => {
+      scene.superJump(queued.queuedSuperJumpCharge);
+    });
+  }
+}
+
+function playRegularJumpSound() {
+  try {
+    const now = Tone.now();
+    gameSounds.move.triggerAttackRelease('C6', '16n', now);
+    gameSounds.move.triggerAttackRelease('G6', '16n', now + 0.05);
+  } catch (e) {}
+}
+
+function spawnSuperJumpParticles(scene, normalizedCharge) {
+  const particleConfig = MAIN_SCENE_TUNING.jump.super.particles;
+  if (normalizedCharge <= particleConfig.activeThreshold) return;
+
+  const particleCount = Math.floor(particleConfig.baseCount + normalizedCharge * particleConfig.perChargeCount);
+  const speed = particleConfig.baseSpeed + normalizedCharge * particleConfig.perChargeSpeed;
+
+  for (let i = 0; i < particleCount; i++) {
+    const angle = (Math.PI * 2 * i) / particleCount;
+    const particle = scene.add.graphics();
+    particle.x = scene.player.x;
+    particle.y = scene.player.y;
+
+    const particleColor = normalizedCharge > particleConfig.highChargeThreshold
+      ? particleConfig.highColor
+      : particleConfig.lowColor;
+
+    particle.fillStyle(particleColor, 1);
+    particle.fillCircle(0, 0, particleConfig.radiusPx);
+
+    scene.tweens.add({
+      targets: particle,
+      x: particle.x + Math.cos(angle) * speed,
+      y: particle.y + (Math.sin(angle) * speed) / 2,
+      alpha: 0,
+      duration: 600,
+      ease: 'Power2',
+      onComplete: () => {
+        particle.destroy();
+      }
+    });
+  }
+
+  if (normalizedCharge > particleConfig.highChargeThreshold) {
+    scene.cameras.main.shake(
+      particleConfig.shakeDurationMs,
+      particleConfig.shakeBaseIntensity + normalizedCharge * particleConfig.shakePerChargeIntensity
+    );
+  }
+}
+
+function playSuperJumpSound(normalizedCharge) {
+  try {
+    const now = Tone.now();
+
+    gameSounds.powerUp.triggerAttackRelease('C3', '8n', now);
+
+    if (normalizedCharge > 0.3) {
+      gameSounds.powerUp.triggerAttackRelease('G3', '8n', now + 0.02);
+      gameSounds.move.triggerAttackRelease('C6', '16n', now);
+    }
+    if (normalizedCharge > 0.5) {
+      gameSounds.powerUp.triggerAttackRelease('E4', '16n', now + 0.05);
+      gameSounds.move.triggerAttackRelease('G6', '16n', now + 0.08);
+    }
+    if (normalizedCharge > 0.7) {
+      gameSounds.powerUp.triggerAttackRelease('C5', '32n', now + 0.1);
+      gameSounds.move.triggerAttackRelease('E7', '32n', now + 0.12);
+      gameSounds.offScreenWomp.triggerAttackRelease('C1', '16n', now);
+    }
+  } catch (e) {}
+}
 
 export function jumpSystem() {
   const { player, input } = this.stateSlices;
-  if(player.jumping) return;
-  player.jumping = true;
-  
-  // Jump animation - higher jump to clear obstacles better
+  if (!beginJumpState(player)) return;
+
+  const jumpConfig = MAIN_SCENE_TUNING.jump.regular;
+
   this.tweens.add({
     targets: this.player,
-    y: gameState.PLAYER_Y - 120, // Higher jump
-    scaleX: 1.2,
-    scaleY: 1.2,
-    duration: 250,
+    y: gameState.PLAYER_Y - jumpConfig.heightPx,
+    scaleX: jumpConfig.scaleX,
+    scaleY: jumpConfig.scaleY,
+    duration: jumpConfig.durationMs,
     ease: 'Quad.easeOut',
     yoyo: true,
-    onYoyo: () => {
-      // Player has reached apex and is starting to fall - allow jumping again
-    },
     onComplete: () => {
-      player.jumping = false;
-      this.player.y = gameState.PLAYER_Y;
-      // Animate rotation back to 0 if needed
-      if(Math.abs(this.player.angle % 360) > 1) {
-        this.tweens.add({
-          targets: this.player,
-          angle: 0,
-          duration: 200,
-          ease: 'Cubic.easeOut'
-        });
-      } else {
-        this.player.angle = 0;
-      }
-      
-      // Check if we should start charging based on queued crouch
-      if (this.queuedCrouchOnLanding && input.currentZone === 'crouch') {
-        player.charging = true;
-        this.chargeGlow.setVisible(true);
-        this.queuedCrouchOnLanding = false;
-        
-        // Start time-based charging like keyboard
-        this.touchChargeStartTime = this.time.now;
-        this.usingTimeBasedCharge = true;
-        input.jumpChargeAmount = 0;
-        this.maxPullDistance = 0;
-        // Start charge sound
-        try {
-          gameSounds.jumpCharge.triggerAttack("C2");
-        } catch(e) {}
-        
-        // Reset touch reference point
-        const activePointer = this.input.activePointer;
-        if (activePointer && activePointer.isDown) {
-          const edgePadding = this.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
-          this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, gameState.WIDTH - edgePadding);
-          this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, gameState.HEIGHT - edgePadding);
-        }
-        
-        // Start charge sound
-        try {
-          gameSounds.jumpCharge.triggerAttack("C2");
-        } catch(e) {}
-        
-        // Squash animation when starting crouch
-        this.tweens.add({
-          targets: this.player,
-          scaleX: 1.4,
-          scaleY: 0.6,
-          duration: 100,
-          ease: 'Power2'
-        });
-      }
-      
-      // Check for queued super jump (old system, keeping for compatibility)
-      if (this.queuedSuperJumpCharge > 0) {
-        const charge = this.queuedSuperJumpCharge;
-        this.queuedSuperJumpCharge = 0;
-        this.time.delayedCall(50, () => {
-          this.superJump(charge);
-        });
-      }
+      finalizeLanding(this, player, input);
     }
   });
-  
-  // Only do a simple forward flip if no directional input
-  // Mid-air directional moves will override this
+
   this.jumpSpinTween = this.tweens.add({
     targets: this.player,
-    angle: 360,
-    duration: 500, // Match total jump time (250 * 2)
+    angle: jumpConfig.spinAngle,
+    duration: jumpConfig.durationMs * 2,
     ease: 'Linear'
   });
-  
-  // Jump sound effect
-  try {
-    const now = Tone.now();
-    gameSounds.move.triggerAttackRelease("C6", "16n", now);
-    gameSounds.move.triggerAttackRelease("G6", "16n", now + 0.05);
-  } catch(e) {}
+
+  playRegularJumpSound();
 }
 
 export function superJumpSystem(chargePercent = 1.0) {
   const { player, input } = this.stateSlices;
-  if(player.jumping) return;
-  player.jumping = true;
-  
-  // Track super jumps for tutorial (only count if charged enough)
-  if (this.isTutorial && this.tutorialWave === 5 && chargePercent > 0.3) {
+  if (!beginJumpState(player)) return;
+
+  const normalizedCharge = Phaser.Math.Clamp(chargePercent, 0, 1);
+  const superJumpConfig = MAIN_SCENE_TUNING.jump.super;
+
+  if (
+    this.isTutorial &&
+    this.tutorialWave === 5 &&
+    normalizedCharge > superJumpConfig.tutorialCountThreshold
+  ) {
     this.tutorialSuperJumps = (this.tutorialSuperJumps || 0) + 1;
   }
-  
-  // Calculate jump height: from 1x (120) to 3x (360) based on charge for more distinction
-  const minHeight = 120;
-  const maxHeight = 360;
-  const jumpHeight = minHeight + (maxHeight - minHeight) * chargePercent;
-  
-  // Scale the stretch effect based on charge
-  const stretchX = 0.6 + (1.0 - chargePercent) * 0.3; // More dramatic stretch
-  const stretchY = 1.3 + chargePercent * 0.8; // More stretch for higher charge
-  
-  // Create launch particles effect for charged jumps
-  if(chargePercent > 0.3) {
-    // Create burst effect at player position
-    const particleCount = Math.floor(5 + chargePercent * 15);
-    for(let i = 0; i < particleCount; i++) {
-      const angle = (Math.PI * 2 * i) / particleCount;
-      const speed = 100 + chargePercent * 250;
-      const particle = this.add.graphics();
-      particle.x = this.player.x;
-      particle.y = this.player.y;
-      
-      // Draw small glowing particle
-      const particleColor = chargePercent > 0.7 ? 0xff00ff : 0x00ffcc;
-      particle.fillStyle(particleColor, 1);
-      particle.fillCircle(0, 0, 4);
-      
-      // Animate particle outward and fade
-      this.tweens.add({
-        targets: particle,
-        x: particle.x + Math.cos(angle) * speed,
-        y: particle.y + Math.sin(angle) * speed / 2,
-        alpha: 0,
-        duration: 600,
-        ease: 'Power2',
-        onComplete: () => {
-          particle.destroy();
-        }
-      });
-    }
-    
-    // Screen shake for powerful jumps
-    if(chargePercent > 0.7) {
-      this.cameras.main.shake(200, 0.008 + chargePercent * 0.01);
-    }
-  }
-  
-  // First squash down as launch preparation with jello wobble
-  this.player.setScale(1.6, 0.3);
-  
-  // Pre-launch wobble build-up
-  this.wobbleVelocity.y = -20 * (1 + chargePercent);
-  
-  // Then stretch up and launch with elastic
+
+  const jumpHeight = superJumpConfig.minHeightPx +
+    (superJumpConfig.maxHeightPx - superJumpConfig.minHeightPx) * normalizedCharge;
+
+  const stretchX = superJumpConfig.stretchXBase + (1.0 - normalizedCharge) * superJumpConfig.stretchXFalloff;
+  const stretchY = superJumpConfig.stretchYBase + normalizedCharge * superJumpConfig.stretchYGain;
+
+  spawnSuperJumpParticles(this, normalizedCharge);
+
+  this.player.setScale(superJumpConfig.launchSquashX, superJumpConfig.launchSquashY);
+  this.wobbleVelocity.y = superJumpConfig.launchWobbleVelocityBase * (1 + normalizedCharge);
+
   this.tweens.add({
     targets: this.player,
     scaleX: stretchX * 0.7,
     scaleY: stretchY * 1.3,
-    duration: 150,
+    duration: superJumpConfig.launchStretchDurationMs,
     ease: 'Back.easeOut',
     onComplete: () => {
-      // Launch up with variable height
-      const jumpDuration = 300 + chargePercent * 200;
-      
-      // Main jump tween with wobble
+      const jumpDuration =
+        superJumpConfig.jumpDurationBaseMs +
+        normalizedCharge * superJumpConfig.jumpDurationPerChargeMs;
+
       this.tweens.add({
         targets: this.player,
         y: gameState.PLAYER_Y - jumpHeight,
         duration: jumpDuration,
         ease: 'Cubic.easeOut',
-        onUpdate: (tween) => {
-          // Add wobble during flight
+        onUpdate: tween => {
           const progress = tween.progress;
-          const wobbleAmount = (1 - progress) * 0.15; // Less wobble as we reach apex
-          this.player.scaleX = 1 + Math.sin(progress * Math.PI * 4) * wobbleAmount;
-          this.player.scaleY = 1 + Math.cos(progress * Math.PI * 4) * wobbleAmount;
+          const wobbleAmount = (1 - progress) * superJumpConfig.flightWobbleMax;
+          const wobblePhase = Math.PI * superJumpConfig.flightWobbleCycles;
+          this.player.scaleX = 1 + Math.sin(progress * wobblePhase) * wobbleAmount;
+          this.player.scaleY = 1 + Math.cos(progress * wobblePhase) * wobbleAmount;
         },
         yoyo: true,
         onYoyo: () => {
-          // At apex, add a little squish
-          this.player.setScale(1.2, 0.8);
+          this.player.setScale(superJumpConfig.apexScaleX, superJumpConfig.apexScaleY);
           this.tweens.add({
             targets: this.player,
             scaleX: 1,
             scaleY: 1,
-            duration: 100,
+            duration: superJumpConfig.apexSettleDurationMs,
             ease: 'Sine.easeInOut'
           });
         },
         onComplete: () => {
-          // Landing with multiple bounces
-          this.player.setScale(2, 0.3); // Extreme squash on landing
-          this.wobbleVelocity.y = 15;
-          
-          // First bounce up
+          this.player.setScale(superJumpConfig.landingSquashX, superJumpConfig.landingSquashY);
+          this.wobbleVelocity.y = superJumpConfig.landingWobbleVelocityY;
+
           this.tweens.add({
             targets: this.player,
-            scaleX: 0.7,
-            scaleY: 1.5,
-            y: gameState.PLAYER_Y - 20,
-            duration: 100,
+            scaleX: superJumpConfig.bounceUpScaleX,
+            scaleY: superJumpConfig.bounceUpScaleY,
+            y: gameState.PLAYER_Y - superJumpConfig.bounceHeightPx,
+            duration: superJumpConfig.bounceUpDurationMs,
             ease: 'Quad.easeOut',
             onComplete: () => {
-              // Mini landing
               this.tweens.add({
                 targets: this.player,
-                scaleX: 1.3,
-                scaleY: 0.7,
+                scaleX: superJumpConfig.bounceDownScaleX,
+                scaleY: superJumpConfig.bounceDownScaleY,
                 y: gameState.PLAYER_Y,
-                duration: 80,
+                duration: superJumpConfig.bounceDownDurationMs,
                 ease: 'Quad.easeIn',
                 onComplete: () => {
-                  // Allow jumping after first bounce
-                  player.jumping = false;
-                  this.player.y = gameState.PLAYER_Y;
-                  
-                  // Handle rotation reset and queued actions here
-                  if(Math.abs(this.player.angle % 360) > 1) {
-                    this.tweens.add({
-                      targets: this.player,
-                      angle: 0,
-                      duration: 200,
-                      ease: 'Cubic.easeOut'
-                    });
-                  } else {
-                    this.player.angle = 0;
-                  }
-                  
-                  // Check if we should start charging based on queued crouch
-                  if (this.queuedCrouchOnLanding && input.currentZone === 'crouch') {
-                    player.charging = true;
-                    this.chargeGlow.setVisible(true);
-                    this.queuedCrouchOnLanding = false;
-                    
-                    // Start time-based charging like keyboard
-                    this.touchChargeStartTime = this.time.now;
-                    this.usingTimeBasedCharge = true;
-                    input.jumpChargeAmount = 0;
-                    this.maxPullDistance = 0;
-                    // Start charge sound
-                    try {
-                      gameSounds.jumpCharge.triggerAttack("C2");
-                    } catch(e) {}
-                    
-                    // Reset touch reference point
-                    const activePointer = this.input.activePointer;
-                    if (activePointer && activePointer.isDown) {
-                      const edgePadding = this.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
-                      this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, gameState.WIDTH - edgePadding);
-                      this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, gameState.HEIGHT - edgePadding);
-                    }
-                    
-                    // Squash animation when starting crouch
-                    this.tweens.add({
-                      targets: this.player,
-                      scaleX: 1.4,
-                      scaleY: 0.6,
-                      duration: 100,
-                      ease: 'Power2'
-                    });
-                  }
-                  
-                  // Check for queued super jump
-                  if (this.queuedSuperJumpCharge > 0) {
-                    const charge = this.queuedSuperJumpCharge;
-                    this.queuedSuperJumpCharge = 0;
-                    this.time.delayedCall(50, () => {
-                      this.superJump(charge);
-                    });
-                  }
-                  
-                  // Final jello settle
+                  finalizeLanding(this, player, input);
+
                   this.tweens.add({
                     targets: this.player,
                     scaleX: 1,
                     scaleY: 1,
-                    duration: 400,
+                    duration: superJumpConfig.settleDurationMs,
                     ease: 'Elastic.easeOut',
-                    easeParams: [0.2, 0.15],
-                    onComplete: () => {
-                      // Final settle complete - everything was handled after first bounce
-                    }
+                    easeParams: superJumpConfig.settleElasticParams
                   });
                 }
               });
@@ -299,41 +271,15 @@ export function superJumpSystem(chargePercent = 1.0) {
           });
         }
       });
-      
-      // Spin based on charge with wobble
-      const spinAngle = 360 + chargePercent * 360;
+
       this.tweens.add({
         targets: this.player,
-        angle: spinAngle,
+        angle: superJumpConfig.spinBaseAngle + normalizedCharge * superJumpConfig.spinPerChargeAngle,
         duration: jumpDuration * 2,
         ease: 'Cubic.easeInOut'
       });
     }
   });
-  
-  // Enhanced super jump sound that scales with charge
-  try {
-    const now = Tone.now();
-    
-    // Base launch sound - deeper and more powerful than regular jump
-    gameSounds.powerUp.triggerAttackRelease("C3", "8n", now);
-    
-    if(chargePercent > 0.3) {
-      // Add harmonic layer
-      gameSounds.powerUp.triggerAttackRelease("G3", "8n", now + 0.02);
-      gameSounds.move.triggerAttackRelease("C6", "16n", now);
-    }
-    if(chargePercent > 0.5) {
-      // Add rising arpeggio
-      gameSounds.powerUp.triggerAttackRelease("E4", "16n", now + 0.05);
-      gameSounds.move.triggerAttackRelease("G6", "16n", now + 0.08);
-    }
-    if(chargePercent > 0.7) {
-      // Add high sparkle for max charge
-      gameSounds.powerUp.triggerAttackRelease("C5", "32n", now + 0.1);
-      gameSounds.move.triggerAttackRelease("E7", "32n", now + 0.12);
-      // Extra bass thump for maximum power
-      gameSounds.offScreenWomp.triggerAttackRelease("C1", "16n", now);
-    }
-  } catch(e) {}
+
+  playSuperJumpSound(normalizedCharge);
 }
