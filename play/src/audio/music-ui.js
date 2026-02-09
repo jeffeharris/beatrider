@@ -13,6 +13,7 @@ import {
   lastSection, setLastSection,
   muteStates,
   updatePatterns,
+  ensureTransportScheduled,
   applyTension,
   GENRE_CONFIGS,
   raveSynth, setRaveSynth,
@@ -50,6 +51,12 @@ const DIFFICULTY_PRESETS = {
 };
 
 let currentDifficulty = DIFFICULTY_PRESETS.normal;
+const isAudioRunning = () => Tone?.context?.state === 'running';
+const withTransport = (fn) => {
+  if (!isAudioRunning()) return false;
+  fn(Tone.Transport);
+  return true;
+};
 const trackEventSafe = (eventName, params) => {
   if (typeof window.trackEvent === 'function') {
     window.trackEvent(eventName, params);
@@ -124,7 +131,9 @@ function switchGenre(genre) {
   bpmSlider.value = config.bpmDefault;
 
   // Update BPM
-  Tone.Transport.bpm.value = config.bpmDefault;
+  withTransport((transport) => {
+    transport.bpm.value = config.bpmDefault;
+  });
   document.getElementById('bpmDisplay').textContent = config.bpmDefault;
 
   // Switch stab synth based on genre
@@ -257,6 +266,7 @@ export function setupMusicUI() {
           setCurrentChordIndex(0);
           setLastSection('');
           updatePatterns();
+          ensureTransportScheduled();
           Tone.Transport.start();
           document.getElementById('status').textContent = 'PLAYING';
           uiState.isPlaying = true;
@@ -275,7 +285,9 @@ export function setupMusicUI() {
   // BPM slider
   document.getElementById('bpmSlider').addEventListener('input', (e) => {
     const bpm = parseInt(e.target.value);
-    Tone.Transport.bpm.value = bpm;
+    withTransport((transport) => {
+      transport.bpm.value = bpm;
+    });
     document.getElementById('bpmDisplay').textContent = bpm;
     // Mark as custom and save
     markCustomPreset();
@@ -387,7 +399,7 @@ export function setupMusicUI() {
   document.getElementById('genreTrance').addEventListener('click', () => switchGenre('trance'));
 
   // Initial BPM and genre - will be overridden by saved settings if they exist
-  Tone.Transport.bpm.value = 132;
+  document.getElementById('bpmDisplay').textContent = 132;
   // Set initial genre button highlighting
   switchGenre('techno');
 
@@ -399,7 +411,9 @@ export function setupMusicUI() {
         // Apply custom BPM/energy/tension
         const custom = savedData.settings.customMusic;
         if (custom.bpm) {
-          Tone.Transport.bpm.value = custom.bpm;
+          withTransport((transport) => {
+            transport.bpm.value = custom.bpm;
+          });
           document.getElementById('bpmSlider').value = custom.bpm;
           document.getElementById('bpmDisplay').textContent = custom.bpm;
         }

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, isMobile, LANES, ENEMY_SPEED_BASE, BULLET_SPEED, FIRE_COOLDOWN, HORIZONTAL_SHOOTING, ARC_SHOT_BASE_SAFE_DISTANCE, ARC_SHOT_HEIGHT_BONUS, ARC_SHOT_MAX_JUMP_HEIGHT, PLAYER_CONFIG, pulsePatternPool, sectionPatternMap, updateDimensions } from '../config.js';
 import { savedData, saveGameData, sessionHighScore, setSessionHighScore } from '../storage.js';
-import { currentBar, setCurrentBar, currentChordIndex, setCurrentChordIndex, lastSection, setLastSection, currentGenre, updatePatterns, getSection } from '../audio/music-engine.js';
+import { currentBar, setCurrentBar, currentChordIndex, setCurrentChordIndex, lastSection, setLastSection, currentGenre, updatePatterns, getSection, ensureTransportScheduled } from '../audio/music-engine.js';
 import { currentDifficulty, DIFFICULTY_PRESETS, uiState, updateGridButton, updatePlayPauseButton } from '../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../audio/game-sounds.js';
 
@@ -270,6 +270,7 @@ export default class Main extends Phaser.Scene {
           setCurrentChordIndex(0);
           setLastSection('');
           updatePatterns();
+          ensureTransportScheduled();
 
           // Add a small delay before starting transport for Mac
           await new Promise(resolve => setTimeout(resolve, 50));

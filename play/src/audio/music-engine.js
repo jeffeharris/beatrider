@@ -956,5 +956,9 @@ export function evolve(scheduleTime) {
   window.currentBar = currentBar;
 }
 
-// Schedule evolution
-Tone.Transport.scheduleRepeat((time) => evolve(time), "1m");
+let transportScheduled = false;
+export function ensureTransportScheduled() {
+  if (transportScheduled) return;
+  Tone.Transport.scheduleRepeat((time) => evolve(time), "1m");
+  transportScheduled = true;
+}
