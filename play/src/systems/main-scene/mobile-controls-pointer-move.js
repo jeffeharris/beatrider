@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import * as Tone from 'tone';
-import { gameState } from '../../config.js';
+import { gameState, MAIN_SCENE_TUNING } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 
 export function handleMobilePointerMove(pointer) {
@@ -107,11 +107,11 @@ export function handleMobilePointerMove(pointer) {
           this.moveLeft();
           this.lastMoveTime = currentTime;
 
-          this.time.delayedCall(150, () => {
+          this.time.delayedCall(MAIN_SCENE_TUNING.touch.recenterDelayMs, () => {
             if (this.touchZoneActive) {
               const activePointer = this.input.activePointer;
               if (activePointer && activePointer.isDown) {
-                const edgePadding = this.zoneRadius * 0.7;
+                const edgePadding = this.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
                 this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, gameState.WIDTH - edgePadding);
                 this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, gameState.HEIGHT - edgePadding);
 
@@ -130,11 +130,11 @@ export function handleMobilePointerMove(pointer) {
           this.moveRight();
           this.lastMoveTime = currentTime;
 
-          this.time.delayedCall(150, () => {
+          this.time.delayedCall(MAIN_SCENE_TUNING.touch.recenterDelayMs, () => {
             if (this.touchZoneActive) {
               const activePointer = this.input.activePointer;
               if (activePointer && activePointer.isDown) {
-                const edgePadding = this.zoneRadius * 0.7;
+                const edgePadding = this.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
                 this.touchStartX = Phaser.Math.Clamp(activePointer.x, edgePadding, gameState.WIDTH - edgePadding);
                 this.touchStartY = Phaser.Math.Clamp(activePointer.y, edgePadding, gameState.HEIGHT - edgePadding);
 
@@ -149,7 +149,7 @@ export function handleMobilePointerMove(pointer) {
 
       case 'leftDash':
         if (canDash) {
-          if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < 250) {
+          if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < MAIN_SCENE_TUNING.touch.dashFromMoveWindowMs) {
             this.tweens.killTweensOf(this.player);
             this.playerLane = this.laneBeforeMove;
             this.player.x = this._laneX(this.playerLane);
@@ -165,7 +165,7 @@ export function handleMobilePointerMove(pointer) {
 
       case 'rightDash':
         if (canDash) {
-          if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < 250) {
+          if (this.laneBeforeMove !== null && currentTime - this.lastMoveTime < MAIN_SCENE_TUNING.touch.dashFromMoveWindowMs) {
             this.tweens.killTweensOf(this.player);
             this.playerLane = this.laneBeforeMove;
             this.player.x = this._laneX(this.playerLane);

@@ -1,6 +1,7 @@
-import { gameState, isMobile, LANES, PLAYER_CONFIG } from '../../config.js';
+import { gameState, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../config.js';
 import { sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
+import { setupDebugToolsSystem } from './debug-tools.js';
 
 export function initializeSceneWorldAndHUD() {
   this.trails = [];
@@ -124,8 +125,8 @@ export function initializeSceneWorldAndHUD() {
   this.isJumping = false;
   this.isCrouching = false;
   this.crouchTimer = 0;
-  this.maxChargeTime = 1000;
-  this.releaseGraceTime = 150;
+  this.maxChargeTime = MAIN_SCENE_TUNING.crouchMaxChargeMs;
+  this.releaseGraceTime = MAIN_SCENE_TUNING.crouchReleaseGraceMs;
   this.queuedSuperJumpCharge = 0;
   this.keyboardJumpQueuedWhileAirborne = false;
   this.queuedCrouchOnLanding = false;
@@ -140,14 +141,14 @@ export function initializeSceneWorldAndHUD() {
   this.lastLeftPress = 0;
   this.lastRightPress = 0;
   this.doubleTapWindow = PLAYER_CONFIG.dash.doubleTapWindow;
-  this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC');
+  this.keys = this.input.keyboard.addKeys(`LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC,${MAIN_SCENE_TUNING.debug.toggleKey}`);
   this.score = 0;
   this.beats = 0;
   this.combo = 1;
   this.comboTimer = 0;
   this.lastKillTime = 0;
   this.maxCombo = 8;
-  this.comboWindow = 2000;
+  this.comboWindow = MAIN_SCENE_TUNING.comboWindowMs;
 
   const scoreFontSize = isMobile ? '24px' : '16px';
   const scoreY = isMobile ? gameState.HEIGHT - 36 : gameState.HEIGHT - 24;
@@ -182,4 +183,5 @@ export function initializeSceneWorldAndHUD() {
   updateGridButton();
 
   this.setupMobileControls();
+  setupDebugToolsSystem.call(this);
 }

@@ -1,4 +1,4 @@
-import { gameState } from '../../config.js';
+import { MAIN_SCENE_TUNING } from '../../config.js';
 import { savedData } from '../../storage.js';
 import { handleMobilePointerDown } from './mobile-controls-pointer-down.js';
 import { handleMobilePointerMove } from './mobile-controls-pointer-move.js';
@@ -10,22 +10,22 @@ export function setupMobileControlsSystem() {
   this.touchZoneActive = false;
   this.isTouchFiring = false;
 
-  this.zoneRadius = 100;
-  this.zoneDeadRadius = savedData.settings?.touchSensitivity || 30;
+  this.zoneRadius = MAIN_SCENE_TUNING.touch.zoneRadiusPx;
+  this.zoneDeadRadius = savedData.settings?.touchSensitivity || MAIN_SCENE_TUNING.touch.defaultDeadZonePx;
 
   this.currentZone = 'center';
   this.lastMoveTime = 0;
-  this.moveCooldown = 150;
+  this.moveCooldown = MAIN_SCENE_TUNING.touch.moveCooldownMs;
   this.laneBeforeMove = null;
   this.zoneHoldTimer = 0;
-  this.zoneRepeatDelay = 300;
-  this.zoneRepeatRate = 150;
+  this.zoneRepeatDelay = MAIN_SCENE_TUNING.touch.zoneRepeatDelayMs;
+  this.zoneRepeatRate = MAIN_SCENE_TUNING.touch.zoneRepeatRateMs;
   this.lastZoneCheckTime = 0;
 
   this.jumpChargeAmount = 0;
   this.maxPullDistance = 0;
   this.isChargingJump = false;
-  this.jumpThreshold = 40;
+  this.jumpThreshold = MAIN_SCENE_TUNING.touch.jumpThresholdPx;
 
   this.touchIndicator = this.add.circle(0, 0, 15, 0x00ff00, 0.3);
   this.touchIndicator.setVisible(false);

@@ -282,3 +282,25 @@ export const sectionPatternMap = {
   'DROP': 'intense',
   'OUTRO': 'gentle'
 };
+
+// Main scene tuning constants consolidated for easier balancing.
+export const MAIN_SCENE_TUNING = {
+  comboWindowMs: 2000,
+  crouchMaxChargeMs: 1000,
+  crouchReleaseGraceMs: 150,
+  touch: {
+    zoneRadiusPx: 100,
+    defaultDeadZonePx: 30,
+    jumpThresholdPx: 40,
+    moveCooldownMs: 150,
+    zoneRepeatDelayMs: 300,
+    zoneRepeatRateMs: 150,
+    dashFromMoveWindowMs: 250,
+    recenterDelayMs: 150,
+    edgePaddingRatio: 0.7
+  },
+  debug: {
+    toggleKey: 'F2',
+    hudUpdateMs: 120
+  }
+};

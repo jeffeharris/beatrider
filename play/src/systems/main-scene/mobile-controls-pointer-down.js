@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { gameState } from '../../config.js';
+import { gameState, MAIN_SCENE_TUNING } from '../../config.js';
 
 export function handleMobilePointerDown(pointer) {
-  const edgePadding = this.zoneRadius * 0.7;
+  const edgePadding = this.zoneRadius * MAIN_SCENE_TUNING.touch.edgePaddingRatio;
   this.touchStartX = Phaser.Math.Clamp(pointer.x, edgePadding, gameState.WIDTH - edgePadding);
   this.touchStartY = Phaser.Math.Clamp(pointer.y, edgePadding, gameState.HEIGHT - edgePadding);
   this.touchZoneActive = true;
