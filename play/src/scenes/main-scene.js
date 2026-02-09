@@ -670,6 +670,19 @@ export default class Main extends Phaser.Scene {
   _createExplosion(x, y, color = 0xff3366, particleCount = 8, scale = 1.0){
     return createExplosionSystem.call(this, x, y, color, particleCount, scale);
   }
+
+  pauseGame() {
+    return pauseGameSystem.call(this);
+  }
+
+  resumeGame() {
+    return resumeGameSystem.call(this);
+  }
+
+  showGameOverScreen() {
+    return showGameOverScreenSystem.call(this);
+  }
+
   _spawnObstacle(lane){
     return spawnObstacleSystem.call(this, lane);
   }
