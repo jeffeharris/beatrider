@@ -1,12 +1,13 @@
 import * as Tone from 'tone';
 import { gameState } from '../../config.js';
 import { sessionHighScore } from '../../storage.js';
+import { applyPauseTransition, applyResumeTransition } from './state-transitions.js';
 
 export function pauseGameSystem() {
   const { flow, combat } = this.stateSlices;
   if (flow.paused) return;
 
-  flow.paused = true;
+  applyPauseTransition(flow);
 
   this.pauseStartTime = this.time.now;
 
@@ -183,7 +184,7 @@ export function resumeGameSystem() {
   const { flow } = this.stateSlices;
   if (!flow.paused) return;
 
-  flow.paused = false;
+  applyResumeTransition(flow);
   this.isHandlingFeedback = false;
 
   if (this.pauseStartTime) {

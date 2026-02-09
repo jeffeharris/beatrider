@@ -1,5 +1,6 @@
 import { gameSounds } from '../../audio/game-sounds.js';
 import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
+import { resolveTouchReleaseAction } from './state-transitions.js';
 
 export function handleMobilePointerUp() {
   const { player, input } = this.stateSlices;
@@ -16,14 +17,13 @@ export function handleMobilePointerUp() {
 
   if (player.charging && input.jumpChargeAmount > 0) {
     const chargePercent = input.jumpChargeAmount;
-    if (chargePercent > 0.3) {
-      if (!player.jumping) {
-        dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.SUPER_JUMP, { chargePercent, source: 'touch' });
-      } else {
-        this.queuedSuperJumpCharge = chargePercent;
-      }
-    } else if (!player.jumping) {
+    const nextAction = resolveTouchReleaseAction({ player, input, superJumpThreshold: 0.3 });
+    if (nextAction === 'super_jump') {
+      dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.SUPER_JUMP, { chargePercent, source: 'touch' });
+    } else if (nextAction === 'jump') {
       dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.JUMP, { source: 'touch' });
+    } else if (player.jumping) {
+      this.queuedSuperJumpCharge = chargePercent;
     }
 
     this.chargeGlow.setVisible(false);

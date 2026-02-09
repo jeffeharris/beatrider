@@ -3,6 +3,7 @@ import * as Tone from 'tone';
 import { LANES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
+import { recoverOffScreenPlayer } from './state-transitions.js';
 
 export function handleMovementInputAndOffscreen(dt) {
   const { player, flow, combat } = this.stateSlices;
@@ -76,11 +77,7 @@ export function handleMovementInputAndOffscreen(dt) {
       this.cameras.main.shake(100, 0.02);
     }
     if (combat.offScreenTimer <= 0) {
-      if (player.lane < 0) {
-        player.lane = 0;
-      } else if (player.lane >= LANES) {
-        player.lane = LANES - 1;
-      }
+      recoverOffScreenPlayer({ player, combat, lanes: LANES });
 
       const targetX = this._laneX(player.lane);
 

@@ -1,3 +1,10 @@
+/**
+ * @typedef {'move_left'|'move_right'|'dash_left'|'dash_right'|'jump'|'super_jump'|'fire'|'resume'} MainSceneActionType
+ * @typedef {'keyboard'|'touch'|'unknown'} MainSceneActionSource
+ * @typedef {{ source?: MainSceneActionSource, chargePercent?: number }} MainSceneActionPayload
+ */
+
+/** @type {{ MOVE_LEFT: MainSceneActionType, MOVE_RIGHT: MainSceneActionType, DASH_LEFT: MainSceneActionType, DASH_RIGHT: MainSceneActionType, JUMP: MainSceneActionType, SUPER_JUMP: MainSceneActionType, FIRE: MainSceneActionType, RESUME: MainSceneActionType }} */
 export const MAIN_SCENE_ACTIONS = {
   MOVE_LEFT: 'move_left',
   MOVE_RIGHT: 'move_right',
@@ -9,6 +16,10 @@ export const MAIN_SCENE_ACTIONS = {
   RESUME: 'resume'
 };
 
+/**
+ * @param {MainSceneActionType} action
+ * @param {MainSceneActionPayload} [payload]
+ */
 export function dispatchMainSceneAction(action, payload = {}) {
   this.lastActionType = action;
   this.lastActionSource = payload.source || 'unknown';

@@ -4,11 +4,11 @@ import { saveGameData, sessionHighScore, setSessionHighScore } from '../../stora
 import { currentGenre } from '../../audio/music-engine.js';
 import { currentDifficulty } from '../../audio/music-ui.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { applyGameOverTransition, applyGameResetTransition } from './state-transitions.js';
 
 export function showGameOverScreenSystem() {
   const { player, flow, combat, input } = this.stateSlices;
-  flow.gameOver = true;
-  flow.playerCanControl = false;
+  applyGameOverTransition(flow);
 
   this.recentDeaths.push({
     score: combat.score,
@@ -262,36 +262,17 @@ export function showGameOverScreenSystem() {
         if (highScoreElement) highScoreElement.destroy();
         if (survivalStatsText) survivalStatsText.destroy();
 
-        combat.score = 0;
+        applyGameResetTransition({ player, combat, flow, input });
         this.scoreText.setText('0');
-        combat.combo = 1;
         this.comboText.setAlpha(0);
 
-        combat.beats = 0;
-
         this.gameStartTime = this.time.now;
-
-        combat.rapidFire = false;
-        combat.rapidFireTimer = 0;
         this.player.clearTint();
-
-        player.lane = 2;
         this.player.x = this._laneX(2);
         this.player.setVisible(true);
         this.player.setDepth(500);
-
-        player.jumping = false;
-        player.crouching = false;
-        player.stretching = false;
-        player.dashing = false;
-        player.moving = false;
-        player.charging = false;
-        input.touchFiring = false;
         this.crouchTimer = 0;
         if (this.chargeGlow) this.chargeGlow.setVisible(false);
-
-        flow.gameOver = false;
-        flow.playerCanControl = true;
 
         if (this.invincibilityTween) {
           this.invincibilityTween.stop();
