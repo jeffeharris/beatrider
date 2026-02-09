@@ -627,94 +627,113 @@ export function generatePatterns(section, bar, energy) {
 
 // Sequences
 let kickLoop, snareLoop, hihatLoop, acidLoop, chordLoop, subLoop;
+let loopsStarted = false;
+let lastSequenceCallbackTime = 0;
+const STEP_SEQUENCE = Array.from({ length: 16 }, (_, i) => i);
+let currentKickPattern = new Array(16).fill(0);
+let currentSnarePattern = new Array(16).fill(0);
+let currentHihatPattern = new Array(16).fill(0);
+let currentStabPattern = new Array(16).fill(0);
+let currentSubPattern = new Array(16).fill(null);
+let currentChordInfo = { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "Eb", "G"] };
 
-export function updatePatterns(startTime = 0) {
-  const section = getSection(currentBar);
-
-  // Update progression if needed
-  if (!currentProgression || currentBar % 8 === 0) {
-    currentProgression = getChordProgression(section);
+function computeSubPattern(chordInfo) {
+  if (currentGenre === 'dnb') {
+    // D&B: Long sustained sub-bass notes, often sliding
+    return [
+      chordInfo.bass, null, null, null,
+      null, null, null, null,
+      null, null, null, null,
+      chordInfo.bass, null, null, null
+    ];
   }
-  const chordInfo = currentProgression[currentChordIndex % currentProgression.length];
 
-  // Generate melodic acid sequence FIRST
-  if (currentBar % 2 === 0) {
-    acidSequence = generateMelodicAcidSequence(chordInfo, section, acidSequence);
-    // Pattern displays were removed with minimized UI
+  if (currentGenre === 'tropical') {
+    // Tropical: Bouncing, syncopated bass following dembow rhythm
+    return [
+      chordInfo.bass, null, null, chordInfo.bass,
+      null, null, chordInfo.bass, null,
+      chordInfo.bass, null, null, chordInfo.bass,
+      null, null, chordInfo.bass, null
+    ];
   }
 
-  // THEN generate patterns (so stabs can respond to acid)
-  const patterns = generatePatterns(section, currentBar, energyLevel);
+  // Techno: Offset from kick to avoid mud
+  return [
+    null, chordInfo.bass, null, null,  // Offset by one 16th
+    null, null, null, null,
+    null, chordInfo.bass, null, null,  // Offset by one 16th
+    null, null, null, null
+  ];
+}
 
-  // Clear and recreate sequences
-  if (kickLoop) kickLoop.dispose();
-  if (snareLoop) snareLoop.dispose();
-  if (hihatLoop) hihatLoop.dispose();
-  if (acidLoop) acidLoop.dispose();
-  if (chordLoop) chordLoop.dispose();
-  if (subLoop) subLoop.dispose();
+function ensureLoopsCreated() {
+  if (kickLoop && snareLoop && hihatLoop && acidLoop && chordLoop && subLoop) {
+    return;
+  }
 
   // Kick with micro-timing
-  kickLoop = new Tone.Sequence((time, note) => {
+  kickLoop = new Tone.Sequence((time, step) => {
+    lastSequenceCallbackTime = time;
+    const note = currentKickPattern[step];
     if (note && !muteStates.kick) {
-      // Slight timing variation, but keep kick more stable
       const humanTime = humanize(time, 0.003);
       kick.triggerAttackRelease("C1", "8n", humanTime);
       sidechain.ratio.setValueAtTime(20, humanTime);
       sidechain.ratio.linearRampToValueAtTime(8, humanTime + 0.1);
       Tone.Draw.schedule(() => {
         flashIndicator('kickIndicator');
-        // Trigger game beat event
         if (window.GameAPI && window.GameAPI.onBeat) {
           window.GameAPI.onBeat();
         }
       }, humanTime);
     }
-  }, patterns.kick, "16n");
+  }, STEP_SEQUENCE, "16n");
 
   // Snare with more looseness
-  snareLoop = new Tone.Sequence((time, note) => {
+  snareLoop = new Tone.Sequence((time, step) => {
+    lastSequenceCallbackTime = time;
+    const note = currentSnarePattern[step];
     if (note && !muteStates.snare) {
       const humanTime = humanize(time, 0.005);
       snare.triggerAttackRelease("8n", humanTime);
       Tone.Draw.schedule(() => {
         flashIndicator('snareIndicator');
-        // Trigger different enemy type on snare
         if (window.GameAPI && window.GameAPI.onSnare) {
           window.GameAPI.onSnare();
         }
       }, humanTime);
     }
-  }, patterns.snare, "16n");
+  }, STEP_SEQUENCE, "16n");
 
   // Hi-hat with most variation
-  hihatLoop = new Tone.Sequence((time, note) => {
+  hihatLoop = new Tone.Sequence((time, step) => {
+    lastSequenceCallbackTime = time;
+    const note = currentHihatPattern[step];
     if (note && !muteStates.hat) {
       const humanTime = humanize(time, 0.008);
-      // Vary between closed and open hi-hats
       const velocity = 0.3 + Math.random() * 0.4;
-      const duration = Math.random() > 0.8 ? "16n" : "32n"; // Occasional longer hat
+      const duration = Math.random() > 0.8 ? "16n" : "32n";
       hihat.triggerAttackRelease(duration, humanTime);
-      hihat.volume.setValueAtTime(-15 + (velocity * 10), humanTime); // Subtle volume variation
+      hihat.volume.setValueAtTime(-15 + (velocity * 10), humanTime);
       Tone.Draw.schedule(() => {
         flashIndicator('hatIndicator');
-        // Spawn obstacles on some hi-hat hits
         if (Math.random() < 0.2 && window.GameAPI && window.GameAPI.onHihat) {
           window.GameAPI.onHihat();
         }
       }, humanTime);
     }
-  }, patterns.hihat, "16n");
+  }, STEP_SEQUENCE, "16n");
 
   // Acid with melodic sequence - slight timing variations and accent
-  acidLoop = new Tone.Sequence((time, note, index) => {
+  acidLoop = new Tone.Sequence((time, step) => {
+    lastSequenceCallbackTime = time;
+    const note = acidSequence[step];
     if (note && !muteStates.acid) {
       const humanTime = humanize(time, 0.004);
-      // Add accent to some notes (first beat of each group and random others)
-      const isAccent = index % 4 === 0 || (Math.random() > 0.85 && tensionLevel > 50);
+      const isAccent = step % 4 === 0 || (Math.random() > 0.85 && tensionLevel > 50);
 
       if (isAccent) {
-        // Accent: louder with more filter modulation
         acid.volume.value = 3;
         acid.filterEnvelope.octaves = 5;
         acidDistortion.wet.value = 0.7;
@@ -727,117 +746,157 @@ export function updatePatterns(startTime = 0) {
       acid.triggerAttackRelease(note, "16n", humanTime);
       Tone.Draw.schedule(() => {
         flashIndicator('acidIndicator');
-        // Spawn power-up occasionally
         if (Math.random() < 0.1 && window.GameAPI && window.GameAPI.onAcid) {
           window.GameAPI.onAcid();
         }
       }, humanTime);
     }
-  }, acidSequence, "16n");
+  }, STEP_SEQUENCE, "16n");
 
   // Stabs with slight spread and filter variation
-  chordLoop = new Tone.Sequence((time, hit, index) => {
+  chordLoop = new Tone.Sequence((time, step) => {
+    lastSequenceCallbackTime = time;
+    const hit = currentStabPattern[step];
     if (hit && !muteStates.stab) {
       const humanTime = humanize(time, 0.006);
-
-      // Vary the filter based on section
       const currentSection = getSection(currentBar);
       if (currentSection === 'DROP') {
         stabFilter.frequency.setValueAtTime(3500, humanTime);
       } else if (currentSection === 'BUILD') {
-        // Gradually open filter in builds
         stabFilter.frequency.exponentialRampToValueAtTime(2500, humanTime + 0.2);
       } else {
         stabFilter.frequency.setValueAtTime(2000, humanTime);
       }
 
-      // Choose chord voicing based on what acid is doing
-      // If acid is playing high, play stabs lower and vice versa
-      const acidNote = acidSequence[index];
-      let chordToPlay = chordInfo.chord;
+      const acidNote = acidSequence[step];
+      let chordToPlay = currentChordInfo.chord;
 
       if (acidNote && acidNote.includes('3')) {
-        // Acid is high, play stabs an octave lower
-        chordToPlay = chordInfo.chord.map(note =>
+        chordToPlay = currentChordInfo.chord.map(note =>
           note.replace(/(\d)/, (match) => parseInt(match) - 1)
         );
       }
 
-      // Simple - just play the chord once with slight strum
       chordToPlay.forEach((note, i) => {
-        const noteTime = humanTime + i * 0.015; // Slight strum
-        raveSynth.triggerAttackRelease(note, "4n", noteTime); // Longer note for reverb tail
+        const noteTime = humanTime + i * 0.015;
+        raveSynth.triggerAttackRelease(note, "4n", noteTime);
       });
 
       Tone.Draw.schedule(() => {
         flashIndicator('stabIndicator');
-        // Spawn drifter enemy
         if (window.GameAPI && window.GameAPI.onStab) {
           window.GameAPI.onStab();
         }
       }, humanTime);
     }
-  }, patterns.stab, "16n");
+  }, STEP_SEQUENCE, "16n");
 
   // Sub bass pattern - genre-specific
-  let subPattern;
-  if (currentGenre === 'dnb') {
-    // D&B: Long sustained sub-bass notes, often sliding
-    subPattern = [
-      chordInfo.bass, null, null, null,
-      null, null, null, null,
-      null, null, null, null,
-      chordInfo.bass, null, null, null
-    ];
-  } else if (currentGenre === 'tropical') {
-    // Tropical: Bouncing, syncopated bass following dembow rhythm
-    subPattern = [
-      chordInfo.bass, null, null, chordInfo.bass,
-      null, null, chordInfo.bass, null,
-      chordInfo.bass, null, null, chordInfo.bass,
-      null, null, chordInfo.bass, null
-    ];
-  } else {
-    // Techno: Offset from kick to avoid mud
-    subPattern = [
-      null, chordInfo.bass, null, null,  // Offset by one 16th
-      null, null, null, null,
-      null, chordInfo.bass, null, null,  // Offset by one 16th
-      null, null, null, null
-    ];
-  }
-  subLoop = new Tone.Sequence((time, note) => {
+  subLoop = new Tone.Sequence((time, step) => {
+    lastSequenceCallbackTime = time;
+    const note = currentSubPattern[step];
     if (note && !muteStates.sub) {
-      const humanTime = humanize(time, 0.002); // Very slight timing variation
-      // Play longer note that sustains
+      const humanTime = humanize(time, 0.002);
       subBass.triggerAttackRelease(note, "2n", humanTime);
-      // Add a subtle octave above for presence (only in drops)
       const currentSection = getSection(currentBar);
       if (currentSection === 'DROP' || currentSection === 'MAIN') {
         const octaveUp = note.replace(/\d/, (match) => parseInt(match) + 1);
-        subBass.triggerAttackRelease(octaveUp, "2n", humanTime + 0.01, 0.3); // Quieter octave
+        subBass.triggerAttackRelease(octaveUp, "2n", humanTime + 0.01, 0.3);
       }
       Tone.Draw.schedule(() => {
         flashIndicator('subIndicator');
-        // Pulse the grid
         if (window.GameAPI && window.GameAPI.onSub) {
           window.GameAPI.onSub();
         }
       }, humanTime);
     }
-  }, subPattern, "16n");
+  }, STEP_SEQUENCE, "16n");
+}
 
-  kickLoop.start(startTime);
-  snareLoop.start(startTime);
-  hihatLoop.start(startTime);
-  acidLoop.start(startTime);
-  chordLoop.start(startTime);
-  subLoop.start(startTime);
+export function updatePatterns(startTime = 0) {
+  const section = getSection(currentBar);
+
+  // Update progression if needed
+  if (!currentProgression || currentBar % 8 === 0) {
+    currentProgression = getChordProgression(section);
+  }
+  const chordInfo = currentProgression[currentChordIndex % currentProgression.length];
+  currentChordInfo = chordInfo;
+
+  // Generate melodic acid sequence FIRST
+  if (currentBar % 2 === 0) {
+    acidSequence = generateMelodicAcidSequence(chordInfo, section, acidSequence);
+    // Pattern displays were removed with minimized UI
+  }
+
+  // THEN generate patterns (so stabs can respond to acid)
+  const patterns = generatePatterns(section, currentBar, energyLevel);
+  currentKickPattern = patterns.kick;
+  currentSnarePattern = patterns.snare;
+  currentHihatPattern = patterns.hihat;
+  currentStabPattern = patterns.stab;
+  currentSubPattern = computeSubPattern(chordInfo);
+
+  ensureLoopsCreated();
+
+  if (loopsStarted) {
+    return;
+  }
+
+  // When rebuilding inside a Transport callback, start slightly ahead to avoid
+  // same-tick race conditions that can drop subsequent loop scheduling.
+  const safeStartTime = typeof startTime === 'number' && startTime > 0
+    ? startTime + 0.001
+    : startTime;
+
+  kickLoop.start(safeStartTime);
+  snareLoop.start(safeStartTime);
+  hihatLoop.start(safeStartTime);
+  acidLoop.start(safeStartTime);
+  chordLoop.start(safeStartTime);
+  subLoop.start(safeStartTime);
+  loopsStarted = true;
+}
+
+export function getMusicWatchdogStatus(now = Tone.now()) {
+  return {
+    transportState: Tone.Transport.state,
+    transportSeconds: Tone.Transport.seconds,
+    lastSequenceCallbackTime,
+    secondsSinceSequenceCallback: lastSequenceCallbackTime > 0 ? Math.max(0, now - lastSequenceCallbackTime) : Infinity
+  };
+}
+
+export function recoverMusicLoops(now = Tone.now()) {
+  ensureLoopsCreated();
+  updatePatterns(now);
+
+  if (Tone.Transport.state !== 'started') {
+    loopsStarted = false;
+    return false;
+  }
+
+  const restartAt = now + 0.02;
+  kickLoop.stop(restartAt);
+  snareLoop.stop(restartAt);
+  hihatLoop.stop(restartAt);
+  acidLoop.stop(restartAt);
+  chordLoop.stop(restartAt);
+  subLoop.stop(restartAt);
+
+  kickLoop.start(restartAt + 0.001);
+  snareLoop.start(restartAt + 0.001);
+  hihatLoop.start(restartAt + 0.001);
+  acidLoop.start(restartAt + 0.001);
+  chordLoop.start(restartAt + 0.001);
+  subLoop.start(restartAt + 0.001);
+  loopsStarted = true;
+  return true;
 }
 
 // Apply tension to parameters
-export function applyTension() {
-  const now = Tone.now();
+export function applyTension(scheduleTime) {
+  const now = typeof scheduleTime === 'number' ? scheduleTime : Tone.now();
 
   // Both acid filters open with tension
   const baseFreq = 300 + (tensionLevel * 15);
@@ -862,12 +921,12 @@ export function applyTension() {
 
   // Start/stop noise riser
   if (tensionLevel > 60 && !riserActive) {
-    noiseRiser.start();
+    noiseRiser.start(now);
     riserEnvelope.triggerAttack();
     riserActive = true;
   } else if (tensionLevel <= 60 && riserActive) {
     riserEnvelope.triggerRelease();
-    setTimeout(() => noiseRiser.stop(), 500);
+    noiseRiser.stop(now + 0.5);
     riserActive = false;
   }
 
@@ -878,8 +937,8 @@ export function applyTension() {
 }
 
 // Automation curves for smooth transitions
-function applyAutomation(section, prevSection) {
-  const now = Tone.now();
+function applyAutomation(section, prevSection, scheduleTime) {
+  const now = typeof scheduleTime === 'number' ? scheduleTime : Tone.now();
 
   // Filter automation for both cascaded filters
   if (section === 'DROP' && prevSection !== 'DROP') {
@@ -924,7 +983,7 @@ export function evolve(scheduleTime) {
 
   // Apply automation on section changes
   if (section !== lastSection) {
-    applyAutomation(section, lastSection);
+    applyAutomation(section, lastSection, scheduleTime);
     lastSection = section;
   }
 
@@ -934,7 +993,7 @@ export function evolve(scheduleTime) {
   }
 
   // Apply tension continuously
-  applyTension();
+  applyTension(scheduleTime);
 
   // Vary chord progression rate based on section (already declared above)
   if (section === 'DROP' || section === 'MAIN') {
