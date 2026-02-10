@@ -15,12 +15,9 @@ import {
   updatePatterns,
   ensureTransportScheduled,
   applyTension,
+  applyGenreScene,
   GENRE_CONFIGS,
-  raveSynth, setRaveSynth,
-  kick,
-  technoStab,
-  dnbReese,
-  tropicalPluck
+  kick
 } from './music-engine.js';
 import { gameSounds } from './game-sounds.js';
 
@@ -54,9 +51,14 @@ const CHARACTER_LABELS = {
   default: 'Classic',
   unicorn: 'Unicorn'
 };
+const GENRE_ORDER = ['techno', 'dnb', 'tropical', 'dubstep', 'trance'];
+let genreOverlayTimeout = null;
+let genreOverlayFadeOutTimeout = null;
 
 let currentDifficulty = DIFFICULTY_PRESETS.normal;
 const isAudioRunning = () => Tone?.context?.state === 'running';
+let pendingGenreSwitch = null;
+let pendingGenreSwitchTimer = null;
 const withTransport = (fn) => {
   if (!isAudioRunning()) return false;
   fn(Tone.Transport);
@@ -66,6 +68,63 @@ const trackEventSafe = (eventName, params) => {
   if (typeof window.trackEvent === 'function') {
     window.trackEvent(eventName, params);
   }
+};
+const isEditableTarget = (target) => {
+  if (!target) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+};
+const getRampMeasuresForBpmDelta = (deltaBpm) => {
+  if (deltaBpm <= 6) return 1;
+  if (deltaBpm <= 20) return 2;
+  return 4;
+};
+const ensureGenreOverlay = () => {
+  let overlay = document.getElementById('genreKeyboardOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'genreKeyboardOverlay';
+    overlay.style.position = 'fixed';
+    overlay.style.left = '50%';
+    overlay.style.top = '18%';
+    overlay.style.transform = 'translate(-50%, -50%)';
+    overlay.style.zIndex = '30010';
+    overlay.style.padding = '10px 18px';
+    overlay.style.fontSize = '42px';
+    overlay.style.fontWeight = '700';
+    overlay.style.fontFamily = 'monospace';
+    overlay.style.letterSpacing = '2px';
+    overlay.style.color = '#0f0';
+    overlay.style.background = 'rgba(0, 0, 0, 0.82)';
+    overlay.style.border = '2px solid #0f0';
+    overlay.style.textTransform = 'uppercase';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 1000ms ease';
+    document.body.appendChild(overlay);
+  }
+  return overlay;
+};
+const showKeyboardGenreOverlay = (genre) => {
+  const overlay = ensureGenreOverlay();
+  overlay.textContent = genre;
+  overlay.style.opacity = '1';
+
+  if (genreOverlayTimeout) {
+    clearTimeout(genreOverlayTimeout);
+  }
+  if (genreOverlayFadeOutTimeout) {
+    clearTimeout(genreOverlayFadeOutTimeout);
+  }
+
+  // 2s total: fade in for 1s, fade out for 1s.
+  genreOverlayFadeOutTimeout = setTimeout(() => {
+    overlay.style.opacity = '0';
+  }, 1000);
+
+  genreOverlayTimeout = setTimeout(() => {
+    overlay.style.opacity = '0';
+  }, 2000);
 };
 
 function updatePlayPauseButton() {
@@ -115,6 +174,14 @@ const markCustomPreset = () => {
 };
 
 function switchGenre(genre) {
+  switchGenreWithOptions(genre);
+}
+
+function switchGenreWithOptions(genre, options = {}) {
+  const {
+    scheduleTime = null,
+    bpmRampMeasures = 1
+  } = options;
   const previousGenre = currentGenre;
   setCurrentGenre(genre);
   const config = GENRE_CONFIGS[genre];
@@ -135,48 +202,21 @@ function switchGenre(genre) {
   bpmSlider.max = config.bpmMax;
   bpmSlider.value = config.bpmDefault;
 
-  // Update BPM
-  withTransport((transport) => {
-    transport.bpm.value = config.bpmDefault;
-  });
+  // Update BPM (ramped when scheduled on a quantized boundary)
+  if (typeof scheduleTime === 'number' && Tone.Transport.state === 'started') {
+    const rampSeconds = Tone.Time(`${Math.max(1, bpmRampMeasures)}m`).toSeconds();
+    Tone.Transport.bpm.cancelAndHoldAtTime(scheduleTime);
+    Tone.Transport.bpm.linearRampToValueAtTime(config.bpmDefault, scheduleTime + rampSeconds);
+  } else {
+    withTransport((transport) => {
+      transport.bpm.value = config.bpmDefault;
+    });
+  }
   document.getElementById('bpmDisplay').textContent = config.bpmDefault;
 
-  // Switch stab synth based on genre
-  if (genre === 'dnb') {
-    setRaveSynth(dnbReese);
-  } else if (genre === 'tropical') {
-    setRaveSynth(tropicalPluck);
-  } else if (genre === 'dubstep') {
-    setRaveSynth(dnbReese); // Use Reese for dubstep wobbles
-  } else if (genre === 'trance') {
-    setRaveSynth(technoStab); // Use saw stabs for trance
-  } else {
-    setRaveSynth(technoStab);
-  }
-
-  // Adjust kick tuning for genre (only if instruments are loaded)
+  // Apply complete genre scene (sound design + mix profile + timing profile)
   if (typeof kick !== 'undefined') {
-    if (genre === 'tropical') {
-      // 808-style deeper kick for tropical
-      kick.oscillator.frequency.value = 50;
-      kick.octaves = 6;
-    } else if (genre === 'dnb') {
-      // Punchy, tight kick for D&B
-      kick.oscillator.frequency.value = 65;
-      kick.octaves = 3;
-    } else if (genre === 'dubstep') {
-      // Deep sub kick for dubstep
-      kick.oscillator.frequency.value = 45;
-      kick.octaves = 7;
-    } else if (genre === 'trance') {
-      // Punchy trance kick
-      kick.oscillator.frequency.value = 60;
-      kick.octaves = 4;
-    } else {
-      // Classic 909 kick for techno
-      kick.oscillator.frequency.value = 60;
-      kick.octaves = 4;
-    }
+    applyGenreScene(genre, scheduleTime);
   }
 
   // Update button styles
@@ -197,7 +237,56 @@ function switchGenre(genre) {
   });
 
   // Force pattern update on next bar
-  updatePatterns();
+  updatePatterns(typeof scheduleTime === 'number' ? scheduleTime : 0);
+}
+
+function requestGenreSwitch(genre, options = {}) {
+  const {
+    quantized = true,
+    bpmRampMeasures = null
+  } = options;
+
+  const currentBpm = withTransport((transport) => transport.bpm.value)
+    ? Tone.Transport.bpm.value
+    : parseInt(document.getElementById('bpmSlider')?.value || '132', 10);
+  const targetBpm = GENRE_CONFIGS[genre]?.bpmDefault || currentBpm;
+  const autoRampMeasures = getRampMeasuresForBpmDelta(Math.abs(targetBpm - currentBpm));
+  const finalRampMeasures = typeof bpmRampMeasures === 'number' ? bpmRampMeasures : autoRampMeasures;
+
+  if (!quantized || Tone.Transport.state !== 'started') {
+    switchGenreWithOptions(genre, { bpmRampMeasures: finalRampMeasures });
+    return;
+  }
+
+  pendingGenreSwitch = {
+    genre,
+    bpmRampMeasures: finalRampMeasures,
+    requestBar: currentBar
+  };
+
+  const genreName = GENRE_CONFIGS[genre]?.name || genre;
+  const status = document.getElementById('status');
+  if (status) {
+    status.textContent = `NEXT: ${genreName}`;
+  }
+
+  if (!pendingGenreSwitchTimer) {
+    pendingGenreSwitchTimer = setInterval(() => {
+      if (!pendingGenreSwitch) return;
+      if (Tone.Transport.state !== 'started') {
+        const queued = pendingGenreSwitch;
+        pendingGenreSwitch = null;
+        switchGenreWithOptions(queued.genre, { bpmRampMeasures: queued.bpmRampMeasures });
+        return;
+      }
+
+      if (currentBar !== pendingGenreSwitch.requestBar) {
+        const queued = pendingGenreSwitch;
+        pendingGenreSwitch = null;
+        switchGenreWithOptions(queued.genre, { bpmRampMeasures: queued.bpmRampMeasures });
+      }
+    }, 50);
+  }
 }
 
 // Handle touch events for transparency
@@ -415,11 +504,11 @@ export function setupMusicUI() {
   });
 
   // Genre switching handlers
-  document.getElementById('genreTechno').addEventListener('click', () => switchGenre('techno'));
-  document.getElementById('genreDnb').addEventListener('click', () => switchGenre('dnb'));
-  document.getElementById('genreTropical').addEventListener('click', () => switchGenre('tropical'));
-  document.getElementById('genreDubstep').addEventListener('click', () => switchGenre('dubstep'));
-  document.getElementById('genreTrance').addEventListener('click', () => switchGenre('trance'));
+  document.getElementById('genreTechno').addEventListener('click', () => requestGenreSwitch('techno'));
+  document.getElementById('genreDnb').addEventListener('click', () => requestGenreSwitch('dnb'));
+  document.getElementById('genreTropical').addEventListener('click', () => requestGenreSwitch('tropical'));
+  document.getElementById('genreDubstep').addEventListener('click', () => requestGenreSwitch('dubstep'));
+  document.getElementById('genreTrance').addEventListener('click', () => requestGenreSwitch('trance'));
 
   // Initial BPM and genre - will be overridden by saved settings if they exist
   document.getElementById('bpmDisplay').textContent = 132;
@@ -623,6 +712,24 @@ export function setupMusicUI() {
 
   // Close menu when game control keys are pressed
   document.addEventListener('keydown', (e) => {
+    if (isEditableTarget(e.target)) return;
+
+    // Keyboard genre controls:
+    // - [ / ]: previous / next genre
+    if (!e.ctrlKey && !e.metaKey) {
+      if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
+        const currentIndex = GENRE_ORDER.indexOf(currentGenre);
+        const step = e.code === 'BracketLeft' ? -1 : 1;
+        const nextIndex = currentIndex >= 0
+          ? (currentIndex + step + GENRE_ORDER.length) % GENRE_ORDER.length
+          : 0;
+        requestGenreSwitch(GENRE_ORDER[nextIndex]);
+        showKeyboardGenreOverlay(GENRE_ORDER[nextIndex]);
+        e.preventDefault();
+        return;
+      }
+    }
+
     if (!uiState.settingsOpen) return;
 
     // Game control keys that should close the menu

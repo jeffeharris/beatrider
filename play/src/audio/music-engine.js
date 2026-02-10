@@ -1,5 +1,14 @@
 import * as Tone from 'tone';
 import { savedData } from '../storage.js';
+import {
+  GENRE_CONFIGS as GENRE_CONFIGS_BASE,
+  GENRE_SCENES,
+  createGenreGenerators,
+  generateGenrePatterns,
+  generateGenreSubPattern,
+  getSectionForGenre,
+  isApproachingTransitionForGenre
+} from './genres/genre-logic.js';
 
 const hasSecureAudioWorklet = () =>
   typeof window !== 'undefined' &&
@@ -251,43 +260,7 @@ function getChordProgression(section) {
 }
 
 // Genre configurations with appropriate BPM ranges and pattern sets
-export const GENRE_CONFIGS = {
-  techno: {
-    name: 'Techno/Acid',
-    bpmMin: 120,
-    bpmMax: 150,
-    bpmDefault: 132,
-    patterns: ['detroit', 'berlin', 'chicago', 'fourOnFloor', 'syncopated']
-  },
-  dnb: {
-    name: 'Drum & Bass',
-    bpmMin: 160,
-    bpmMax: 180,
-    bpmDefault: 174,
-    patterns: ['dnb_basic', 'dnb_amen', 'dnb_jump', 'dnb_roll']
-  },
-  tropical: {
-    name: 'Tropical/Kygo',
-    bpmMin: 100,
-    bpmMax: 115,
-    bpmDefault: 110,
-    patterns: ['kygo_basic', 'kygo_bounce', 'kygo_minimal', 'kygo_clap']
-  },
-  dubstep: {
-    name: 'Dubstep',
-    bpmMin: 138,
-    bpmMax: 145,
-    bpmDefault: 140,
-    patterns: ['dubstep_basic', 'dubstep_half', 'dubstep_roll']
-  },
-  trance: {
-    name: 'Trance',
-    bpmMin: 135,
-    bpmMax: 145,
-    bpmDefault: 138,
-    patterns: ['trance_kick', 'trance_build', 'trance_uplifting']
-  }
-};
+export const GENRE_CONFIGS = GENRE_CONFIGS_BASE;
 
 // Current genre (can be changed via UI)
 export let currentGenre = 'techno';
@@ -360,6 +333,7 @@ export const patternBank = {
     busy: [1,1,0,1, 1,0,1,1, 0,1,1,0, 1,0,1,1]
   }
 };
+const genreGenerators = createGenreGenerators(patternBank);
 
 // State
 export let currentBar = 0;
@@ -372,6 +346,7 @@ export let tensionLevel = 30;
 export let lastSection = '';
 export let isTransitioning = false;
 export let riserActive = false;
+let currentSceneHumanize = { kick: 0.003, snare: 0.005, hihat: 0.008, acid: 0.004, stab: 0.006, sub: 0.002 };
 
 // Setter functions for mutable state (needed because ES module live bindings
 // can only be reassigned from within the module that declares them)
@@ -384,6 +359,49 @@ export function setLastSection(v) { lastSection = v; }
 export function setCurrentGenre(v) { currentGenre = v; }
 export function setRaveSynth(v) { raveSynth = v; }
 export function setRiserActive(v) { riserActive = v; }
+
+function setParamAtTime(param, value, atTime) {
+  if (!param || typeof value !== 'number') return;
+  if (typeof atTime === 'number' && typeof param.setValueAtTime === 'function') {
+    param.setValueAtTime(value, atTime);
+    return;
+  }
+  param.value = value;
+}
+
+export function applyGenreScene(genre = currentGenre, atTime) {
+  const scene = GENRE_SCENES[genre] || GENRE_SCENES.techno;
+  const time = typeof atTime === 'number' ? atTime : undefined;
+
+  if (scene.raveSynth === 'dnbReese') {
+    setRaveSynth(dnbReese);
+  } else if (scene.raveSynth === 'tropicalPluck') {
+    setRaveSynth(tropicalPluck);
+  } else {
+    setRaveSynth(technoStab);
+  }
+
+  if (kick?.oscillator?.frequency) {
+    setParamAtTime(kick.oscillator.frequency, scene.kick.frequency, time);
+  }
+  if (typeof scene.kick.octaves === 'number') {
+    kick.octaves = scene.kick.octaves;
+  }
+
+  setParamAtTime(hihatFilter.frequency, scene.hihat.highpass, time);
+  setParamAtTime(sidechain.ratio, scene.sidechain.ratio, time);
+  setParamAtTime(sidechain.threshold, scene.sidechain.threshold, time);
+  setParamAtTime(stabReverb.wet, scene.stab.wet, time);
+  setParamAtTime(stabFilter.frequency, scene.stab.lowpass, time);
+  setParamAtTime(acidDistortion.wet, scene.acid.drive, time);
+
+  if (typeof scene.sub.low === 'number') subEQ.low.value = scene.sub.low;
+  if (typeof scene.sub.mid === 'number') subEQ.mid.value = scene.sub.mid;
+  if (typeof scene.sub.high === 'number') subEQ.high.value = scene.sub.high;
+  if (typeof scene.sub.volume === 'number') subBass.volume.value = scene.sub.volume;
+
+  currentSceneHumanize = scene.humanize || currentSceneHumanize;
+}
 
 // Mute states - initialized from saved data
 export const muteStates = {
@@ -484,145 +502,29 @@ export function generateDrumFill() {
 
 // Get section
 export function getSection(bar) {
-  const pos = bar % 64;
-  if (pos < 8) return 'INTRO';
-  if (pos < 16) return 'BUILD';
-  if (pos < 32) return 'MAIN';
-  if (pos < 40) return 'BREAK';
-  if (pos < 56) return 'DROP';
-  return 'OUTRO';
+  return getSectionForGenre(currentGenre, bar);
 }
 
 // Check if we're approaching a section change
 export function isApproachingTransition(bar) {
-  const pos = bar % 64;
-  const transitionBars = [7, 15, 31, 39, 55, 63];
-  return transitionBars.includes(pos);
+  return isApproachingTransitionForGenre(currentGenre, bar);
 }
 
 // Generate patterns based on section and energy
 export function generatePatterns(section, bar, energy) {
-  const patterns = {};
-  const isFill = isApproachingTransition(bar);
-
-  if (isFill) {
-    // Drum fill before section change
-    const fill = generateDrumFill();
-    patterns.kick = fill.kick;
-    patterns.snare = fill.snare;
-    patterns.hihat = fill.hihat;
-  } else {
-    // Use genre-specific patterns based on section
-    const genreConfig = GENRE_CONFIGS[currentGenre];
-
-    if (section === 'DROP') {
-      // Drop section - use genre-specific intense patterns
-      if (currentGenre === 'dnb') {
-        patterns.kick = patternBank.kick.dnb_jump;
-        patterns.snare = patternBank.snare.dnb_roll;
-      } else if (currentGenre === 'tropical') {
-        patterns.kick = patternBank.kick.kygo_bounce;
-        patterns.snare = patternBank.snare.kygo_clap;
-      } else {
-        patterns.kick = Math.random() > 0.5 ? patternBank.kick.chicago : patternBank.kick.detroit;
-        patterns.snare = energy > 70 ? patternBank.snare.detroit : patternBank.snare.backbeat;
-      }
-    } else if (section === 'MAIN') {
-      // Main section - rotate through genre patterns
-      if (currentGenre === 'dnb') {
-        const dnbKicks = [patternBank.kick.dnb_basic, patternBank.kick.dnb_amen];
-        patterns.kick = dnbKicks[Math.floor((bar / 4) % dnbKicks.length)];
-        patterns.snare = patternBank.snare.dnb_basic;
-      } else if (currentGenre === 'tropical') {
-        patterns.kick = patternBank.kick.kygo_basic;
-        patterns.snare = patternBank.snare.kygo_rim;
-      } else if (currentGenre === 'dubstep') {
-        patterns.kick = patternBank.kick.dubstep_basic;
-        patterns.snare = patternBank.snare.dubstep_basic;
-      } else if (currentGenre === 'trance') {
-        patterns.kick = patternBank.kick.trance_kick;
-        patterns.snare = patternBank.snare.trance_clap;
-      } else {
-        const kickStyles = [patternBank.kick.fourOnFloor, patternBank.kick.berlin, patternBank.kick.detroit];
-        patterns.kick = kickStyles[Math.floor((bar / 4) % kickStyles.length)];
-        patterns.snare = patternBank.snare.backbeat;
-      }
-    } else if (section === 'BUILD') {
-      patterns.kick = patternBank.kick.halfTime;
-      patterns.snare = patternBank.snare.minimal;
-    } else if (section === 'BREAK') {
-      patterns.kick = patternBank.kick.minimal;
-      patterns.snare = new Array(16).fill(0);
-    } else {
-      patterns.kick = patternBank.kick.halfTime;
-      patterns.snare = patternBank.snare.minimal;
-    }
-
-    // Hi-hat patterns based on genre
-    if (currentGenre === 'dnb') {
-      // D&B has rapid, intricate hi-hats
-      if (tensionLevel > 70) {
-        patterns.hihat = new Array(16).fill(1); // Constant ride at high tension
-      } else {
-        patterns.hihat = [1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1]; // D&B shuffle
-      }
-    } else if (currentGenre === 'tropical') {
-      // Tropical has sparse, laid-back hi-hats
-      if (section === 'DROP') {
-        patterns.hihat = [0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1]; // Shaker pattern
-      } else {
-        patterns.hihat = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]; // Quarter notes
-      }
-    } else if (currentGenre === 'dubstep') {
-      // Dubstep has minimal, sparse hi-hats
-      patterns.hihat = [0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0]; // Very sparse
-    } else if (currentGenre === 'trance') {
-      // Trance has steady, driving hi-hats
-      patterns.hihat = [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0]; // Steady 8ths
-    } else {
-      // Techno - dynamic based on energy AND tension
-      patterns.hihat = [];
-      const hihatDensity = (energy / 100) * 0.5 + (tensionLevel / 100) * 0.5;
-      for (let i = 0; i < 16; i++) {
-        // More rapid hits at high tension
-        if (tensionLevel > 70 && i % 2 === 1) {
-          patterns.hihat[i] = 1; // Constant 16ths at high tension
-        } else {
-          patterns.hihat[i] = Math.random() < hihatDensity ? 1 : 0;
-        }
-      }
-    }
-  }
-
-  // Stab patterns that complement the acid line
-  // Look at where acid pattern has gaps and fill them
-  const acidDensity = acidSequence ? acidSequence.filter(n => n).length : 8;
-
-  const stabPatterns = [
-    [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0], // Single hit on downbeat
-    [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0], // Single hit midway
-    [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,0], // Single hit on upbeat
-    new Array(16).fill(0) // Rest
-  ];
-
-  // Simplified - sparse stabs for impact
-  if (section === 'BREAK') {
-    patterns.stab = stabPatterns[3]; // No stabs in break
-  } else if (section === 'DROP') {
-    // Hit on first bar of drop for impact
-    patterns.stab = (bar % 4 === 0) ? stabPatterns[0] : stabPatterns[3];
-  } else if (section === 'BUILD') {
-    // Occasional stab to build tension
-    patterns.stab = (bar % 2 === 1) ? stabPatterns[2] : stabPatterns[3];
-  } else if (section === 'MAIN') {
-    // Every other bar
-    patterns.stab = (bar % 2 === 0) ? stabPatterns[1] : stabPatterns[3];
-  } else {
-    // INTRO/OUTRO - very minimal
-    patterns.stab = (bar % 4 === 0) ? stabPatterns[1] : stabPatterns[3];
-  }
-
-  return patterns;
+  return generateGenrePatterns(
+    currentGenre,
+    {
+      section,
+      bar,
+      energy,
+      tension: tensionLevel,
+      chordInfo: currentChordInfo,
+      acidSequence
+    },
+    genreGenerators,
+    patternBank
+  );
 }
 
 // Sequences
@@ -638,33 +540,15 @@ let currentSubPattern = new Array(16).fill(null);
 let currentChordInfo = { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "Eb", "G"] };
 
 function computeSubPattern(chordInfo) {
-  if (currentGenre === 'dnb') {
-    // D&B: Long sustained sub-bass notes, often sliding
-    return [
-      chordInfo.bass, null, null, null,
-      null, null, null, null,
-      null, null, null, null,
-      chordInfo.bass, null, null, null
-    ];
-  }
-
-  if (currentGenre === 'tropical') {
-    // Tropical: Bouncing, syncopated bass following dembow rhythm
-    return [
-      chordInfo.bass, null, null, chordInfo.bass,
-      null, null, chordInfo.bass, null,
-      chordInfo.bass, null, null, chordInfo.bass,
-      null, null, chordInfo.bass, null
-    ];
-  }
-
-  // Techno: Offset from kick to avoid mud
-  return [
-    null, chordInfo.bass, null, null,  // Offset by one 16th
-    null, null, null, null,
-    null, chordInfo.bass, null, null,  // Offset by one 16th
-    null, null, null, null
-  ];
+  return generateGenreSubPattern(
+    currentGenre,
+    {
+      section: getSection(currentBar),
+      bar: currentBar,
+      chordInfo
+    },
+    genreGenerators
+  );
 }
 
 function ensureLoopsCreated() {
@@ -677,7 +561,7 @@ function ensureLoopsCreated() {
     lastSequenceCallbackTime = time;
     const note = currentKickPattern[step];
     if (note && !muteStates.kick) {
-      const humanTime = humanize(time, 0.003);
+      const humanTime = humanize(time, currentSceneHumanize.kick);
       kick.triggerAttackRelease("C1", "8n", humanTime);
       sidechain.ratio.setValueAtTime(20, humanTime);
       sidechain.ratio.linearRampToValueAtTime(8, humanTime + 0.1);
@@ -695,7 +579,7 @@ function ensureLoopsCreated() {
     lastSequenceCallbackTime = time;
     const note = currentSnarePattern[step];
     if (note && !muteStates.snare) {
-      const humanTime = humanize(time, 0.005);
+      const humanTime = humanize(time, currentSceneHumanize.snare);
       snare.triggerAttackRelease("8n", humanTime);
       Tone.Draw.schedule(() => {
         flashIndicator('snareIndicator');
@@ -711,7 +595,7 @@ function ensureLoopsCreated() {
     lastSequenceCallbackTime = time;
     const note = currentHihatPattern[step];
     if (note && !muteStates.hat) {
-      const humanTime = humanize(time, 0.008);
+      const humanTime = humanize(time, currentSceneHumanize.hihat);
       const velocity = 0.3 + Math.random() * 0.4;
       const duration = Math.random() > 0.8 ? "16n" : "32n";
       hihat.triggerAttackRelease(duration, humanTime);
@@ -730,7 +614,7 @@ function ensureLoopsCreated() {
     lastSequenceCallbackTime = time;
     const note = acidSequence[step];
     if (note && !muteStates.acid) {
-      const humanTime = humanize(time, 0.004);
+      const humanTime = humanize(time, currentSceneHumanize.acid);
       const isAccent = step % 4 === 0 || (Math.random() > 0.85 && tensionLevel > 50);
 
       if (isAccent) {
@@ -758,7 +642,7 @@ function ensureLoopsCreated() {
     lastSequenceCallbackTime = time;
     const hit = currentStabPattern[step];
     if (hit && !muteStates.stab) {
-      const humanTime = humanize(time, 0.006);
+      const humanTime = humanize(time, currentSceneHumanize.stab);
       const currentSection = getSection(currentBar);
       if (currentSection === 'DROP') {
         stabFilter.frequency.setValueAtTime(3500, humanTime);
@@ -796,7 +680,7 @@ function ensureLoopsCreated() {
     lastSequenceCallbackTime = time;
     const note = currentSubPattern[step];
     if (note && !muteStates.sub) {
-      const humanTime = humanize(time, 0.002);
+      const humanTime = humanize(time, currentSceneHumanize.sub);
       subBass.triggerAttackRelease(note, "2n", humanTime);
       const currentSection = getSection(currentBar);
       if (currentSection === 'DROP' || currentSection === 'MAIN') {
@@ -911,7 +795,10 @@ export function applyTension(scheduleTime) {
 
   // Master highpass rises with extreme tension
   if (tensionLevel > 80) {
-    masterHighpass.frequency.exponentialRampToValueAtTime(100 + (tensionLevel - 80) * 10, now + 0.5);
+    const highpassTarget = currentGenre === 'dubstep'
+      ? 35 + (tensionLevel - 80) * 2
+      : 100 + (tensionLevel - 80) * 10;
+    masterHighpass.frequency.exponentialRampToValueAtTime(highpassTarget, now + 0.5);
   } else {
     masterHighpass.frequency.exponentialRampToValueAtTime(20, now + 0.5);
   }

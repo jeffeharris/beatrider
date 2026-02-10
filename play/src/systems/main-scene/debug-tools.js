@@ -1,5 +1,9 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { LANES, MAIN_SCENE_TUNING } from '../../config.js';
+
+function isDevBuild() {
+  return typeof import.meta !== 'undefined' && !!import.meta.env?.DEV;
+}
 
 function warnInvariant(scene, key, message) {
   const now = scene.time.now;
@@ -29,7 +33,7 @@ export function setupDebugToolsSystem() {
 }
 
 export function assertMainSceneStateDev() {
-  if (!import.meta.env.DEV) return;
+  if (!isDevBuild()) return;
   const { player, flow } = this.stateSlices;
 
   if (flow.paused && flow.gameOver) {
@@ -64,7 +68,7 @@ export function monitorAndHealPlayerLaneDesync() {
 
   this.playerLaneDesyncFrames = (this.playerLaneDesyncFrames || 0) + 1;
 
-  if (import.meta.env.DEV) {
+  if (isDevBuild()) {
     warnInvariant(this, 'lane-position-desync', `player x desynced by ${diff.toFixed(2)} at lane ${player.lane}`);
   }
 
@@ -78,13 +82,13 @@ export function monitorAndHealPlayerLaneDesync() {
   this.playerLaneDesyncFrames = 0;
   this.playerLaneLastHealAt = now;
 
-  if (import.meta.env.DEV) {
+  if (isDevBuild()) {
     warnInvariant(this, 'lane-position-heal', `corrected player x to lane ${player.lane}`);
   }
 }
 
 export function updateDebugHudSystem() {
-  if (!import.meta.env.DEV || !this.debugHudText) return;
+  if (!isDevBuild() || !this.debugHudText) return;
 
   if (Phaser.Input.Keyboard.JustDown(this.keys[MAIN_SCENE_TUNING.debug.toggleKey])) {
     this.debugHudVisible = !this.debugHudVisible;

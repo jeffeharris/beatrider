@@ -1,0 +1,48 @@
+Original prompt: Help me resolve these issues: tone.js?v=8f973d5a:9688  * Tone.js v15.1.22 * ... (AudioContext not allowed, Tone is not defined, AudioWorkletNode secure context error, iOS unlock error, manifest 404)
+
+- Investigated current audio startup path and confirmed `music-ui.js` uses `Tone` without importing it.
+- Confirmed additional likely issue: module-level Tone node creation plus `Tone.Reverb` in non-secure contexts can trigger AudioWorklet errors.
+- Next: patch imports, secure-context fallbacks, iOS unlock compatibility, and manifest path.
+- User reported runtime syntax error in `play/index.html` due duplicate `isSafari`; fixed by renaming early audio flag to `isSafariAudio`.
+- User then reported persistent autoplay + secure-context errors with stack traces in `game-sounds.js`.
+- Patched `play/src/audio/game-sounds.js`:
+  - Removed unconditional module-load `offScreenFilter.start()` (now only starts if context already running).
+  - Added non-worklet fallback for laser sound #4 (replace `Tone.PluckSynth` with `Tone.MonoSynth` when not secure context).
+- Rebuilt Vite bundle successfully.
+- Updated root `sw.js` to remove hardcoded monolithic bundle URLs and adopt Vite-friendly runtime caching.
+- Added precache entries for `/play/index-vite.html`, manifest, and icons.
+- Added stale-while-revalidate strategy for `/play/assets/*` hashed files and network-first navigation fallback.
+- Bumped cache version to `beatrider-v11`.
+- Addressed massive pre-gesture autoplay warnings from Tone transport initialization.
+- `music-engine.js`: removed module-load `Tone.Transport.scheduleRepeat(...)`; added lazy `ensureTransportScheduled()`.
+- `music-ui.js`: replaced load-time transport writes with guarded helpers (`isAudioRunning`/`withTransport`), and call `ensureTransportScheduled()` only when user starts playback.
+- `main-scene.js`: call `ensureTransportScheduled()` right before transport start in game-start music flow.
+- Build passes.
+- Added real iOS unlock asset: `play/public/audio/unlock.wav`.
+- Updated `ios-unlock.js` to use real file URL(s) instead of data URI; added `Tone.Destination.mute = false` after Tone.start().
+- Added `/play/audio/unlock.wav` to SW precache list.
+- Build passes.
+- Reworked music sequencing for iOS reliability:
+  - `music-engine.js` now keeps Tone sequences persistent (created once) instead of disposing/recreating every bar.
+  - Pattern/chord/sub state updates are now data-only mutations consumed by those persistent loops.
+  - Added `loopsStarted` guard so loop start is one-time.
+- Expected impact: prevents Safari transport timing drops where music plays briefly then stops.
+- Build passes.
+- Added lightweight music watchdog (enabled only while game active and not paused).
+- `music-engine.js`: track last sequence callback timestamp and export `getMusicWatchdogStatus()` + `recoverMusicLoops()`.
+- `main-scene.js`: 1s timer checks for stale callbacks (>3s) while transport is started; throttled recovery (>=5s between attempts).
+- Watchdog cleaned up on scene shutdown.
+- Build passes.
+- Genre-depth branch work (`spike/genre-sound-depth`) started.
+- Added new pure genre logic module: `play/src/audio/genres/genre-logic.js`.
+  - Includes `GENRE_SCENES`, `GENRE_CONFIGS`, genre-specific arrangements, transition detection, and generator factories.
+- Refactored `music-engine.js` to consume generator module:
+  - `getSection()` now uses per-genre arrangement planner.
+  - `generatePatterns()` and sub-bass generation now dispatch through genre generators.
+  - Added `applyGenreScene(genre, atTime?)` and scene-driven humanize profile.
+- Updated `music-ui.js` genre switching to apply full scene profiles via `applyGenreScene()`.
+- Added unit tests for genre logic: `play/tests/audio-genre-logic.test.js`.
+- Added keyboard genre switching in `music-ui.js` without conflicting with existing 1-6 laser hotkeys:
+  - `Alt+1..5` selects techno/dnb/tropical/dubstep/trance.
+  - `g` cycles to next genre.
+  - Shortcuts ignore text-input targets.
