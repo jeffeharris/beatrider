@@ -46,3 +46,10 @@ Original prompt: Help me resolve these issues: tone.js?v=8f973d5a:9688  * Tone.j
   - `Alt+1..5` selects techno/dnb/tropical/dubstep/trance.
   - `g` cycles to next genre.
   - Shortcuts ignore text-input targets.
+- Added opt-in audio debug logs for genre workflow and section transitions:
+  - `play/src/audio/debug-log.js`: new `logAudioDebug()` helper gated by `debugAudio`.
+  - `play/src/audio/music-ui.js`: logs on request/apply/flush of queued genre switches.
+  - `play/src/audio/music-engine.js`: logs section transitions and periodic tension snapshots.
+- Expanded `[audio-metrics]` logging to all genres when `METRICS` is ON (removed house/garage-only restriction).
+- Validation: `cd play && npm test && npm run build` both pass.
+- Note: Playwright helper captures only screenshots/state/errors, not debug console output; manual browser console is still needed to inspect `console.debug` logs.

@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import StartupScene from './scenes/startup-scene.js';
 import { useCanvas, isMac, isSafariBrowser, isChrome } from './config.js';
 

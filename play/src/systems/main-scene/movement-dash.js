@@ -176,11 +176,11 @@ export function checkDashCollisionSystem() {
         this.player.setTint(0xff0000);
         try {
           const now = Tone.now();
-          gameSounds.obstacleHit.triggerAttackRelease('G2', '16n', now);
-          gameSounds.obstacleHit.triggerAttackRelease('D2', '16n', now + 0.05);
-          gameSounds.obstacleHit.triggerAttackRelease('G1', '16n', now + 0.1);
-          gameSounds.explosion.triggerAttackRelease('8n', now + 0.02);
-        } catch(e) {}
+          gameSounds.obstacleHit.triggerAttackRelease('E2', '16n', now, 0.42);
+          gameSounds.obstacleHit.triggerAttackRelease('C2', '16n', now + 0.06, 0.36);
+          gameSounds.obstacleHit.triggerAttackRelease('G1', '8n', now + 0.13, 0.3);
+          gameSounds.explosion.triggerAttackRelease('16n', now + 0.03, 0.18);
+        } catch (e) { logAudioError("movement-dash:collision-lethal", e); }
         this.showGameOverScreen();
       } else {
         // Shield absorbs obstacle hit during dash

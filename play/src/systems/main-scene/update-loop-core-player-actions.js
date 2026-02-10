@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import * as Tone from 'tone';
 import { LANES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';

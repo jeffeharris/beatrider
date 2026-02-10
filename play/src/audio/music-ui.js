@@ -16,10 +16,15 @@ import {
   ensureTransportScheduled,
   applyTension,
   applyGenreScene,
+  setNative24ModeEnabled,
+  isNative24ModeEnabled,
+  setAudioMetricsEnabled,
+  isAudioMetricsEnabled,
   GENRE_CONFIGS,
   kick
 } from './music-engine.js';
 import { gameSounds } from './game-sounds.js';
+import { logAudioDebug } from './debug-log.js';
 
 // UI State Management
 const uiState = {
@@ -51,7 +56,7 @@ const CHARACTER_LABELS = {
   default: 'Classic',
   unicorn: 'Unicorn'
 };
-const GENRE_ORDER = ['techno', 'dnb', 'tropical', 'dubstep', 'trance'];
+const GENRE_ORDER = ['techno', 'house', 'garage', 'dnb', 'tropical', 'dubstep', 'trance'];
 let genreOverlayTimeout = null;
 let genreOverlayFadeOutTimeout = null;
 
@@ -126,6 +131,24 @@ const showKeyboardGenreOverlay = (genre) => {
     overlay.style.opacity = '0';
   }, 2000);
 };
+const updateNative24UI = (enabled) => {
+  const toggle = document.getElementById('native24Toggle');
+  const display = document.getElementById('native24Display');
+  const abBtn = document.getElementById('native24ABBtn');
+  if (toggle) toggle.checked = !!enabled;
+  if (display) display.textContent = enabled ? 'On' : 'Off';
+  if (abBtn) {
+    abBtn.style.setProperty('background', enabled ? '#0f0' : '#333', 'important');
+    abBtn.style.setProperty('color', enabled ? '#000' : '#0f0', 'important');
+  }
+};
+const updateAudioMetricsUI = (enabled) => {
+  const btn = document.getElementById('audioMetricsBtn');
+  if (!btn) return;
+  btn.textContent = enabled ? 'METRICS ON' : 'METRICS';
+  btn.style.setProperty('background', enabled ? '#0f0' : '#333', 'important');
+  btn.style.setProperty('color', enabled ? '#000' : '#0f0', 'important');
+};
 
 function updatePlayPauseButton() {
   const btn = document.getElementById('playPauseBtn');
@@ -185,6 +208,9 @@ function switchGenreWithOptions(genre, options = {}) {
   const previousGenre = currentGenre;
   setCurrentGenre(genre);
   const config = GENRE_CONFIGS[genre];
+  logAudioDebug(
+    `apply genre=${genre} from=${previousGenre || 'none'} scheduled=${typeof scheduleTime === 'number'} rampMeasures=${bpmRampMeasures}`
+  );
 
   // Track genre change (only if actually changed)
   if (previousGenre && previousGenre !== genre) {
@@ -222,6 +248,8 @@ function switchGenreWithOptions(genre, options = {}) {
   // Update button styles
   const genreButtonMap = {
     'techno': 'genreTechno',
+    'house': 'genreHouse',
+    'garage': 'genreGarage',
     'dnb': 'genreDnb',
     'tropical': 'genreTropical',
     'dubstep': 'genreDubstep',
@@ -252,6 +280,9 @@ function requestGenreSwitch(genre, options = {}) {
   const targetBpm = GENRE_CONFIGS[genre]?.bpmDefault || currentBpm;
   const autoRampMeasures = getRampMeasuresForBpmDelta(Math.abs(targetBpm - currentBpm));
   const finalRampMeasures = typeof bpmRampMeasures === 'number' ? bpmRampMeasures : autoRampMeasures;
+  logAudioDebug(
+    `request genre=${genre} quantized=${quantized} bpm=${Math.round(currentBpm)}->${Math.round(targetBpm)} rampMeasures=${finalRampMeasures}`
+  );
 
   if (!quantized || Tone.Transport.state !== 'started') {
     switchGenreWithOptions(genre, { bpmRampMeasures: finalRampMeasures });
@@ -276,6 +307,7 @@ function requestGenreSwitch(genre, options = {}) {
       if (Tone.Transport.state !== 'started') {
         const queued = pendingGenreSwitch;
         pendingGenreSwitch = null;
+        logAudioDebug(`flush queued genre=${queued.genre} (transport not started)`);
         switchGenreWithOptions(queued.genre, { bpmRampMeasures: queued.bpmRampMeasures });
         return;
       }
@@ -283,6 +315,7 @@ function requestGenreSwitch(genre, options = {}) {
       if (currentBar !== pendingGenreSwitch.requestBar) {
         const queued = pendingGenreSwitch;
         pendingGenreSwitch = null;
+        logAudioDebug(`flush queued genre=${queued.genre} at bar=${currentBar}`);
         switchGenreWithOptions(queued.genre, { bpmRampMeasures: queued.bpmRampMeasures });
       }
     }, 50);
@@ -504,21 +537,76 @@ export function setupMusicUI() {
   });
 
   // Genre switching handlers
-  document.getElementById('genreTechno').addEventListener('click', () => requestGenreSwitch('techno'));
-  document.getElementById('genreDnb').addEventListener('click', () => requestGenreSwitch('dnb'));
-  document.getElementById('genreTropical').addEventListener('click', () => requestGenreSwitch('tropical'));
-  document.getElementById('genreDubstep').addEventListener('click', () => requestGenreSwitch('dubstep'));
-  document.getElementById('genreTrance').addEventListener('click', () => requestGenreSwitch('trance'));
+  const bindGenre = (id, genre) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', () => requestGenreSwitch(genre));
+  };
+  bindGenre('genreTechno', 'techno');
+  bindGenre('genreHouse', 'house');
+  bindGenre('genreGarage', 'garage');
+  bindGenre('genreDnb', 'dnb');
+  bindGenre('genreTropical', 'tropical');
+  bindGenre('genreDubstep', 'dubstep');
+  bindGenre('genreTrance', 'trance');
 
   // Initial BPM and genre - will be overridden by saved settings if they exist
   document.getElementById('bpmDisplay').textContent = 132;
   // Set initial genre button highlighting
   switchGenre('techno');
 
+  // Debug/runtime A/B toggle for native 24-step on supported genres (house/garage)
+  window.setNative24Mode = (enabled) => {
+    setNative24ModeEnabled(enabled);
+    updateNative24UI(isNative24ModeEnabled());
+    updatePatterns();
+    const status = document.getElementById('status');
+    if (status) {
+      status.textContent = `NATIVE24 ${isNative24ModeEnabled() ? 'ON' : 'OFF'}`;
+    }
+  };
+  window.getNative24Mode = () => isNative24ModeEnabled();
+
+  const native24Toggle = document.getElementById('native24Toggle');
+  if (native24Toggle) {
+    native24Toggle.addEventListener('change', (e) => {
+      const enabled = !!e.target.checked;
+      window.setNative24Mode(enabled);
+      saveGameDataDebounced({ settings: { native24: enabled } });
+    });
+  }
+  const native24ABBtn = document.getElementById('native24ABBtn');
+  if (native24ABBtn) {
+    native24ABBtn.addEventListener('click', () => {
+      const enabled = !isNative24ModeEnabled();
+      window.setNative24Mode(enabled);
+      saveGameDataDebounced({ settings: { native24: enabled } });
+    });
+  }
+  const audioMetricsBtn = document.getElementById('audioMetricsBtn');
+  if (audioMetricsBtn) {
+    audioMetricsBtn.addEventListener('click', () => {
+      const enabled = !isAudioMetricsEnabled();
+      setAudioMetricsEnabled(enabled);
+      updateAudioMetricsUI(enabled);
+      const status = document.getElementById('status');
+      if (status) {
+        status.textContent = enabled ? 'AUDIO METRICS ON' : 'AUDIO METRICS OFF';
+      }
+    });
+  }
+  updateNative24UI(isNative24ModeEnabled());
+  updateAudioMetricsUI(isAudioMetricsEnabled());
+
   // Apply saved music settings after page loads
   window.addEventListener('load', () => {
     if (savedData.settings) {
       // Apply saved music preset or custom values
+      if (savedData.settings.native24 !== undefined) {
+        window.setNative24Mode(!!savedData.settings.native24);
+      } else {
+        updateNative24UI(isNative24ModeEnabled());
+      }
+
       if (savedData.settings.musicPreset === 'custom' && savedData.settings.customMusic) {
         // Apply custom BPM/energy/tension
         const custom = savedData.settings.customMusic;

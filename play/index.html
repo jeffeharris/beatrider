@@ -44,6 +44,16 @@
   </script>
 
   <link rel="stylesheet" href="./styles/game.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "phaser": "./node_modules/phaser/dist/phaser.esm.js",
+        "tone": "./node_modules/tone/build/esm/index.js",
+        "standardized-audio-context": "./src/vendor/standardized-audio-context-shim.js",
+        "tslib": "./node_modules/tslib/tslib.es6.mjs"
+      }
+    }
+  </script>
 </head>
 <body>
   <div class="container">
@@ -100,6 +110,8 @@
           <label class="slider-label">Genre:</label>
           <div style="display: flex; gap: 3px; margin-top: 5px; flex-wrap: wrap;">
             <button id="genreTechno" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Techno</button>
+            <button id="genreHouse" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">House</button>
+            <button id="genreGarage" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Garage</button>
             <button id="genreDnb" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">D&B</button>
             <button id="genreTropical" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Tropical</button>
             <button id="genreDubstep" class="preset-btn" style="flex: 1; min-width: 45px; padding: 4px 2px; font-size: 16px;">Dubstep</button>
@@ -120,6 +132,16 @@
           <label class="slider-label">TENSION:</label>
           <input type="range" id="tensionSlider" min="0" max="100" value="30" class="slider">
           <span id="tensionDisplay" class="slider-value">30</span>
+        </div>
+        <div class="slider-row">
+          <label class="slider-label">N24:</label>
+          <label style="display:flex; align-items:center; gap:6px; color:#0f0; min-width: 120px;">
+            <input type="checkbox" id="native24Toggle" style="accent-color:#0f0;">
+            <span id="native24Display" class="slider-value">Off</span>
+          </label>
+          <button id="native24ABBtn" class="preset-btn" style="padding: 3px 6px; font-size: 10px; min-width: 36px;">A/B</button>
+          <button id="audioMetricsBtn" class="preset-btn" style="padding: 3px 6px; font-size: 10px; min-width: 56px;">METRICS</button>
+          <span class="slider-value" style="font-size:10px; width:80px;">House/Garage</span>
         </div>
         <div class="slider-row">
           <label class="slider-label">SHOT:</label>

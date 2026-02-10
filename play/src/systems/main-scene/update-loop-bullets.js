@@ -8,6 +8,14 @@ import {
   updateMaxComboReached
 } from './score-combo-state.js';
 
+function getSafeAudioTime(scene, key, baseTime = Tone.now(), minStep = 0.002) {
+  scene._audioScheduleTimes ??= {};
+  const last = scene._audioScheduleTimes[key] || 0;
+  const safe = Math.max(baseTime, last + minStep);
+  scene._audioScheduleTimes[key] = safe;
+  return safe;
+}
+
 export function updateBulletsSystem(dt) {
 const { combat } = this.stateSlices;
 const vanishY = gameState.HEIGHT * 0.15;
@@ -156,8 +164,9 @@ for(let i=this.bullets.length-1; i>=0; i--){
       
       // Obstacle block sound - metallic ping
       try {
-        gameSounds.move.triggerAttackRelease("C7", "64n");
-      } catch(e) {}
+        const at = getSafeAudioTime(this, 'obstacleHit');
+        gameSounds.obstacleHit.triggerAttackRelease("C3", "32n", at, 0.24);
+      } catch (e) { logAudioError("update-loop-bullets:obstacle-block-ping", e); }
       break; // Obstacle blocks the shot
     }
   }
@@ -257,13 +266,13 @@ for(let i=this.bullets.length-1; i>=0; i--){
           // Bonus sound effects for combo milestones
           if(combat.combo === 4 || combat.combo === 6 || combat.combo === 8) {
             try {
-              const now = Tone.now();
+              const now = getSafeAudioTime(this, 'powerUp');
               // Ascending arpeggio for combo milestone
-              gameSounds.powerUp.triggerAttackRelease("C4", "32n", now);
-              gameSounds.powerUp.triggerAttackRelease("E4", "32n", now + 0.05);
-              gameSounds.powerUp.triggerAttackRelease("G4", "32n", now + 0.1);
-              gameSounds.powerUp.triggerAttackRelease("C5", "32n", now + 0.15);
-            } catch(e) {}
+              gameSounds.powerUp.triggerAttackRelease("C3", "32n", now, 0.35);
+              gameSounds.powerUp.triggerAttackRelease("E3", "32n", now + 0.05, 0.3);
+              gameSounds.powerUp.triggerAttackRelease("G3", "32n", now + 0.1, 0.28);
+              gameSounds.powerUp.triggerAttackRelease("C4", "32n", now + 0.15, 0.25);
+            } catch (e) { logAudioError("update-loop-bullets:combo-milestone-arp", e); }
           }
         }
         // Update highscore if beaten
@@ -276,23 +285,26 @@ for(let i=this.bullets.length-1; i>=0; i--){
         
         // Play destruction sound based on enemy type with pitch variation
         try {
-          const now = Tone.now();
+          const nowEnemyDestroy = getSafeAudioTime(this, 'enemyDestroy');
+          const nowExplosion = getSafeAudioTime(this, 'explosion');
+          const nowPowerUp = getSafeAudioTime(this, 'powerUp');
           if(e.isDrifter){
             // Drifter destruction - descending stab chord
-            gameSounds.powerUp.triggerAttackRelease("G4", "32n", now);
-            gameSounds.powerUp.triggerAttackRelease("D4", "32n", now + 0.02);
-            gameSounds.powerUp.triggerAttackRelease("A3", "32n", now + 0.04);
+            gameSounds.powerUp.triggerAttackRelease("G4", "32n", nowPowerUp);
+            gameSounds.powerUp.triggerAttackRelease("D4", "32n", nowPowerUp + 0.02);
+            gameSounds.powerUp.triggerAttackRelease("A3", "32n", nowPowerUp + 0.04);
           } else if(e.enemyType === 'fastEnemyTex'){
-            // Fast enemy - high pitched noise burst
-            gameSounds.explosion.triggerAttackRelease("32n", now);
-            gameSounds.enemyDestroy.triggerAttackRelease("G5", "32n", now + 0.01);
+            // Fast enemy - softer mid accent (avoid sharp top-end burst)
+            gameSounds.enemyDestroy.triggerAttackRelease("G4", "32n", nowEnemyDestroy + 0.01, 0.52);
+            gameSounds.obstacleHit.triggerAttackRelease("E3", "32n", nowExplosion + 0.02, 0.26);
+            gameSounds.explosion.triggerAttackRelease("64n", nowExplosion + 0.025, 0.12);
           } else {
-            // Regular enemy - distorted kick-like sound with random note from scale
+            // Regular enemy - lower/softer hit to keep feedback without harshness
             const noteIndex = Math.floor(Math.random() * 7);
             // Add tiny random offset to each sound to prevent exact timing conflicts
             const offset = Math.random() * 0.005;
-            gameSounds.enemyDestroy.triggerAttackRelease(getGameNote(noteIndex) + "3", "16n", now + offset);
-            gameSounds.explosion.triggerAttackRelease("32n", now + 0.015 + offset);
+            gameSounds.enemyDestroy.triggerAttackRelease(getGameNote(noteIndex) + "3", "16n", nowEnemyDestroy + offset, 0.46);
+            gameSounds.obstacleHit.triggerAttackRelease("C2", "32n", nowExplosion + 0.015 + offset, 0.24);
           }
         } catch(err) {
           // Timing conflict - sounds will be skipped this frame

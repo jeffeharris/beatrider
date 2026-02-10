@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { gameState, isMobile } from '../config.js';
 import { unlockIOSAudio } from '../audio/ios-unlock.js';
 

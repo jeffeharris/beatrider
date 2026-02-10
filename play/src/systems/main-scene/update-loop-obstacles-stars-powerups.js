@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, DAMAGE_VALUES } from '../../config.js';
 import { sessionHighScore, setSessionHighScore } from '../../storage.js';
@@ -200,9 +200,12 @@ for(let i=this.obstacles.length-1; i>=0; i--){
         }
         this._createSplatEffect(this.player.x, this.player.y);
         try {
-          gameSounds.obstacleHit.triggerAttackRelease("C2", "8n");
-          gameSounds.explosion.triggerAttackRelease("8n");
-        } catch(e) {}
+          const now = Tone.now();
+          gameSounds.obstacleHit.triggerAttackRelease("E2", "16n", now, 0.42);
+          gameSounds.obstacleHit.triggerAttackRelease("C2", "16n", now + 0.06, 0.36);
+          gameSounds.obstacleHit.triggerAttackRelease("G1", "8n", now + 0.13, 0.3);
+          gameSounds.explosion.triggerAttackRelease("16n", now + 0.03, 0.18);
+        } catch (e) { logAudioError("obstacles-stars-powerups:obstacle-lethal-hit", e); }
         this.showGameOverScreen();
         for(let j = this.floatingStars.length - 1; j >= 0; j--) {
           if(this.floatingStars[j].attachedObstacle === o) {

@@ -6,9 +6,16 @@ import {
   createGenreGenerators,
   generateGenrePatterns,
   generateGenreSubPattern,
+  adaptBinaryPatternToStepCount,
+  getStepCountForGenre,
+  isNative24Enabled,
+  setNative24Enabled,
   getSectionForGenre,
-  isApproachingTransitionForGenre
+  getBarsUntilNextSectionForGenre,
+  isApproachingTransitionForGenre,
+  STEP_COUNT
 } from './genres/genre-logic.js';
+import { isAudioDebugEnabled, logAudioDebug } from './debug-log.js';
 
 const hasSecureAudioWorklet = () =>
   typeof window !== 'undefined' &&
@@ -292,7 +299,15 @@ export const patternBank = {
     // Trance patterns (driving four-on-floor)
     trance_kick: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],   // Classic trance
     trance_build: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],  // Build-up pattern
-    trance_uplifting: [1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1] // Uplifting variation
+    trance_uplifting: [1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1], // Uplifting variation
+    // House patterns
+    house_classic: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+    house_drive: [1,0,0,1, 1,0,0,0, 1,0,0,1, 1,0,0,0],
+    house_shuffle: [1,0,1,0, 1,0,0,0, 1,0,1,0, 1,0,0,0],
+    // UK Garage patterns
+    garage_2step: [1,0,0,0, 0,0,1,0, 0,0,0,1, 0,0,1,0],
+    garage_shuffle: [1,0,0,1, 0,0,1,0, 0,1,0,0, 0,0,1,0],
+    garage_sparse: [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,1]
   },
   snare: {
     backbeat: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
@@ -315,7 +330,12 @@ export const patternBank = {
     // Trance snare patterns (uplifting, driving)
     trance_clap: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],   // Standard clap
     trance_build: [0,0,0,0, 1,0,0,1, 0,0,1,0, 1,0,1,1],  // Building energy
-    trance_uplift: [0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0]  // Uplifting pattern
+    trance_uplift: [0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0],  // Uplifting pattern
+    // House/garage extras
+    house_clap: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+    house_ghost: [0,0,1,0, 1,0,0,0, 0,0,1,0, 1,0,0,0],
+    garage_clap: [0,0,0,0, 1,0,0,0, 0,0,0,1, 1,0,0,0],
+    garage_ghost: [0,0,1,0, 1,0,0,0, 0,0,1,0, 1,0,0,1]
   },
   // Classic acid bassline patterns (rhythm only, notes added later)
   acid: {
@@ -359,6 +379,12 @@ export function setLastSection(v) { lastSection = v; }
 export function setCurrentGenre(v) { currentGenre = v; }
 export function setRaveSynth(v) { raveSynth = v; }
 export function setRiserActive(v) { riserActive = v; }
+export function setNative24ModeEnabled(v) { setNative24Enabled(v); }
+export function isNative24ModeEnabled() { return isNative24Enabled(); }
+let audioMetricsEnabled = false;
+let lastMetricsLoggedBar = -1;
+export function setAudioMetricsEnabled(v) { audioMetricsEnabled = !!v; }
+export function isAudioMetricsEnabled() { return audioMetricsEnabled; }
 
 function setParamAtTime(param, value, atTime) {
   if (!param || typeof value !== 'number') return;
@@ -449,13 +475,14 @@ export function generateMelodicAcidSequence(chordInfo, section, previousSequence
     // Main section varies
     rhythmPattern = Math.random() > 0.5 ? patternBank.acid.hardfloor : patternBank.acid.phuture;
   }
+  const pattern24 = adaptBinaryPatternToStepCount(rhythmPattern, activeStepCount);
 
   // Use chord tones as anchors
   const chordTones = chordInfo.melodicFocus;
   let lastNote = previousSequence.length > 0 ? previousSequence[previousSequence.length - 1] : null;
 
-  for (let i = 0; i < 16; i++) {
-    if (rhythmPattern[i]) {
+  for (let i = 0; i < activeStepCount; i++) {
+    if (pattern24[i]) {
       let note;
 
       // Strong beats (0, 4, 8, 12) favor chord tones
@@ -496,7 +523,7 @@ export function generateDrumFill() {
   return {
     kick: patternBank.kick.fill,
     snare: patternBank.snare.fill,
-    hihat: new Array(16).fill(1) // Rapid hi-hats
+    hihat: new Array(activeStepCount).fill(1) // Rapid hi-hats
   };
 }
 
@@ -531,13 +558,84 @@ export function generatePatterns(section, bar, energy) {
 let kickLoop, snareLoop, hihatLoop, acidLoop, chordLoop, subLoop;
 let loopsStarted = false;
 let lastSequenceCallbackTime = 0;
-const STEP_SEQUENCE = Array.from({ length: 16 }, (_, i) => i);
-let currentKickPattern = new Array(16).fill(0);
-let currentSnarePattern = new Array(16).fill(0);
-let currentHihatPattern = new Array(16).fill(0);
-let currentStabPattern = new Array(16).fill(0);
-let currentSubPattern = new Array(16).fill(null);
+let activeStepCount = STEP_COUNT;
+let activeStepSubdivision = "16n";
+let stepSequence = Array.from({ length: activeStepCount }, (_, i) => i);
+let currentKickPattern = new Array(activeStepCount).fill({ on: false, velocity: 0, gate: '16n', accent: false, slide: false });
+let currentSnarePattern = new Array(activeStepCount).fill({ on: false, velocity: 0, gate: '16n', accent: false, slide: false });
+let currentHihatPattern = new Array(activeStepCount).fill({ on: false, velocity: 0, gate: '16n', accent: false, slide: false });
+let currentStabPattern = new Array(activeStepCount).fill({ on: false, velocity: 0, gate: '8n', accent: false, slide: false });
+let currentSubPattern = new Array(activeStepCount).fill({ note: null, velocity: 0, gate: '8n', accent: false, slide: false });
 let currentChordInfo = { root: "C", chord: ["C4", "Eb4", "G4"], bass: "C1", melodicFocus: ["C", "Eb", "G"] };
+
+function activeSubdivisionForStepCount(stepCount) {
+  return stepCount === 24 ? "16t" : "16n";
+}
+
+function resetLoopGrid(stepCount) {
+  const nextCount = typeof stepCount === 'number' && stepCount > 0 ? stepCount : STEP_COUNT;
+  if (nextCount === activeStepCount) return;
+
+  const stopAt = Tone.now() + 0.01;
+  [kickLoop, snareLoop, hihatLoop, acidLoop, chordLoop, subLoop].forEach((loop) => {
+    if (!loop) return;
+    try {
+      loop.stop(stopAt);
+      loop.dispose();
+    } catch (_e) {
+      // Ignore disposal issues; loops will be recreated.
+    }
+  });
+
+  kickLoop = null;
+  snareLoop = null;
+  hihatLoop = null;
+  acidLoop = null;
+  chordLoop = null;
+  subLoop = null;
+  loopsStarted = false;
+
+  activeStepCount = nextCount;
+  activeStepSubdivision = activeSubdivisionForStepCount(activeStepCount);
+  stepSequence = Array.from({ length: activeStepCount }, (_, i) => i);
+  currentKickPattern = new Array(activeStepCount).fill({ on: false, velocity: 0, gate: '16n', accent: false, slide: false });
+  currentSnarePattern = new Array(activeStepCount).fill({ on: false, velocity: 0, gate: '16n', accent: false, slide: false });
+  currentHihatPattern = new Array(activeStepCount).fill({ on: false, velocity: 0, gate: '16n', accent: false, slide: false });
+  currentStabPattern = new Array(activeStepCount).fill({ on: false, velocity: 0, gate: '8n', accent: false, slide: false });
+  currentSubPattern = new Array(activeStepCount).fill({ note: null, velocity: 0, gate: '8n', accent: false, slide: false });
+}
+
+function toStepEvent(step) {
+  if (step && typeof step === 'object' && Object.prototype.hasOwnProperty.call(step, 'on')) {
+    return {
+      on: !!step.on,
+      velocity: typeof step.velocity === 'number' ? Math.max(0, Math.min(1, step.velocity)) : 0.75,
+      gate: typeof step.gate === 'string' ? step.gate : '16n',
+      accent: !!step.accent,
+      slide: !!step.slide
+    };
+  }
+  if (typeof step === 'number') {
+    return { on: !!step, velocity: step ? 0.75 : 0, gate: '16n', accent: false, slide: false };
+  }
+  return { on: false, velocity: 0, gate: '16n', accent: false, slide: false };
+}
+
+function toSubEvent(step) {
+  if (step && typeof step === 'object' && Object.prototype.hasOwnProperty.call(step, 'note')) {
+    return {
+      note: step.note || null,
+      velocity: typeof step.velocity === 'number' ? Math.max(0, Math.min(1, step.velocity)) : 0.8,
+      gate: typeof step.gate === 'string' ? step.gate : '8n',
+      accent: !!step.accent,
+      slide: !!step.slide
+    };
+  }
+  if (typeof step === 'string') {
+    return { note: step, velocity: 0.8, gate: '8n', accent: false, slide: false };
+  }
+  return { note: null, velocity: 0, gate: '8n', accent: false, slide: false };
+}
 
 function computeSubPattern(chordInfo) {
   return generateGenreSubPattern(
@@ -559,10 +657,10 @@ function ensureLoopsCreated() {
   // Kick with micro-timing
   kickLoop = new Tone.Sequence((time, step) => {
     lastSequenceCallbackTime = time;
-    const note = currentKickPattern[step];
-    if (note && !muteStates.kick) {
+    const event = toStepEvent(currentKickPattern[step]);
+    if (event.on && !muteStates.kick) {
       const humanTime = humanize(time, currentSceneHumanize.kick);
-      kick.triggerAttackRelease("C1", "8n", humanTime);
+      kick.triggerAttackRelease("C1", event.gate || "16n", humanTime, event.velocity || 0.8);
       sidechain.ratio.setValueAtTime(20, humanTime);
       sidechain.ratio.linearRampToValueAtTime(8, humanTime + 0.1);
       Tone.Draw.schedule(() => {
@@ -572,15 +670,15 @@ function ensureLoopsCreated() {
         }
       }, humanTime);
     }
-  }, STEP_SEQUENCE, "16n");
+  }, stepSequence, activeStepSubdivision);
 
   // Snare with more looseness
   snareLoop = new Tone.Sequence((time, step) => {
     lastSequenceCallbackTime = time;
-    const note = currentSnarePattern[step];
-    if (note && !muteStates.snare) {
+    const event = toStepEvent(currentSnarePattern[step]);
+    if (event.on && !muteStates.snare) {
       const humanTime = humanize(time, currentSceneHumanize.snare);
-      snare.triggerAttackRelease("8n", humanTime);
+      snare.triggerAttackRelease(event.gate || "16n", humanTime, event.velocity || 0.75);
       Tone.Draw.schedule(() => {
         flashIndicator('snareIndicator');
         if (window.GameAPI && window.GameAPI.onSnare) {
@@ -588,16 +686,16 @@ function ensureLoopsCreated() {
         }
       }, humanTime);
     }
-  }, STEP_SEQUENCE, "16n");
+  }, stepSequence, activeStepSubdivision);
 
   // Hi-hat with most variation
   hihatLoop = new Tone.Sequence((time, step) => {
     lastSequenceCallbackTime = time;
-    const note = currentHihatPattern[step];
-    if (note && !muteStates.hat) {
+    const event = toStepEvent(currentHihatPattern[step]);
+    if (event.on && !muteStates.hat) {
       const humanTime = humanize(time, currentSceneHumanize.hihat);
-      const velocity = 0.3 + Math.random() * 0.4;
-      const duration = Math.random() > 0.8 ? "16n" : "32n";
+      const velocity = Math.max(0.2, event.velocity || 0.5);
+      const duration = event.gate || "16n";
       hihat.triggerAttackRelease(duration, humanTime);
       hihat.volume.setValueAtTime(-15 + (velocity * 10), humanTime);
       Tone.Draw.schedule(() => {
@@ -607,7 +705,7 @@ function ensureLoopsCreated() {
         }
       }, humanTime);
     }
-  }, STEP_SEQUENCE, "16n");
+  }, stepSequence, activeStepSubdivision);
 
   // Acid with melodic sequence - slight timing variations and accent
   acidLoop = new Tone.Sequence((time, step) => {
@@ -635,13 +733,13 @@ function ensureLoopsCreated() {
         }
       }, humanTime);
     }
-  }, STEP_SEQUENCE, "16n");
+  }, stepSequence, activeStepSubdivision);
 
   // Stabs with slight spread and filter variation
   chordLoop = new Tone.Sequence((time, step) => {
     lastSequenceCallbackTime = time;
-    const hit = currentStabPattern[step];
-    if (hit && !muteStates.stab) {
+    const event = toStepEvent(currentStabPattern[step]);
+    if (event.on && !muteStates.stab) {
       const humanTime = humanize(time, currentSceneHumanize.stab);
       const currentSection = getSection(currentBar);
       if (currentSection === 'DROP') {
@@ -663,7 +761,7 @@ function ensureLoopsCreated() {
 
       chordToPlay.forEach((note, i) => {
         const noteTime = humanTime + i * 0.015;
-        raveSynth.triggerAttackRelease(note, "4n", noteTime);
+        raveSynth.triggerAttackRelease(note, event.gate || "8n", noteTime, event.velocity || 0.72);
       });
 
       Tone.Draw.schedule(() => {
@@ -673,19 +771,20 @@ function ensureLoopsCreated() {
         }
       }, humanTime);
     }
-  }, STEP_SEQUENCE, "16n");
+  }, stepSequence, activeStepSubdivision);
 
   // Sub bass pattern - genre-specific
   subLoop = new Tone.Sequence((time, step) => {
     lastSequenceCallbackTime = time;
-    const note = currentSubPattern[step];
-    if (note && !muteStates.sub) {
+    const event = toSubEvent(currentSubPattern[step]);
+    if (event.note && !muteStates.sub) {
       const humanTime = humanize(time, currentSceneHumanize.sub);
-      subBass.triggerAttackRelease(note, "2n", humanTime);
+      subBass.portamento = event.slide ? 0.06 : 0.01;
+      subBass.triggerAttackRelease(event.note, event.gate || "8n", humanTime, event.velocity || 0.8);
       const currentSection = getSection(currentBar);
       if (currentSection === 'DROP' || currentSection === 'MAIN') {
-        const octaveUp = note.replace(/\d/, (match) => parseInt(match) + 1);
-        subBass.triggerAttackRelease(octaveUp, "2n", humanTime + 0.01, 0.3);
+        const octaveUp = event.note.replace(/\d/, (match) => parseInt(match) + 1);
+        subBass.triggerAttackRelease(octaveUp, event.gate || "8n", humanTime + 0.01, Math.min(1, (event.velocity || 0.8) * 0.4));
       }
       Tone.Draw.schedule(() => {
         flashIndicator('subIndicator');
@@ -694,10 +793,62 @@ function ensureLoopsCreated() {
         }
       }, humanTime);
     }
-  }, STEP_SEQUENCE, "16n");
+  }, stepSequence, activeStepSubdivision);
+}
+
+function laneStats(lane = []) {
+  let hits = 0;
+  let velocitySum = 0;
+  for (const step of lane) {
+    if (step?.on) {
+      hits += 1;
+      velocitySum += step.velocity || 0;
+    }
+  }
+  return {
+    hits,
+    avgVelocity: hits > 0 ? velocitySum / hits : 0
+  };
+}
+
+function bassStats(lane = []) {
+  let notes = 0;
+  let velocitySum = 0;
+  for (const step of lane) {
+    if (step?.note) {
+      notes += 1;
+      velocitySum += step.velocity || 0;
+    }
+  }
+  return {
+    notes,
+    avgVelocity: notes > 0 ? velocitySum / notes : 0
+  };
+}
+
+function logAudioMetricsForBar() {
+  if (!audioMetricsEnabled) return;
+  if (lastMetricsLoggedBar === currentBar) return;
+  lastMetricsLoggedBar = currentBar;
+
+  const kick = laneStats(currentKickPattern);
+  const snare = laneStats(currentSnarePattern);
+  const hihat = laneStats(currentHihatPattern);
+  const stab = laneStats(currentStabPattern);
+  const sub = bassStats(currentSubPattern);
+  const mode = isNative24ModeEnabled() ? 'N24' : 'N16';
+
+  console.log(
+    `[audio-metrics] genre=${currentGenre} mode=${mode} bar=${currentBar} ` +
+    `k=${kick.hits}/${kick.avgVelocity.toFixed(2)} s=${snare.hits}/${snare.avgVelocity.toFixed(2)} ` +
+    `h=${hihat.hits}/${hihat.avgVelocity.toFixed(2)} stab=${stab.hits}/${stab.avgVelocity.toFixed(2)} ` +
+    `sub=${sub.notes}/${sub.avgVelocity.toFixed(2)}`
+  );
 }
 
 export function updatePatterns(startTime = 0) {
+  const targetStepCount = getStepCountForGenre(currentGenre);
+  resetLoopGrid(targetStepCount);
   const section = getSection(currentBar);
 
   // Update progression if needed
@@ -710,6 +861,15 @@ export function updatePatterns(startTime = 0) {
   // Generate melodic acid sequence FIRST
   if (currentBar % 2 === 0) {
     acidSequence = generateMelodicAcidSequence(chordInfo, section, acidSequence);
+    if (acidSequence.length !== activeStepCount) {
+      const mapped = new Array(activeStepCount).fill(null);
+      for (let i = 0; i < acidSequence.length; i++) {
+        if (!acidSequence[i]) continue;
+        const idx = Math.min(activeStepCount - 1, Math.floor((i * activeStepCount) / acidSequence.length));
+        mapped[idx] = acidSequence[i];
+      }
+      acidSequence = mapped;
+    }
     // Pattern displays were removed with minimized UI
   }
 
@@ -821,6 +981,12 @@ export function applyTension(scheduleTime) {
   if (riserActive) {
     noiseRiser.volume.value = -40 + (tensionLevel - 60) * 0.5;
   }
+
+  if (isAudioDebugEnabled() && currentBar % 8 === 0) {
+    logAudioDebug(
+      `tension genre=${currentGenre} bar=${currentBar} tension=${tensionLevel} energy=${energyLevel}`
+    );
+  }
 }
 
 // Automation curves for smooth transitions
@@ -857,13 +1023,7 @@ export function evolve(scheduleTime) {
   document.getElementById('chord').textContent = currentChord.root + (currentChord.chord.length > 3 ? '7' : 'm');
 
   // Calculate next transition
-  const barsUntilNext = nextSection !== section ? 1 :
-    nextBar < 8 ? 8 - nextBar :
-    nextBar < 16 ? 16 - nextBar :
-    nextBar < 32 ? 32 - nextBar :
-    nextBar < 40 ? 40 - nextBar :
-    nextBar < 56 ? 56 - nextBar :
-    64 - nextBar;
+  const barsUntilNext = getBarsUntilNextSectionForGenre(currentGenre, currentBar);
   document.getElementById('nextSection').textContent =
     nextSection !== section ? `${nextSection} next bar` :
     `${getSection(currentBar + barsUntilNext)} in ${barsUntilNext} bars`;
@@ -871,12 +1031,16 @@ export function evolve(scheduleTime) {
   // Apply automation on section changes
   if (section !== lastSection) {
     applyAutomation(section, lastSection, scheduleTime);
+    logAudioDebug(
+      `section ${lastSection || 'INIT'} -> ${section} @bar=${currentBar} genre=${currentGenre}`
+    );
     lastSection = section;
   }
 
   // Update patterns every bar
   if (currentBar % 1 === 0) {
     updatePatterns(scheduleTime ?? 0);
+    logAudioMetricsForBar();
   }
 
   // Apply tension continuously

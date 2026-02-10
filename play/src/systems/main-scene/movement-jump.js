@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, MAIN_SCENE_TUNING } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
@@ -128,20 +128,20 @@ function playSuperJumpSound(normalizedCharge) {
   try {
     const now = Tone.now();
 
-    gameSounds.powerUp.triggerAttackRelease('C3', '8n', now);
+    gameSounds.powerUp.triggerAttackRelease('C3', '8n', now, 0.5);
 
     if (normalizedCharge > 0.3) {
-      gameSounds.powerUp.triggerAttackRelease('G3', '8n', now + 0.02);
-      gameSounds.move.triggerAttackRelease('C6', '16n', now);
+      gameSounds.powerUp.triggerAttackRelease('G3', '8n', now + 0.02, 0.45);
+      gameSounds.move.triggerAttackRelease('C5', '16n', now, 0.28);
     }
     if (normalizedCharge > 0.5) {
-      gameSounds.powerUp.triggerAttackRelease('E4', '16n', now + 0.05);
-      gameSounds.move.triggerAttackRelease('G6', '16n', now + 0.08);
+      gameSounds.powerUp.triggerAttackRelease('E4', '16n', now + 0.05, 0.4);
+      gameSounds.move.triggerAttackRelease('G5', '16n', now + 0.08, 0.24);
     }
     if (normalizedCharge > 0.7) {
-      gameSounds.powerUp.triggerAttackRelease('C5', '32n', now + 0.1);
-      gameSounds.move.triggerAttackRelease('E7', '32n', now + 0.12);
-      gameSounds.offScreenWomp.triggerAttackRelease('C1', '16n', now);
+      gameSounds.powerUp.triggerAttackRelease('C5', '32n', now + 0.1, 0.35);
+      gameSounds.move.triggerAttackRelease('E6', '32n', now + 0.12, 0.2);
+      gameSounds.offScreenWomp.triggerAttackRelease('C1', '16n', now, 0.18);
     }
   } catch (e) {}
 }

@@ -7,6 +7,52 @@ const hasSecureAudioWorklet = () =>
   window.isSecureContext &&
   typeof window.AudioWorkletNode !== 'undefined';
 
+const synthLastScheduleTime = new WeakMap();
+
+function getSafeScheduleTimeForSynth(synth, requestedTime) {
+  const baseTime = (typeof requestedTime === 'number' && Number.isFinite(requestedTime))
+    ? requestedTime
+    : Tone.now();
+  const lastTime = synthLastScheduleTime.get(synth) || 0;
+  const minStep = 0.003;
+  const safeTime = Math.max(baseTime, lastTime + minStep);
+  synthLastScheduleTime.set(synth, safeTime);
+  return safeTime;
+}
+
+function wrapTriggerAttackReleaseWithSafeTime(synth) {
+  if (!synth || typeof synth.triggerAttackRelease !== 'function') return;
+  if (synth.__safeTriggerWrapped) return;
+
+  const original = synth.triggerAttackRelease.bind(synth);
+  synth.triggerAttackRelease = (...args) => {
+    const nextArgs = [...args];
+    const requestedTime = nextArgs.length >= 3 ? nextArgs[2] : undefined;
+    nextArgs[2] = getSafeScheduleTimeForSynth(synth, requestedTime);
+    return original(...nextArgs);
+  };
+
+  Object.defineProperty(synth, '__safeTriggerWrapped', {
+    value: true,
+    enumerable: false,
+    configurable: false
+  });
+}
+
+function applySafeSchedulingToGameSounds(gameSounds) {
+  if (!gameSounds || typeof gameSounds !== 'object') return;
+
+  for (const value of Object.values(gameSounds)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        wrapTriggerAttackReleaseWithSafeTime(entry);
+      }
+      continue;
+    }
+    wrapTriggerAttackReleaseWithSafeTime(value);
+  }
+}
+
 // Helper to get notes in current scale
 export function getGameNote(index) {
   const scales = {
@@ -15,7 +61,9 @@ export function getGameNote(index) {
     phrygian: ["C", "Db", "Eb", "F", "G", "Ab", "Bb"]
   };
   const scale = scales.minor; // Default to minor
-  return scale[index % scale.length];
+  const numericIndex = Number.isFinite(index) ? Math.trunc(index) : 0;
+  const wrappedIndex = ((numericIndex % scale.length) + scale.length) % scale.length;
+  return scale[wrappedIndex] || scale[0];
 }
 
 // Create game sounds that blend with the music - route through sidechain for cohesion
@@ -172,6 +220,7 @@ export function createGameSounds({ sidechain, acidFilter1, stabReverb, savedData
     }).connect(acidFilter1) // Route through acid filter for consistency
   };
 
+  applySafeSchedulingToGameSounds(gameSounds);
   return gameSounds;
 }
 

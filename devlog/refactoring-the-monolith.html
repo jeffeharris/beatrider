@@ -440,6 +440,7 @@
             <p>The audio library worked differently as an ES module import than it did as a CDN global. Code that initialized at import time now ran before the browser allowed audio. One agent's export didn't match another agent's import. These are the classic integration problems of any modular system, just surfaced in a single afternoon instead of over weeks of development.</p>
 
             <p>This is where <a href="https://openai.com/index/introducing-codex/">OpenAI's Codex</a> (running GPT 5.3) earned its keep. After the agent team completed the structural extraction, I used Codex for code review and targeted bug fixes on the integrated result. Different tool, different strength: Codex was good at reading the full module graph and spotting the cross-boundary issues that individual agents had missed during parallel work. It fixed the audio initialization timing, patched the transport scheduling, and cleaned up a few module interface mismatches.</p>
+            <p>Then I used Codex for a second-phase hardening pass on the main gameplay scene itself: migrating to owned state slices, removing dead legacy fields, and refactoring the highest-risk flows (dash, jump, game-over, score/combo) into smaller tested modules. Agent Teams did the big structural split quickly; Codex did the boundary cleanup and behavior-preserving refactor work that made the result stable and maintainable.</p>
 
             <h2>The Numbers</h2>
 

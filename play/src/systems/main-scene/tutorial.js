@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, LANES, ENEMY_SPEED_BASE } from '../../config.js';
 import { currentDifficulty } from '../../audio/music-ui.js';

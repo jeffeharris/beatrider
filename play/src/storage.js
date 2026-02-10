@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = {
   highScore: 0,
   settings: {
     gridEnabled: true,
+    native24: false,
     character: 'default',
     difficulty: 'normal',
     touchSensitivity: 30,
@@ -62,6 +63,7 @@ function migrateData(data) {
       highScore: data.highScore || 0,
       settings: {
         gridEnabled: data.gridEnabled !== undefined ? data.gridEnabled : true,
+        native24: false,
         character: 'default',
         difficulty: 'normal',
         touchSensitivity: 30,

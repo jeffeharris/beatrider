@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { gameState } from '../../config.js';
 import { saveGameData } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';

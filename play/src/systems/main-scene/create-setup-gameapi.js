@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { gameState, isMobile, LANES, ENEMY_SPEED_BASE } from '../../config.js';
 import { saveGameData } from '../../storage.js';
 import { getSection } from '../../audio/music-engine.js';

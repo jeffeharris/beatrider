@@ -53,26 +53,30 @@ export function assertMainSceneStateDev() {
 export function monitorAndHealPlayerLaneDesync() {
   const { player, flow } = this.stateSlices;
   if (!this.player || flow.paused || flow.gameOver) return;
+  const laneWidth = this.laneWidth || this.laneW || 0;
+  const warnThresholdPx = Math.max(10, laneWidth * 0.06);
+  const healThresholdPx = Math.max(18, laneWidth * 0.1);
+  const playerTweening = this.tweens?.isTweening?.(this.player);
 
-  if (player.lane < 0 || player.lane >= LANES || player.moving || player.dashing) {
+  if (player.lane < 0 || player.lane >= LANES || player.moving || player.dashing || playerTweening) {
     this.playerLaneDesyncFrames = 0;
     return;
   }
 
   const expectedX = this._laneX(player.lane);
   const diff = Math.abs(this.player.x - expectedX);
-  if (diff <= 2) {
+  if (diff <= warnThresholdPx) {
     this.playerLaneDesyncFrames = 0;
     return;
   }
 
   this.playerLaneDesyncFrames = (this.playerLaneDesyncFrames || 0) + 1;
 
-  if (isDevBuild()) {
+  if (isDevBuild() && diff > healThresholdPx) {
     warnInvariant(this, 'lane-position-desync', `player x desynced by ${diff.toFixed(2)} at lane ${player.lane}`);
   }
 
-  if (this.playerLaneDesyncFrames < 4) return;
+  if (this.playerLaneDesyncFrames < 6 || diff <= healThresholdPx) return;
 
   const now = this.time.now;
   if (now - (this.playerLaneLastHealAt || 0) < 500) return;
