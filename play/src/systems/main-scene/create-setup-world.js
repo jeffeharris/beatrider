@@ -49,6 +49,15 @@ function getPlayerTextureForCharacter(characterId) {
 function createUnicornParts(scene) {
   if (scene.unicornParts) return;
 
+  const head = scene.add.image(scene.player.x, scene.player.y, 'unicornHeadTex');
+  head.setDepth(501);
+  const horn = scene.add.image(scene.player.x, scene.player.y, 'unicornHornTex');
+  horn.setDepth(510);
+  const leftEar = scene.add.image(scene.player.x, scene.player.y, 'unicornEarTex');
+  leftEar.setDepth(503);
+  const rightEar = scene.add.image(scene.player.x, scene.player.y, 'unicornEarTex');
+  rightEar.setDepth(503);
+
   const maneCount = 4;
   const mane = [];
   for (let i = 0; i < maneCount; i++) {
@@ -66,29 +75,61 @@ function createUnicornParts(scene) {
   tail.setDepth(499);
 
   scene.unicornParts = {
+    head,
+    horn,
+    leftEar,
+    rightEar,
     mane,
     leftHoof,
     rightHoof,
     tail
   };
+
+  scene.unicornRig = {
+    damping: 0.9,
+    elasticTight: 0.4,
+    elasticLoose: 0.15,
+    head: { x: 0, y: 0 },
+    tail: { x: 0, y: 0 },
+    leftHoof: { x: 0, y: 0 },
+    rightHoof: { x: 0, y: 0 },
+    mane: mane.map(() => ({ x: 0, y: 0 }))
+  };
 }
 
 function destroyUnicornParts(scene) {
   if (!scene.unicornParts) return;
-  const { mane, leftHoof, rightHoof, tail } = scene.unicornParts;
+  const {
+    head,
+    horn,
+    leftEar,
+    rightEar,
+    mane,
+    leftHoof,
+    rightHoof,
+    tail
+  } = scene.unicornParts;
+  head?.destroy();
+  horn?.destroy();
+  leftEar?.destroy();
+  rightEar?.destroy();
   mane.forEach((strand) => strand?.destroy());
   leftHoof?.destroy();
   rightHoof?.destroy();
   tail?.destroy();
   scene.unicornParts = null;
+  scene.unicornRig = null;
 }
 
 function applyUnicornPartStyles(scene, rainbowMode) {
   if (!scene.unicornParts) return;
-  const { mane, leftHoof, rightHoof, tail } = scene.unicornParts;
+  const { horn, leftEar, rightEar, mane, leftHoof, rightHoof, tail } = scene.unicornParts;
   const rainbow = [0xff004d, 0xff8a00, 0xfff000, 0x00ff85, 0x00d1ff, 0x7b61ff];
 
   if (!rainbowMode) {
+    horn.setTint(0xffd700);
+    leftEar.clearTint();
+    rightEar.clearTint();
     mane.forEach((strand, index) => {
       strand.setTint(index % 2 === 0 ? 0xffb3d9 : 0xffd6eb);
     });
@@ -99,6 +140,9 @@ function applyUnicornPartStyles(scene, rainbowMode) {
   }
 
   const base = Math.floor((scene.time.now || 0) / 120);
+  horn.setTint(rainbow[base % rainbow.length]);
+  leftEar.setTint(0xffffcc);
+  rightEar.setTint(0xffffcc);
   mane.forEach((strand, index) => {
     strand.setTint(rainbow[(base + index) % rainbow.length]);
   });
@@ -113,33 +157,117 @@ function updateUnicornParts(scene) {
   const player = scene.player;
   const displayW = player.displayWidth;
   const displayH = player.displayHeight;
-  const originX = player.originX;
-  const originY = player.originY;
-  const left = player.x - displayW * originX;
-  const top = player.y - displayH * originY;
   const alpha = player.alpha;
 
-  const { mane, leftHoof, rightHoof, tail } = scene.unicornParts;
+  const { head, horn, leftEar, rightEar, mane, leftHoof, rightHoof, tail } = scene.unicornParts;
+  const rig = scene.unicornRig;
+  const now = scene.time.now || 0;
 
+  const springAttach = (part, velocity, targetX, targetY, {
+    elastic = 0.2,
+    maxForce = 1.5,
+    leash = 14
+  } = {}) => {
+    velocity.x *= rig.damping;
+    velocity.y *= rig.damping;
+
+    const dx = targetX - part.x;
+    const dy = targetY - part.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > leash && dist > 0.0001) {
+      const ratio = leash / dist;
+      part.x = targetX - dx * ratio;
+      part.y = targetY - dy * ratio;
+      velocity.x *= 0.5;
+      velocity.y *= 0.5;
+    } else {
+      let forceX = dx * elastic;
+      let forceY = dy * elastic;
+      forceX = Math.max(-maxForce, Math.min(maxForce, forceX));
+      forceY = Math.max(-maxForce, Math.min(maxForce, forceY));
+      velocity.x += forceX;
+      velocity.y += forceY;
+      part.x += velocity.x;
+      part.y += velocity.y;
+    }
+  };
+
+  const bodyCenterX = player.x;
+  const movingFactor = player.moving || player.dashing ? 1 : 0;
+
+  // Floating head: tighter spring/leash.
+  const headTargetX = bodyCenterX;
+  const headTargetY = player.y - displayH * 0.7;
+  springAttach(head, rig.head, headTargetX, headTargetY, {
+    elastic: rig.elasticTight,
+    maxForce: 2,
+    leash: 10
+  });
+  head.x += Math.cos(now * 0.0015) * 0.5;
+  head.y += Math.sin(now * 0.002) * 0.8;
+  head.angle = Math.sin(now * 0.001) * 2;
+
+  horn.x = head.x;
+  horn.y = head.y;
+  horn.angle = head.angle * 0.3;
+
+  leftEar.x = head.x - displayW * 0.225;
+  leftEar.y = head.y + displayH * 0.15;
+  rightEar.x = head.x + displayW * 0.225;
+  rightEar.y = head.y + displayH * 0.15;
+  leftEar.angle = head.angle * 0.5 - 10;
+  rightEar.angle = head.angle * 0.5 + 10;
+
+  // Tail: looser spring, swings opposite movement.
+  const tailTargetX = bodyCenterX;
+  const tailTargetY = player.y + displayH * 0.5;
+  rig.tail.x += ((scene.wobbleVelocity?.x || 0) * -0.02);
+  rig.tail.y += ((scene.wobbleVelocity?.y || 0) * 0.02);
+  springAttach(tail, rig.tail, tailTargetX, tailTargetY, {
+    elastic: rig.elasticLoose,
+    maxForce: 1.4,
+    leash: 18
+  });
+  tail.angle = Math.sin(now * 0.006) * 8 + (player.moving ? Math.sin(now * 0.018) * 10 : 0);
+
+  // Front hooves: loose spring with gallop phase while moving.
+  const gallop = Math.sin(now * 0.012);
+  const leftHoofTargetX = player.x - displayW * 0.4;
+  const rightHoofTargetX = player.x + displayW * 0.4;
+  const hoofBaseY = player.y - displayH * 0.4;
+  const leftHoofTargetY = hoofBaseY + (movingFactor ? gallop * 4 : Math.sin(now * 0.003) * 1.5);
+  const rightHoofTargetY = hoofBaseY + (movingFactor ? -gallop * 4 : Math.sin(now * 0.003 + Math.PI / 2) * 1.5);
+
+  springAttach(leftHoof, rig.leftHoof, leftHoofTargetX, leftHoofTargetY, {
+    elastic: rig.elasticLoose,
+    maxForce: 1.6,
+    leash: 14
+  });
+  springAttach(rightHoof, rig.rightHoof, rightHoofTargetX, rightHoofTargetY, {
+    elastic: rig.elasticLoose,
+    maxForce: 1.6,
+    leash: 14
+  });
+  leftHoof.angle = movingFactor ? gallop * 10 : Math.sin(now * 0.002) * 4;
+  rightHoof.angle = movingFactor ? -gallop * 10 : Math.sin(now * 0.002 + Math.PI / 2) * 4;
+
+  // Mane: chained spring from head/back region.
   mane.forEach((strand, index) => {
-    strand.x = left + displayW * 0.28;
-    strand.y = top + displayH * (0.12 + index * 0.09);
-    strand.alpha = alpha;
-    strand.angle = Math.sin((scene.time.now || 0) * 0.004 + index) * 6;
+    const prev = index === 0 ? null : mane[index - 1];
+    const anchorX = prev ? prev.x - displayW * 0.01 : head.x - displayW * 0.05;
+    const anchorY = prev ? prev.y + displayH * 0.08 : head.y + displayH * 0.05;
+    springAttach(strand, rig.mane[index], anchorX, anchorY, {
+      elastic: rig.elasticTight,
+      maxForce: 1.8,
+      leash: 10
+    });
+    strand.angle = Math.sin(now * 0.005 + index * 0.8) * (4 + index);
   });
 
-  leftHoof.x = left + displayW * 0.36;
-  leftHoof.y = top + displayH * 0.73;
-  leftHoof.alpha = alpha;
-
-  rightHoof.x = left + displayW * 0.64;
-  rightHoof.y = top + displayH * 0.73;
-  rightHoof.alpha = alpha;
-
-  tail.x = left + displayW * 0.5;
-  tail.y = top + displayH * 0.92;
-  tail.alpha = alpha;
-  tail.angle = Math.sin((scene.time.now || 0) * 0.006) * 10;
+  [head, horn, leftEar, rightEar, tail, leftHoof, rightHoof, ...mane].forEach((part) => {
+    part.alpha = alpha;
+  });
 
   const { combat } = scene.stateSlices;
   applyUnicornPartStyles(scene, !!combat?.rapidFire);
@@ -152,97 +280,43 @@ function buildMainSceneTextures(gfx, sizes) {
   // Backward-compat key still used by some tooling/experiments.
   gfx.fillStyle(0x00ffcc, 1).fillRect(0, 0, playerSize, playerSize).generateTexture('playerTex', playerSize, playerSize).clear();
 
-  // Cuboid unicorn variant inspired by the unicorn experiment.
-  const unicornW = Math.floor(playerSize * 0.8);
-  const unicornH = Math.floor(playerSize * 1.2);
-  const unicornHeadW = Math.floor(playerSize * 0.55);
-  const unicornHeadH = Math.floor(playerSize * 0.45);
-  const unicornTexH = unicornH + unicornHeadH;
-  const bodyX = Math.floor((playerSize - unicornW) / 2);
-  const bodyY = unicornHeadH;
-  const headX = Math.floor((playerSize - unicornHeadW) / 2);
-  const headBottomY = unicornHeadH;
-
-  gfx.fillStyle(0xffffff, 1);
-  gfx.fillRect(bodyX, bodyY, unicornW, unicornH);
-
-  gfx.fillStyle(0xffffff, 1);
-  gfx.beginPath();
-  gfx.moveTo(headX + Math.floor(unicornHeadW * 0.3), 0);
-  gfx.lineTo(headX + Math.floor(unicornHeadW * 0.7), 0);
-  gfx.lineTo(headX + unicornHeadW, headBottomY);
-  gfx.lineTo(headX, headBottomY);
-  gfx.closePath();
-  gfx.fillPath();
-
-  gfx.fillStyle(0x000000, 1);
-  gfx.fillCircle(headX + Math.floor(unicornHeadW * 0.28), Math.floor(unicornHeadH * 0.5), Math.max(1, Math.floor(playerSize * 0.03)));
-  gfx.fillCircle(headX + Math.floor(unicornHeadW * 0.72), Math.floor(unicornHeadH * 0.5), Math.max(1, Math.floor(playerSize * 0.03)));
-
-  gfx.fillStyle(0xffd700, 1);
-  gfx.fillTriangle(
-    headX + Math.floor(unicornHeadW * 0.5),
-    Math.max(0, Math.floor(unicornHeadH * 0.05)),
-    headX + Math.floor(unicornHeadW * 0.42),
-    Math.floor(unicornHeadH * 0.8),
-    headX + Math.floor(unicornHeadW * 0.58),
-    Math.floor(unicornHeadH * 0.8)
-  );
-
-  gfx.fillStyle(0xffffff, 1);
-  gfx.fillTriangle(
-    headX + Math.floor(unicornHeadW * 0.22),
-    Math.floor(unicornHeadH * 0.25),
-    headX + Math.floor(unicornHeadW * 0.1),
-    Math.floor(unicornHeadH * 0.75),
-    headX + Math.floor(unicornHeadW * 0.3),
-    Math.floor(unicornHeadH * 0.75)
-  );
-  gfx.fillTriangle(
-    headX + Math.floor(unicornHeadW * 0.78),
-    Math.floor(unicornHeadH * 0.25),
-    headX + Math.floor(unicornHeadW * 0.7),
-    Math.floor(unicornHeadH * 0.75),
-    headX + Math.floor(unicornHeadW * 0.9),
-    Math.floor(unicornHeadH * 0.75)
-  );
-
-  const footSize = Math.max(3, Math.floor(playerSize * 0.18));
-  const footY = bodyY + unicornH - Math.floor(footSize * 0.2);
-  gfx.fillTriangle(
-    bodyX + Math.floor(unicornW * 0.2),
-    footY,
-    bodyX + Math.floor(unicornW * 0.1),
-    footY + footSize,
-    bodyX + Math.floor(unicornW * 0.3),
-    footY + footSize
-  );
-  gfx.fillTriangle(
-    bodyX + Math.floor(unicornW * 0.8),
-    footY,
-    bodyX + Math.floor(unicornW * 0.7),
-    footY + footSize,
-    bodyX + Math.floor(unicornW * 0.9),
-    footY + footSize
-  );
-
-  const tailCenterX = bodyX + Math.floor(unicornW * 0.5);
-  const tailY = bodyY + unicornH - 2;
-  gfx.fillTriangle(
-    tailCenterX,
-    tailY,
-    tailCenterX - Math.floor(playerSize * 0.08),
-    tailY + Math.floor(playerSize * 0.18),
-    tailCenterX + Math.floor(playerSize * 0.08),
-    tailY + Math.floor(playerSize * 0.18)
-  );
-
-  gfx.generateTexture('playerTexUnicorn', playerSize, unicornTexH).clear();
+  // Unicorn body-only texture; face/ears/horn/hooves/tail are separate attached parts.
+  const unicornBodyW = Math.max(8, Math.floor(playerSize * 0.8));
+  const unicornBodyH = Math.max(10, Math.floor(playerSize * 1.2));
+  gfx.fillStyle(0xffffff, 1).fillRect(0, 0, unicornBodyW, unicornBodyH);
+  gfx.generateTexture('playerTexUnicorn', unicornBodyW, unicornBodyH).clear();
 
   const maneW = Math.max(4, Math.floor(playerSize * 0.12));
   const maneH = Math.max(10, Math.floor(playerSize * 0.26));
   gfx.fillStyle(0xffb3d9, 0.95).fillRect(0, 0, maneW, maneH);
   gfx.generateTexture('unicornManeTex', maneW, maneH).clear();
+
+  const floatingHeadW = Math.max(8, Math.floor(playerSize * 0.55));
+  const floatingHeadH = Math.max(8, Math.floor(playerSize * 0.45));
+  gfx.fillStyle(0xffffff, 1);
+  gfx.beginPath();
+  gfx.moveTo(Math.floor(floatingHeadW * 0.3), 0);
+  gfx.lineTo(Math.floor(floatingHeadW * 0.7), 0);
+  gfx.lineTo(floatingHeadW, floatingHeadH);
+  gfx.lineTo(0, floatingHeadH);
+  gfx.closePath();
+  gfx.fillPath();
+  gfx.fillStyle(0x000000, 1);
+  gfx.fillCircle(Math.floor(floatingHeadW * 0.3), Math.floor(floatingHeadH * 0.45), Math.max(1, Math.floor(playerSize * 0.03)));
+  gfx.fillCircle(Math.floor(floatingHeadW * 0.7), Math.floor(floatingHeadH * 0.45), Math.max(1, Math.floor(playerSize * 0.03)));
+  gfx.generateTexture('unicornHeadTex', floatingHeadW, floatingHeadH).clear();
+
+  const hornW = Math.max(4, Math.floor(playerSize * 0.15));
+  const hornH = Math.max(8, Math.floor(playerSize * 0.35));
+  gfx.fillStyle(0xffffff, 1);
+  gfx.fillTriangle(Math.floor(hornW * 0.5), 0, 0, hornH, hornW, hornH);
+  gfx.generateTexture('unicornHornTex', hornW, hornH).clear();
+
+  const earW = Math.max(4, Math.floor(playerSize * 0.14));
+  const earH = Math.max(6, Math.floor(playerSize * 0.2));
+  gfx.fillStyle(0xffffff, 1);
+  gfx.fillTriangle(Math.floor(earW * 0.5), 0, 0, earH, earW, earH);
+  gfx.generateTexture('unicornEarTex', earW, earH).clear();
 
   const hoofSize = Math.max(4, Math.floor(playerSize * 0.2));
   gfx.fillStyle(0xffffff, 1);
@@ -342,10 +416,11 @@ function initializeSceneEntities(scene, sizes) {
     scene.playerCharacter = normalized;
     if (scene.player?.active) {
       scene.player.setTexture(getPlayerTextureForCharacter(normalized));
-      scene.player.setOrigin(0.5, normalized === 'unicorn' ? 0.7 : 0.5);
+      scene.player.setOrigin(0.5, 0.5);
     }
     if (normalized === 'unicorn') {
       createUnicornParts(scene);
+      updateUnicornParts(scene);
     } else {
       destroyUnicornParts(scene);
     }
