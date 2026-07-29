@@ -54,6 +54,21 @@ export function handlePauseAndGridInput() {
     updateGridButton();
   }
 
+  if (Phaser.Input.Keyboard.JustDown(this.keys.C) && typeof this.setPlayerCharacter === 'function') {
+    const nextCharacter = this.playerCharacter === 'unicorn' ? 'default' : 'unicorn';
+    const appliedCharacter = this.setPlayerCharacter(nextCharacter);
+    saveGameData({ settings: { character: appliedCharacter } });
+
+    const characterSelector = document.getElementById('characterSelector');
+    const characterDisplay = document.getElementById('characterDisplay');
+    if (characterSelector) {
+      characterSelector.value = appliedCharacter;
+    }
+    if (characterDisplay) {
+      characterDisplay.textContent = appliedCharacter === 'unicorn' ? 'Unicorn' : 'Classic';
+    }
+  }
+
   if (flow.paused) {
     if ((this.keys.SPACE.isDown || input.touchFiring) && !this.isHandlingFeedback) {
       dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.RESUME, {

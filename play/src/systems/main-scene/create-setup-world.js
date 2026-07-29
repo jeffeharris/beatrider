@@ -1,5 +1,5 @@
 import { gameState, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../config.js';
-import { sessionHighScore } from '../../storage.js';
+import { loadGameData, sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
 import { createResourceBarSystem } from './resource-bar.js';
@@ -28,10 +28,236 @@ function computeWorldSizes() {
   };
 }
 
+const PLAYER_CHARACTERS = {
+  default: {
+    textureKey: 'playerTexDefault'
+  },
+  unicorn: {
+    textureKey: 'playerTexUnicorn'
+  }
+};
+
+function normalizeCharacterId(characterId) {
+  return PLAYER_CHARACTERS[characterId] ? characterId : 'default';
+}
+
+function getPlayerTextureForCharacter(characterId) {
+  const normalizedId = normalizeCharacterId(characterId);
+  return PLAYER_CHARACTERS[normalizedId].textureKey;
+}
+
+function createUnicornParts(scene) {
+  if (scene.unicornParts) return;
+
+  const maneCount = 4;
+  const mane = [];
+  for (let i = 0; i < maneCount; i++) {
+    const strand = scene.add.image(scene.player.x, scene.player.y, 'unicornManeTex');
+    strand.setDepth(506 + i);
+    mane.push(strand);
+  }
+
+  const leftHoof = scene.add.image(scene.player.x, scene.player.y, 'unicornHoofTex');
+  leftHoof.setDepth(498);
+  const rightHoof = scene.add.image(scene.player.x, scene.player.y, 'unicornHoofTex');
+  rightHoof.setDepth(498);
+
+  const tail = scene.add.image(scene.player.x, scene.player.y, 'unicornTailTex');
+  tail.setDepth(499);
+
+  scene.unicornParts = {
+    mane,
+    leftHoof,
+    rightHoof,
+    tail
+  };
+}
+
+function destroyUnicornParts(scene) {
+  if (!scene.unicornParts) return;
+  const { mane, leftHoof, rightHoof, tail } = scene.unicornParts;
+  mane.forEach((strand) => strand?.destroy());
+  leftHoof?.destroy();
+  rightHoof?.destroy();
+  tail?.destroy();
+  scene.unicornParts = null;
+}
+
+function applyUnicornPartStyles(scene, rainbowMode) {
+  if (!scene.unicornParts) return;
+  const { mane, leftHoof, rightHoof, tail } = scene.unicornParts;
+  const rainbow = [0xff004d, 0xff8a00, 0xfff000, 0x00ff85, 0x00d1ff, 0x7b61ff];
+
+  if (!rainbowMode) {
+    mane.forEach((strand, index) => {
+      strand.setTint(index % 2 === 0 ? 0xffb3d9 : 0xffd6eb);
+    });
+    tail.setTint(0xffffff);
+    leftHoof.setTint(0xffffff);
+    rightHoof.setTint(0xffffff);
+    return;
+  }
+
+  const base = Math.floor((scene.time.now || 0) / 120);
+  mane.forEach((strand, index) => {
+    strand.setTint(rainbow[(base + index) % rainbow.length]);
+  });
+  tail.setTint(rainbow[(base + 1) % rainbow.length]);
+  leftHoof.setTint(rainbow[(base + 3) % rainbow.length]);
+  rightHoof.setTint(rainbow[(base + 4) % rainbow.length]);
+}
+
+function updateUnicornParts(scene) {
+  if (scene.playerCharacter !== 'unicorn' || !scene.unicornParts || !scene.player?.active) return;
+
+  const player = scene.player;
+  const displayW = player.displayWidth;
+  const displayH = player.displayHeight;
+  const originX = player.originX;
+  const originY = player.originY;
+  const left = player.x - displayW * originX;
+  const top = player.y - displayH * originY;
+  const alpha = player.alpha;
+
+  const { mane, leftHoof, rightHoof, tail } = scene.unicornParts;
+
+  mane.forEach((strand, index) => {
+    strand.x = left + displayW * 0.28;
+    strand.y = top + displayH * (0.12 + index * 0.09);
+    strand.alpha = alpha;
+    strand.angle = Math.sin((scene.time.now || 0) * 0.004 + index) * 6;
+  });
+
+  leftHoof.x = left + displayW * 0.36;
+  leftHoof.y = top + displayH * 0.73;
+  leftHoof.alpha = alpha;
+
+  rightHoof.x = left + displayW * 0.64;
+  rightHoof.y = top + displayH * 0.73;
+  rightHoof.alpha = alpha;
+
+  tail.x = left + displayW * 0.5;
+  tail.y = top + displayH * 0.92;
+  tail.alpha = alpha;
+  tail.angle = Math.sin((scene.time.now || 0) * 0.006) * 10;
+
+  const { combat } = scene.stateSlices;
+  applyUnicornPartStyles(scene, !!combat?.rapidFire);
+}
+
 function buildMainSceneTextures(gfx, sizes) {
   const { enemySize, bulletW, bulletH, obstacleW, obstacleH, powerUpSize, playerSize } = sizes;
 
+  gfx.fillStyle(0x00ffcc, 1).fillRect(0, 0, playerSize, playerSize).generateTexture('playerTexDefault', playerSize, playerSize).clear();
+  // Backward-compat key still used by some tooling/experiments.
   gfx.fillStyle(0x00ffcc, 1).fillRect(0, 0, playerSize, playerSize).generateTexture('playerTex', playerSize, playerSize).clear();
+
+  // Cuboid unicorn variant inspired by the unicorn experiment.
+  const unicornW = Math.floor(playerSize * 0.8);
+  const unicornH = Math.floor(playerSize * 1.2);
+  const unicornHeadW = Math.floor(playerSize * 0.55);
+  const unicornHeadH = Math.floor(playerSize * 0.45);
+  const unicornTexH = unicornH + unicornHeadH;
+  const bodyX = Math.floor((playerSize - unicornW) / 2);
+  const bodyY = unicornHeadH;
+  const headX = Math.floor((playerSize - unicornHeadW) / 2);
+  const headBottomY = unicornHeadH;
+
+  gfx.fillStyle(0xffffff, 1);
+  gfx.fillRect(bodyX, bodyY, unicornW, unicornH);
+
+  gfx.fillStyle(0xffffff, 1);
+  gfx.beginPath();
+  gfx.moveTo(headX + Math.floor(unicornHeadW * 0.3), 0);
+  gfx.lineTo(headX + Math.floor(unicornHeadW * 0.7), 0);
+  gfx.lineTo(headX + unicornHeadW, headBottomY);
+  gfx.lineTo(headX, headBottomY);
+  gfx.closePath();
+  gfx.fillPath();
+
+  gfx.fillStyle(0x000000, 1);
+  gfx.fillCircle(headX + Math.floor(unicornHeadW * 0.28), Math.floor(unicornHeadH * 0.5), Math.max(1, Math.floor(playerSize * 0.03)));
+  gfx.fillCircle(headX + Math.floor(unicornHeadW * 0.72), Math.floor(unicornHeadH * 0.5), Math.max(1, Math.floor(playerSize * 0.03)));
+
+  gfx.fillStyle(0xffd700, 1);
+  gfx.fillTriangle(
+    headX + Math.floor(unicornHeadW * 0.5),
+    Math.max(0, Math.floor(unicornHeadH * 0.05)),
+    headX + Math.floor(unicornHeadW * 0.42),
+    Math.floor(unicornHeadH * 0.8),
+    headX + Math.floor(unicornHeadW * 0.58),
+    Math.floor(unicornHeadH * 0.8)
+  );
+
+  gfx.fillStyle(0xffffff, 1);
+  gfx.fillTriangle(
+    headX + Math.floor(unicornHeadW * 0.22),
+    Math.floor(unicornHeadH * 0.25),
+    headX + Math.floor(unicornHeadW * 0.1),
+    Math.floor(unicornHeadH * 0.75),
+    headX + Math.floor(unicornHeadW * 0.3),
+    Math.floor(unicornHeadH * 0.75)
+  );
+  gfx.fillTriangle(
+    headX + Math.floor(unicornHeadW * 0.78),
+    Math.floor(unicornHeadH * 0.25),
+    headX + Math.floor(unicornHeadW * 0.7),
+    Math.floor(unicornHeadH * 0.75),
+    headX + Math.floor(unicornHeadW * 0.9),
+    Math.floor(unicornHeadH * 0.75)
+  );
+
+  const footSize = Math.max(3, Math.floor(playerSize * 0.18));
+  const footY = bodyY + unicornH - Math.floor(footSize * 0.2);
+  gfx.fillTriangle(
+    bodyX + Math.floor(unicornW * 0.2),
+    footY,
+    bodyX + Math.floor(unicornW * 0.1),
+    footY + footSize,
+    bodyX + Math.floor(unicornW * 0.3),
+    footY + footSize
+  );
+  gfx.fillTriangle(
+    bodyX + Math.floor(unicornW * 0.8),
+    footY,
+    bodyX + Math.floor(unicornW * 0.7),
+    footY + footSize,
+    bodyX + Math.floor(unicornW * 0.9),
+    footY + footSize
+  );
+
+  const tailCenterX = bodyX + Math.floor(unicornW * 0.5);
+  const tailY = bodyY + unicornH - 2;
+  gfx.fillTriangle(
+    tailCenterX,
+    tailY,
+    tailCenterX - Math.floor(playerSize * 0.08),
+    tailY + Math.floor(playerSize * 0.18),
+    tailCenterX + Math.floor(playerSize * 0.08),
+    tailY + Math.floor(playerSize * 0.18)
+  );
+
+  gfx.generateTexture('playerTexUnicorn', playerSize, unicornTexH).clear();
+
+  const maneW = Math.max(4, Math.floor(playerSize * 0.12));
+  const maneH = Math.max(10, Math.floor(playerSize * 0.26));
+  gfx.fillStyle(0xffb3d9, 0.95).fillRect(0, 0, maneW, maneH);
+  gfx.generateTexture('unicornManeTex', maneW, maneH).clear();
+
+  const hoofSize = Math.max(4, Math.floor(playerSize * 0.2));
+  gfx.fillStyle(0xffffff, 1);
+  gfx.fillTriangle(
+    Math.floor(hoofSize * 0.5), 0,
+    0, hoofSize,
+    hoofSize, hoofSize
+  );
+  gfx.generateTexture('unicornHoofTex', hoofSize, hoofSize).clear();
+
+  const tailW = Math.max(4, Math.floor(playerSize * 0.18));
+  const tailH = Math.max(10, Math.floor(playerSize * 0.34));
+  gfx.fillStyle(0xffffff, 1).fillRect(0, 0, tailW, tailH);
+  gfx.generateTexture('unicornTailTex', tailW, tailH).clear();
+
   gfx.fillStyle(0xff3366, 1).fillRect(0, 0, enemySize, enemySize).generateTexture('enemyTex', enemySize, enemySize).clear();
   gfx.fillStyle(0xffff00, 1).fillTriangle(enemySize / 2, 0, 0, enemySize, enemySize, enemySize).generateTexture('fastEnemyTex', enemySize, enemySize).clear();
   gfx.fillStyle(0xffffff, 1).fillRect(0, 0, bulletW, bulletH).generateTexture('bulletTex', bulletW, bulletH).clear();
@@ -100,12 +326,35 @@ function buildMainSceneTextures(gfx, sizes) {
 
 function initializeSceneEntities(scene, sizes) {
   const { player: playerState } = scene.stateSlices;
+  const savedCharacter = loadGameData().settings?.character;
+  const initialCharacter = normalizeCharacterId(savedCharacter);
+  const initialTexture = getPlayerTextureForCharacter(initialCharacter);
 
   playerState.lane = 2;
-  scene.player = scene.add.image(scene._laneX(playerState.lane), gameState.PLAYER_Y, 'playerTex');
+  scene.playerCharacter = initialCharacter;
+  scene.player = scene.add.image(scene._laneX(playerState.lane), gameState.PLAYER_Y, initialTexture);
   scene.player.w = sizes.playerSize;
   scene.player.h = sizes.playerSize;
   scene.player.setDepth(500);
+
+  scene.setPlayerCharacter = (characterId = 'default') => {
+    const normalized = normalizeCharacterId(characterId);
+    scene.playerCharacter = normalized;
+    if (scene.player?.active) {
+      scene.player.setTexture(getPlayerTextureForCharacter(normalized));
+      scene.player.setOrigin(0.5, normalized === 'unicorn' ? 0.7 : 0.5);
+    }
+    if (normalized === 'unicorn') {
+      createUnicornParts(scene);
+    } else {
+      destroyUnicornParts(scene);
+    }
+    return normalized;
+  };
+  scene.setPlayerCharacter(initialCharacter);
+  scene.updatePlayerCharacterCosmetics = () => {
+    updateUnicornParts(scene);
+  };
 
   scene.chargeGlow = scene.add.graphics();
   scene.chargeGlow.setDepth(-1);
@@ -160,7 +409,7 @@ function initializeRuntimeState(scene) {
   scene.lastLeftPress = 0;
   scene.lastRightPress = 0;
   scene.doubleTapWindow = PLAYER_CONFIG.dash.doubleTapWindow;
-  scene.keys = scene.input.keyboard.addKeys(`LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC,${MAIN_SCENE_TUNING.debug.toggleKey}`);
+  scene.keys = scene.input.keyboard.addKeys(`LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,C,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC,${MAIN_SCENE_TUNING.debug.toggleKey}`);
 
   scene.comboTimer = 0;
   scene.lastKillTime = 0;

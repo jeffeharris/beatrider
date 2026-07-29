@@ -87,11 +87,12 @@ function runDash(scene, laneDelta) {
   scene.player.setScale(1, 1);
   scene.player.angle = 0;
 
-  const trail1 = scene.add.image(startX, scene.player.y, 'playerTex');
+  const trailTexture = scene.player?.texture?.key || 'playerTex';
+  const trail1 = scene.add.image(startX, scene.player.y, trailTexture);
   trail1.setAlpha(0.5);
   trail1.setTint(0x00ffff);
 
-  const trail2 = scene.add.image(startX, scene.player.y, 'playerTex');
+  const trail2 = scene.add.image(startX, scene.player.y, trailTexture);
   trail2.setAlpha(0.3);
   trail2.setTint(0x00ffff);
 

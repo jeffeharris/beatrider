@@ -50,6 +50,11 @@ const DIFFICULTY_PRESETS = {
   'chaos': { speedMult: 2.0, fireMult: 0.5, spawnMult: 2.0, description: 'Maximum chaos' }
 };
 
+const CHARACTER_LABELS = {
+  default: 'Classic',
+  unicorn: 'Unicorn'
+};
+
 let currentDifficulty = DIFFICULTY_PRESETS.normal;
 const isAudioRunning = () => Tone?.context?.state === 'running';
 const withTransport = (fn) => {
@@ -339,6 +344,24 @@ export function setupMusicUI() {
     saveGameDataDebounced({ settings: { laserSound: gameSounds.currentLaserSound } });
   });
 
+  // Character selector
+  document.getElementById('characterSelector')?.addEventListener('change', (e) => {
+    const character = e.target.value === 'unicorn' ? 'unicorn' : 'default';
+    const label = CHARACTER_LABELS[character] || CHARACTER_LABELS.default;
+    document.getElementById('characterDisplay').textContent = label;
+
+    const gameScene = window.gameScene;
+    if (gameScene && typeof gameScene.setPlayerCharacter === 'function') {
+      gameScene.setPlayerCharacter(character);
+    }
+
+    saveGameDataDebounced({ settings: { character } });
+    trackEventSafe('settings_change', {
+      setting_type: 'character',
+      character
+    });
+  });
+
   // Music preset selector
   document.getElementById('musicPresetSelector')?.addEventListener('change', (e) => {
     const presetKey = e.target.value;
@@ -454,6 +477,21 @@ export function setupMusicUI() {
         document.getElementById('soundSelector').value = savedData.settings.laserSound;
         const soundNames = ['Triangle', 'Acid', 'Chord', 'Echo', 'Pluck', 'Pew Pew'];
         document.getElementById('soundDisplay').textContent = soundNames[savedData.settings.laserSound];
+      }
+
+      // Apply saved character UI and active scene character
+      const savedCharacter = savedData.settings.character === 'unicorn' ? 'unicorn' : 'default';
+      const characterSelector = document.getElementById('characterSelector');
+      const characterDisplay = document.getElementById('characterDisplay');
+      if (characterSelector) {
+        characterSelector.value = savedCharacter;
+      }
+      if (characterDisplay) {
+        characterDisplay.textContent = CHARACTER_LABELS[savedCharacter];
+      }
+      const gameScene = window.gameScene;
+      if (gameScene && typeof gameScene.setPlayerCharacter === 'function') {
+        gameScene.setPlayerCharacter(savedCharacter);
       }
 
       // Apply mute states to UI
