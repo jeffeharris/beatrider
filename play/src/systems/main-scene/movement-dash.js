@@ -163,8 +163,10 @@ export function checkDashCollisionSystem() {
       o.progress < 0.97 &&
       o.lane === player.lane &&
       !player.jumping &&
-      !flow.invincible
+      !flow.invincible &&
+      !o.playerCollisionHandled
     ) {
+      o.playerCollisionHandled = true;
       const damage = DAMAGE_VALUES.obstacle;
       const { nextShield, lethal } = applyDamage({ shield: combat.shield, damage });
 

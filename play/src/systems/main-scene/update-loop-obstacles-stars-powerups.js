@@ -180,7 +180,7 @@ for(let i=this.obstacles.length-1; i>=0; i--){
   
   // Check collision with player (can jump over obstacles!)
   // 3D collision: obstacles only collide when near player (0.94-0.97), can step behind them after
-  if(o.progress > 0.94 && o.progress < 0.97 && o.lane === playerState.lane) {
+  if(o.progress > 0.94 && o.progress < 0.97 && o.lane === playerState.lane && !o.playerCollisionHandled) {
     if (playerState.jumping || playerState.stretching) {
       // Successfully jumped over obstacle - track for tutorial
       if (this.isTutorial && !o.tutorialCounted) {
@@ -188,6 +188,7 @@ for(let i=this.obstacles.length-1; i>=0; i--){
         this.tutorialProgress.jumpsMade++;
       }
     } else if (!flow.invincible) {
+      o.playerCollisionHandled = true;
       const damage = DAMAGE_VALUES.obstacle;
       const { nextShield, lethal } = applyDamage({ shield: combat.shield, damage });
 
