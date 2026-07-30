@@ -2,7 +2,7 @@
 // All DOM event listeners for music controls, settings panel, genre switching, etc.
 
 import * as Tone from 'tone';
-import { saveGameDataDebounced, savedData } from '../storage.js';
+import { DEFAULT_CHARACTER_ID, saveGameDataDebounced, savedData } from '../storage.js';
 import { unlockIOSAudio } from './ios-unlock.js';
 import {
   energyLevel, setEnergyLevel,
@@ -54,8 +54,8 @@ const DIFFICULTY_PRESETS = {
 };
 
 const CHARACTER_LABELS = {
-  default: 'Classic',
-  unicorn: 'Unicorn'
+  unicorn: 'Unicorn',
+  classic: 'Classic'
 };
 
 // Derive from saved settings, not a hardcoded default: the settings panel only restored
@@ -352,8 +352,8 @@ export function setupMusicUI() {
 
   // Character selector
   document.getElementById('characterSelector')?.addEventListener('change', (e) => {
-    const character = e.target.value === 'unicorn' ? 'unicorn' : 'default';
-    const label = CHARACTER_LABELS[character] || CHARACTER_LABELS.default;
+    const character = CHARACTER_LABELS[e.target.value] ? e.target.value : DEFAULT_CHARACTER_ID;
+    const label = CHARACTER_LABELS[character];
     document.getElementById('characterDisplay').textContent = label;
 
     const gameScene = window.gameScene;
@@ -486,7 +486,9 @@ export function setupMusicUI() {
       }
 
       // Apply saved character UI and active scene character
-      const savedCharacter = savedData.settings.character === 'unicorn' ? 'unicorn' : 'default';
+      const savedCharacter = CHARACTER_LABELS[savedData.settings.character]
+        ? savedData.settings.character
+        : DEFAULT_CHARACTER_ID;
       const characterSelector = document.getElementById('characterSelector');
       const characterDisplay = document.getElementById('characterDisplay');
       if (characterSelector) {

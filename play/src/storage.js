@@ -6,7 +6,10 @@
 import { seedLeaderboardFromLegacyHighScore } from './leaderboard/leaderboard-entry.js';
 
 export const STORAGE_KEY = 'beatrider_data';
-const STORAGE_VERSION = 3; // Version number for migrations
+const STORAGE_VERSION = 4; // Version number for migrations
+
+// The unicorn is the game's main character; 'classic' is the plain square it replaced.
+export const DEFAULT_CHARACTER_ID = 'unicorn';
 
 // Default settings structure
 export const DEFAULT_SETTINGS = {
@@ -15,7 +18,7 @@ export const DEFAULT_SETTINGS = {
   leaderboard: [],
   settings: {
     gridEnabled: true,
-    character: 'default',
+    character: DEFAULT_CHARACTER_ID,
     difficulty: 'normal',
     touchSensitivity: 30,
     laserSound: 0,
@@ -64,7 +67,24 @@ function migrateData(data) {
   let migrated = data;
   if (!migrated.version || migrated.version < 2) migrated = migrateV1ToV2(migrated);
   if (migrated.version < 3) migrated = migrateV2ToV3(migrated);
+  if (migrated.version < 4) migrated = migrateV3ToV4(migrated);
   return migrated;
+}
+
+// v3 -> v4: the unicorn is promoted to the main character.
+// The old character id 'default' meant the plain square, which becomes ambiguous once
+// it stops being the default, so that id is retired in favour of 'classic'. Saves
+// carrying 'default' were assigned it automatically rather than choosing it, so they
+// move to the new main character.
+function migrateV3ToV4(data) {
+  return {
+    ...data,
+    version: 4,
+    settings: {
+      ...data.settings,
+      character: data.settings?.character === 'unicorn' ? 'unicorn' : DEFAULT_CHARACTER_ID
+    }
+  };
 }
 
 // v2 -> v3: the single scalar high score becomes a leaderboard table.
@@ -86,6 +106,7 @@ function migrateV1ToV2(data) {
     highScore: data.highScore || 0,
     settings: {
       gridEnabled: data.gridEnabled !== undefined ? data.gridEnabled : true,
+      // The v2-era id for the plain square. Retired in v4, which maps it forward.
       character: 'default',
       difficulty: 'normal',
       touchSensitivity: 30,

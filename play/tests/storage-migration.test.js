@@ -28,7 +28,7 @@ const { loadGameData, saveGameData } = await import('../src/storage.js');
 test('v2 data is migrated to v3 with the high score seeded into the leaderboard', () => {
   const data = loadGameData();
 
-  assert.equal(data.version, 3);
+  assert.equal(data.version, 4);
   assert.equal(data.leaderboard.length, 1);
   assert.equal(data.leaderboard[0].score, 4200);
   assert.equal(data.leaderboard[0].isLegacySeed, true);
@@ -45,7 +45,7 @@ test('migration preserves the existing high score and settings', () => {
 
 test('the migrated shape is written back to storage', () => {
   const persisted = JSON.parse(store.get('beatrider_data'));
-  assert.equal(persisted.version, 3);
+  assert.equal(persisted.version, 4);
 });
 
 test('saving a leaderboard replaces the stored array wholesale', () => {
@@ -61,11 +61,48 @@ test('saving a leaderboard replaces the stored array wholesale', () => {
   assert.equal(after[0].score, 900);
 });
 
-test('an already-v3 blob passes through untouched', () => {
+test('the unicorn is the main character after migrating', () => {
+  // The seeded v2 blob predates the character setting entirely.
+  assert.equal(loadGameData().settings.character, 'unicorn');
+});
+
+test('an explicit unicorn choice survives migration', () => {
+  store.set('beatrider_data', JSON.stringify({
+    version: 3, highScore: 0, leaderboard: [], settings: { character: 'unicorn' }
+  }));
+  assert.equal(loadGameData().settings.character, 'unicorn');
+});
+
+test('the retired default character id maps forward to the unicorn', () => {
+  store.set('beatrider_data', JSON.stringify({
+    version: 3, highScore: 0, leaderboard: [], settings: { character: 'default' }
+  }));
+  const data = loadGameData();
+
+  assert.equal(data.version, 4);
+  assert.equal(data.settings.character, 'unicorn');
+});
+
+test('migrating the character preserves the rest of settings', () => {
+  store.set('beatrider_data', JSON.stringify({
+    version: 3,
+    highScore: 77,
+    leaderboard: [{ score: 77 }],
+    settings: { character: 'default', difficulty: 'chaos', gridEnabled: false }
+  }));
+  const data = loadGameData();
+
+  assert.equal(data.settings.difficulty, 'chaos');
+  assert.equal(data.settings.gridEnabled, false);
+  assert.equal(data.highScore, 77);
+  assert.equal(data.leaderboard.length, 1);
+});
+
+test('an already-v4 blob passes through untouched', () => {
   saveGameData({ leaderboard: [{ score: 1234, id: 'keep-me' }] });
   const data = loadGameData();
 
-  assert.equal(data.version, 3);
+  assert.equal(data.version, 4);
   assert.equal(data.leaderboard[0].id, 'keep-me');
 });
 
@@ -73,6 +110,6 @@ test('corrupt storage falls back to defaults with an empty leaderboard', () => {
   store.set('beatrider_data', '{not valid json');
   const data = loadGameData();
 
-  assert.equal(data.version, 3);
+  assert.equal(data.version, 4);
   assert.deepEqual(data.leaderboard, []);
 });

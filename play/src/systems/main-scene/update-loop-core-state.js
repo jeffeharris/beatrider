@@ -55,7 +55,7 @@ export function handlePauseAndGridInput() {
   }
 
   if (Phaser.Input.Keyboard.JustDown(this.keys.C) && typeof this.setPlayerCharacter === 'function') {
-    const nextCharacter = this.playerCharacter === 'unicorn' ? 'default' : 'unicorn';
+    const nextCharacter = this.playerCharacter === 'unicorn' ? 'classic' : 'unicorn';
     const appliedCharacter = this.setPlayerCharacter(nextCharacter);
     saveGameData({ settings: { character: appliedCharacter } });
 

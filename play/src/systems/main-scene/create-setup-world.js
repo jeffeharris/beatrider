@@ -1,5 +1,5 @@
 import { gameState, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../config.js';
-import { loadGameData, sessionHighScore } from '../../storage.js';
+import { DEFAULT_CHARACTER_ID, loadGameData, sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
 import { createResourceBarSystem } from './resource-bar.js';
@@ -29,16 +29,18 @@ function computeWorldSizes() {
 }
 
 const PLAYER_CHARACTERS = {
-  default: {
-    textureKey: 'playerTexDefault'
-  },
   unicorn: {
     textureKey: 'playerTexUnicorn'
+  },
+  classic: {
+    textureKey: 'playerTexClassic'
   }
 };
 
+// Anything unrecognised - including the retired 'default' id from before the unicorn
+// was promoted - falls back to the main character.
 function normalizeCharacterId(characterId) {
-  return PLAYER_CHARACTERS[characterId] ? characterId : 'default';
+  return PLAYER_CHARACTERS[characterId] ? characterId : DEFAULT_CHARACTER_ID;
 }
 
 function getPlayerTextureForCharacter(characterId) {
@@ -276,7 +278,7 @@ function updateUnicornParts(scene) {
 function buildMainSceneTextures(gfx, sizes) {
   const { enemySize, bulletW, bulletH, obstacleW, obstacleH, powerUpSize, playerSize } = sizes;
 
-  gfx.fillStyle(0x00ffcc, 1).fillRect(0, 0, playerSize, playerSize).generateTexture('playerTexDefault', playerSize, playerSize).clear();
+  gfx.fillStyle(0x00ffcc, 1).fillRect(0, 0, playerSize, playerSize).generateTexture('playerTexClassic', playerSize, playerSize).clear();
   // Backward-compat key still used by some tooling/experiments.
   gfx.fillStyle(0x00ffcc, 1).fillRect(0, 0, playerSize, playerSize).generateTexture('playerTex', playerSize, playerSize).clear();
 
@@ -411,7 +413,7 @@ function initializeSceneEntities(scene, sizes) {
   scene.player.h = sizes.playerSize;
   scene.player.setDepth(500);
 
-  scene.setPlayerCharacter = (characterId = 'default') => {
+  scene.setPlayerCharacter = (characterId = DEFAULT_CHARACTER_ID) => {
     const normalized = normalizeCharacterId(characterId);
     scene.playerCharacter = normalized;
     if (scene.player?.active) {
