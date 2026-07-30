@@ -3,6 +3,7 @@ import * as Tone from 'tone';
 import { gameState, DAMAGE_VALUES } from '../../config.js';
 import { sessionHighScore, setSessionHighScore } from '../../storage.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { logAudioError } from '../../audio/debug-log.js';
 import {
   applyPoints,
   resolveComboForChain,

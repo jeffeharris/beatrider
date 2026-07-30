@@ -1,5 +1,6 @@
 import { LANES, PLAYER_CONFIG } from '../../config.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
+import { logAudioError } from '../../audio/debug-log.js';
 
 export function moveLeftSystem() {
   const { player, combat } = this.stateSlices;
@@ -14,7 +15,7 @@ export function moveLeftSystem() {
   if(player.lane === -1 && previousLane === 0) {
     try {
       gameSounds.offScreenWomp.triggerAttackRelease("C2", "4n");
-    } catch(e) {}
+    } catch (e) { logAudioError("movement-lateral:offscreen-left-womp", e); }
   }
   
   // Check if we're jumping for special animation
@@ -125,7 +126,7 @@ export function moveLeftSystem() {
   try {
     const note = getGameNote(Math.max(0, Math.min(4, player.lane))) + "5";
     gameSounds.move.triggerAttackRelease(note, "32n");
-  } catch(e) {}
+  } catch (e) { logAudioError("movement-lateral:left-step-note", e); }
 }
 
 export function moveRightSystem() {
@@ -141,7 +142,7 @@ export function moveRightSystem() {
   if(player.lane === LANES && previousLane === LANES - 1) {
     try {
       gameSounds.offScreenWomp.triggerAttackRelease("C2", "4n");
-    } catch(e) {}
+    } catch (e) { logAudioError("movement-lateral:offscreen-right-womp", e); }
   }
   
   // Check if we're jumping for special animation
@@ -252,5 +253,5 @@ export function moveRightSystem() {
   try {
     const note = getGameNote(Math.max(0, Math.min(4, player.lane))) + "5";
     gameSounds.move.triggerAttackRelease(note, "32n");
-  } catch(e) {}
+  } catch (e) { logAudioError("movement-lateral:right-step-note", e); }
 }

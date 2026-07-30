@@ -3,6 +3,7 @@ import * as Tone from 'tone';
 import { gameState, LANES, DAMAGE_VALUES } from '../../config.js';
 import { sessionHighScore, setSessionHighScore } from '../../storage.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { logAudioError } from '../../audio/debug-log.js';
 import { applyDamage } from './damage-state.js';
 
 export function updateEnemiesSystem(dt, pulseShift, pulseXShift) {

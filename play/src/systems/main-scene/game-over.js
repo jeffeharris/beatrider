@@ -5,6 +5,7 @@ import { currentGenre } from '../../audio/music-engine.js';
 import { currentDifficulty } from '../../audio/music-ui.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import { applyGameOverTransition, applyGameResetTransition } from './state-transitions.js';
+import { logAudioError } from '../../audio/debug-log.js';
 import {
   appendRecentDeath,
   buildSurvivalStats,
@@ -244,7 +245,7 @@ function animateGameOverIntro(scene, ui, beatHighScore) {
       gameSounds.powerUp.triggerAttackRelease('E4', '16n', now + 0.1);
       gameSounds.powerUp.triggerAttackRelease('G4', '16n', now + 0.2);
       gameSounds.powerUp.triggerAttackRelease('C5', '8n', now + 0.3);
-    } catch (e) {}
+    } catch (e) { logAudioError("game-over:high-score-fanfare", e); }
   }
 
   scene.tweens.add({

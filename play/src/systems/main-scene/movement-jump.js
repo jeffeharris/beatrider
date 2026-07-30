@@ -3,6 +3,7 @@ import * as Tone from 'tone';
 import { gameState, MAIN_SCENE_TUNING } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import { beginJumpState, finalizeJumpState, resolveLandingQueuedActions } from './jump-state.js';
+import { logAudioError } from '../../audio/debug-log.js';
 
 function resetPlayerRotation(scene) {
   if (Math.abs(scene.player.angle % 360) > 1) {
@@ -37,7 +38,7 @@ function startQueuedTouchCharge(scene, player, input) {
 
   try {
     gameSounds.jumpCharge.triggerAttack('C2');
-  } catch (e) {}
+  } catch (e) { logAudioError("movement-jump:queued-charge-start", e); }
 
   refreshTouchChargeAnchor(scene);
 
@@ -80,7 +81,7 @@ function playRegularJumpSound() {
     const now = Tone.now();
     gameSounds.move.triggerAttackRelease('C6', '16n', now);
     gameSounds.move.triggerAttackRelease('G6', '16n', now + 0.05);
-  } catch (e) {}
+  } catch (e) { logAudioError("movement-jump:regular-jump-chime", e); }
 }
 
 function spawnSuperJumpParticles(scene, normalizedCharge) {
@@ -143,7 +144,7 @@ function playSuperJumpSound(normalizedCharge) {
       gameSounds.move.triggerAttackRelease('E6', '32n', now + 0.12, 0.2);
       gameSounds.offScreenWomp.triggerAttackRelease('C1', '16n', now, 0.18);
     }
-  } catch (e) {}
+  } catch (e) { logAudioError("movement-jump:super-jump-layering", e); }
 }
 
 export function jumpSystem() {

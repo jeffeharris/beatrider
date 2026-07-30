@@ -2,6 +2,7 @@ import * as Tone from 'tone';
 import { gameState } from '../../config.js';
 import { saveGameData, sessionHighScore, setSessionHighScore } from '../../storage.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
+import { logAudioError } from '../../audio/debug-log.js';
 import {
   applyPoints,
   resolveComboFromWindow,

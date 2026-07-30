@@ -3,6 +3,7 @@ import { gameState, LANES, BULLET_SPEED, FIRE_COOLDOWN, FALLBACK_FIRE_COOLDOWN, 
 import { currentBar, getSection } from '../../audio/music-engine.js';
 import { currentDifficulty, DIFFICULTY_PRESETS } from '../../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
+import { logAudioError } from '../../audio/debug-log.js';
 
 export function pulseGridSystem() {
   this.pulseActive = true;
@@ -209,7 +210,7 @@ export function fireSystem() {
         } else if (sound.triggerAttack) {
           sound.triggerAttack(note, Tone.now() + 0.01);
         }
-      } catch (e) {}
+      } catch (e) { logAudioError("grid-fire:rapidfire-laser", e); }
     }
   } else {
     try {
@@ -231,7 +232,7 @@ export function fireSystem() {
       } else {
         sound.triggerAttackRelease(note, '32n', Tone.now() + 0.01);
       }
-    } catch (e) {}
+    } catch (e) { logAudioError("grid-fire:single-shot-laser", e); }
   }
 
   this.bullets.push(b);

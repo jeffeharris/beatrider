@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 import { gameState, LANES, PLAYER_CONFIG, DAMAGE_VALUES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { logAudioError } from '../../audio/debug-log.js';
 import { applyDamage } from './damage-state.js';
 
 function restoreJumpIfNeeded(scene, player) {
