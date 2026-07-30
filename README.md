@@ -40,7 +40,8 @@ Optional query parameters:
 
 Browser automation can call:
 
-- `await window.advanceTime(milliseconds)` to advance only simulated game time.
+- `await window.advanceTime(milliseconds)` to advance only simulated game time
+  in cohesive 10 ms steps; partial time carries into the next call.
 - `window.render_game_to_text()` to read a compact JSON snapshot.
 - `window.BeatriderTest.applyScenario(name)`, `.spawn(type, lane, progress)`, or
   `.setResources(values)` to arrange focused cases.
