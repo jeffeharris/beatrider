@@ -1,0 +1,27 @@
+{
+  "appId": "com.thebeatrider.app",
+  "appName": "BeatRider",
+  "webDir": "dist",
+  "backgroundColor": "#000000",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#000000",
+    "scrollEnabled": false
+  },
+  "android": {
+    "backgroundColor": "#000000",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "DARK",
+      "backgroundColor": "#00000000"
+    },
+    "SplashScreen": {
+      "backgroundColor": "#000000",
+      "showSpinner": false,
+      "launchAutoHide": false
+    }
+  }
+}

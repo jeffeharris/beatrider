@@ -16,6 +16,7 @@ import {
   STEP_COUNT
 } from './genres/genre-logic.js';
 import { isAudioDebugEnabled, logAudioDebug } from './debug-log.js';
+import { recordSequenceTick, startLatencyProbe } from './latency-probe.js';
 
 const hasSecureAudioWorklet = () =>
   typeof window !== 'undefined' &&
@@ -558,6 +559,17 @@ export function generatePatterns(section, bar, energy) {
 let kickLoop, snareLoop, hihatLoop, acidLoop, chordLoop, subLoop;
 let loopsStarted = false;
 let lastSequenceCallbackTime = 0;
+
+/**
+ * Every sequencer callback reports through here: it feeds the music watchdog
+ * (which restarts stalled loops) and, when enabled, the latency probe. Keeping
+ * both on one seam means a new loop can't silently skip either.
+ */
+function noteSequenceCallback(time) {
+  lastSequenceCallbackTime = time;
+  recordSequenceTick(Tone, time);
+}
+
 let activeStepCount = STEP_COUNT;
 let activeStepSubdivision = "16n";
 let stepSequence = Array.from({ length: activeStepCount }, (_, i) => i);
@@ -656,7 +668,7 @@ function ensureLoopsCreated() {
 
   // Kick with micro-timing
   kickLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const event = toStepEvent(currentKickPattern[step]);
     if (event.on && !muteStates.kick) {
       const humanTime = humanize(time, currentSceneHumanize.kick);
@@ -674,7 +686,7 @@ function ensureLoopsCreated() {
 
   // Snare with more looseness
   snareLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const event = toStepEvent(currentSnarePattern[step]);
     if (event.on && !muteStates.snare) {
       const humanTime = humanize(time, currentSceneHumanize.snare);
@@ -690,14 +702,19 @@ function ensureLoopsCreated() {
 
   // Hi-hat with most variation
   hihatLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const event = toStepEvent(currentHihatPattern[step]);
     if (event.on && !muteStates.hat) {
       const humanTime = humanize(time, currentSceneHumanize.hihat);
       const velocity = Math.max(0.2, event.velocity || 0.5);
       const duration = event.gate || "16n";
-      hihat.triggerAttackRelease(duration, humanTime);
-      hihat.volume.setValueAtTime(-15 + (velocity * 10), humanTime);
+      // Velocity rides the envelope, not the output gain — same as kick/snare.
+      // Scheduling `volume` instead (the previous approach) only made hits
+      // louder or quieter; it left the attack identical every time, which is
+      // what makes a 16th-note hat line read as a static loop rather than a
+      // played one. The synth's constructor volume (-10dB) now stands as the
+      // fixed level it was always meant to be.
+      hihat.triggerAttackRelease(duration, humanTime, velocity);
       Tone.Draw.schedule(() => {
         flashIndicator('hatIndicator');
         if (Math.random() < 0.2 && window.GameAPI && window.GameAPI.onHihat) {
@@ -709,7 +726,7 @@ function ensureLoopsCreated() {
 
   // Acid with melodic sequence - slight timing variations and accent
   acidLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const note = acidSequence[step];
     if (note && !muteStates.acid) {
       const humanTime = humanize(time, currentSceneHumanize.acid);
@@ -737,7 +754,7 @@ function ensureLoopsCreated() {
 
   // Stabs with slight spread and filter variation
   chordLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const event = toStepEvent(currentStabPattern[step]);
     if (event.on && !muteStates.stab) {
       const humanTime = humanize(time, currentSceneHumanize.stab);
@@ -775,7 +792,7 @@ function ensureLoopsCreated() {
 
   // Sub bass pattern - genre-specific
   subLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const event = toSubEvent(currentSubPattern[step]);
     if (event.note && !muteStates.sub) {
       const humanTime = humanize(time, currentSceneHumanize.sub);
@@ -1072,3 +1089,8 @@ export function ensureTransportScheduled() {
   Tone.Transport.scheduleRepeat((time) => evolve(time), "1m");
   transportScheduled = true;
 }
+
+// No-ops unless ?latency=1 (see latency-probe.js). Started at module scope so a
+// cold-start measurement covers the very first bar, which is when a WebView's
+// audio path is least warmed up and worst-behaved.
+startLatencyProbe(Tone);
