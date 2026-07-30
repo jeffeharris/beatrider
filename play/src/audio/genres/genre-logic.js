@@ -1,7 +1,7 @@
 const DEFAULT_STEP_COUNT = 16;
 const ALT_STEP_COUNT = 24;
 const LEGACY_STEP_COUNT = 16;
-const NATIVE_24_GENRES = new Set(['house', 'garage']);
+const NATIVE_24_GENRES = new Set(['house', 'garage', 'tropical']);
 let native24Enabled = false;
 let runtimeStepCount = DEFAULT_STEP_COUNT;
 
@@ -139,7 +139,7 @@ export const GENRE_SCENES = {
     stab: { wet: 0.3, lowpass: 2600 },
     acid: { drive: 0.5 },
     sub: { low: 3, mid: -6, high: -12, volume: -6 },
-    humanize: { kick: 0.003, snare: 0.005, hihat: 0.008, acid: 0.004, stab: 0.006, sub: 0.002 }
+    humanize: { kick: 0, snare: 0, hihat: 0, acid: 0, stab: 0, sub: 0 }
   },
   dnb: {
     raveSynth: 'dnbReese',
@@ -149,7 +149,7 @@ export const GENRE_SCENES = {
     stab: { wet: 0.18, lowpass: 3200 },
     acid: { drive: 0.35 },
     sub: { low: 5, mid: -7, high: -14, volume: -5 },
-    humanize: { kick: 0.002, snare: 0.004, hihat: 0.006, acid: 0.003, stab: 0.004, sub: 0.0015 }
+    humanize: { kick: 0, snare: 0, hihat: 0, acid: 0, stab: 0, sub: 0 }
   },
   tropical: {
     raveSynth: 'tropicalPluck',
@@ -159,7 +159,7 @@ export const GENRE_SCENES = {
     stab: { wet: 0.4, lowpass: 3800 },
     acid: { drive: 0.25 },
     sub: { low: 4, mid: -5, high: -10, volume: -7 },
-    humanize: { kick: 0.0035, snare: 0.006, hihat: 0.009, acid: 0.004, stab: 0.007, sub: 0.0025 }
+    humanize: { kick: 0, snare: 0, hihat: 0, acid: 0, stab: 0, sub: 0 }
   },
   dubstep: {
     raveSynth: 'dnbReese',
@@ -169,7 +169,7 @@ export const GENRE_SCENES = {
     stab: { wet: 0.22, lowpass: 2100 },
     acid: { drive: 0.6 },
     sub: { low: 6, mid: -8, high: -15, volume: -4 },
-    humanize: { kick: 0.0025, snare: 0.004, hihat: 0.005, acid: 0.003, stab: 0.005, sub: 0.0015 }
+    humanize: { kick: 0, snare: 0, hihat: 0, acid: 0, stab: 0, sub: 0 }
   },
   trance: {
     raveSynth: 'technoStab',
@@ -179,7 +179,7 @@ export const GENRE_SCENES = {
     stab: { wet: 0.35, lowpass: 4200 },
     acid: { drive: 0.45 },
     sub: { low: 4, mid: -6, high: -11, volume: -6 },
-    humanize: { kick: 0.002, snare: 0.003, hihat: 0.005, acid: 0.003, stab: 0.004, sub: 0.0015 }
+    humanize: { kick: 0, snare: 0, hihat: 0, acid: 0, stab: 0, sub: 0 }
   },
   house: {
     raveSynth: 'technoStab',
@@ -189,7 +189,7 @@ export const GENRE_SCENES = {
     stab: { wet: 0.28, lowpass: 3100 },
     acid: { drive: 0.38 },
     sub: { low: 5, mid: -6, high: -12, volume: -5 },
-    humanize: { kick: 0.0025, snare: 0.004, hihat: 0.006, acid: 0.0035, stab: 0.005, sub: 0.0018 }
+    humanize: { kick: 0, snare: 0, hihat: 0, acid: 0, stab: 0, sub: 0 }
   },
   garage: {
     raveSynth: 'technoStab',
@@ -199,7 +199,7 @@ export const GENRE_SCENES = {
     stab: { wet: 0.25, lowpass: 3300 },
     acid: { drive: 0.32 },
     sub: { low: 5, mid: -7, high: -13, volume: -5 },
-    humanize: { kick: 0.003, snare: 0.0045, hihat: 0.007, acid: 0.003, stab: 0.005, sub: 0.002 }
+    humanize: { kick: 0, snare: 0, hihat: 0, acid: 0, stab: 0, sub: 0 }
   }
 };
 
@@ -292,10 +292,8 @@ function toStepLane(binaryPattern, options = {}) {
   } = options;
 
   const pattern24 = adaptBinaryPatternToStepCount(binaryPattern, stepCount);
-  return pattern24.map((on, i) => {
-    const accent = !!on && i % accentEvery === 0;
-    const eventVelocity = accent ? Math.min(1, velocity + accentBoost) : velocity;
-    return createStepEvent(!!on, eventVelocity, gate, accent);
+  return pattern24.map((on) => {
+    return createStepEvent(!!on, velocity, gate, false);
   });
 }
 
@@ -317,14 +315,13 @@ function toNoteLane(notePattern, options = {}) {
     mapped[idx] = note;
   }
 
-  return mapped.map((note, i) => {
-    const accent = !!note && i % accentEvery === 0;
+  return mapped.map((note) => {
     return {
       note,
-      velocity: note ? (accent ? Math.min(1, velocity + 0.15) : velocity) : 0,
+      velocity: note ? velocity : 0,
       gate,
-      accent,
-      slide: !!note && slideEvery > 0 && i % slideEvery === 0
+      accent: false,
+      slide: false
     };
   });
 }
@@ -465,56 +462,94 @@ function createDnbGenerator(patternBank) {
       null, null, null, null,
       chordInfo.bass, null, null, bar % 2 === 0 ? chordInfo.bass : null
     ], { velocity: 0.82, gate: '8n', slideEvery: 3 }),
-    generateStabs: ({ section, bar }) => {
-      if (section === 'MAIN' || section === 'DROP') {
-        return toStepLane(bar % 2 === 0
-          ? [0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0]
-          : [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0], { velocity: 0.76, gate: '8n' });
-      }
-      return getStabPattern(section, bar);
-    }
+    generateStabs: ({ section, bar }) => getStabPattern(section, bar)
   };
 }
 
 function createTropicalGenerator(patternBank) {
+  const kygoBasic = patternBank.kick.kygo_basic || patternBank.kick.fourOnFloor;
+  const kygoBounce = patternBank.kick.kygo_bounce || patternBank.kick.syncopated;
+  const kygoMinimal = patternBank.kick.kygo_minimal || patternBank.kick.minimal;
+  const kygoClap = patternBank.snare.kygo_clap || patternBank.snare.backbeat;
+  const kygoSnap = patternBank.snare.kygo_snap || patternBank.snare.ghost;
+  const kygoRim = patternBank.snare.kygo_rim || patternBank.snare.ghost;
+
   return {
-    generateDrums: ({ section, bar }) => {
+    generateDrums: ({ section, bar, tension }) => {
       if (section === 'DROP') {
+        const dropKick = bar % 4 < 2 ? kygoBounce : kygoBasic;
+        const dropSnare = bar % 2 === 0 ? kygoClap : kygoRim;
+        const dropHat = tension > 60
+          ? [0,1,1,1, 0,1,1,0, 0,1,1,1, 0,1,1,0]
+          : [0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1];
         return {
-          kick: toStepLane(patternBank.kick.kygo_bounce, { velocity: 0.8, gate: '16n' }),
-          snare: toStepLane(patternBank.snare.kygo_clap, { velocity: 0.72, gate: '16n' }),
-          hihat: toStepLane([0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1], { velocity: 0.54, gate: '16n' })
+          kick: toStepLane(dropKick, { velocity: 0.82, gate: '16n', accentEvery: 4 }),
+          snare: toStepLane(dropSnare, { velocity: 0.74, gate: '16n' }),
+          hihat: toStepLane(dropHat, { velocity: 0.56, gate: '16n', accentEvery: 3 })
         };
       }
 
       if (section === 'BREAK') {
+        const breakHat = bar % 2 === 0
+          ? [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0]
+          : [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,1,0];
         return {
-          kick: toStepLane(patternBank.kick.kygo_minimal, { velocity: 0.74, gate: '16n' }),
-          snare: toStepLane(patternBank.snare.kygo_snap, { velocity: 0.66, gate: '16n' }),
-          hihat: toStepLane([0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0], { velocity: 0.48, gate: '16n' })
+          kick: toStepLane(kygoMinimal, { velocity: 0.72, gate: '16n' }),
+          snare: toStepLane(kygoSnap, { velocity: 0.64, gate: '16n' }),
+          hihat: toStepLane(breakHat, { velocity: 0.46, gate: '16n' })
         };
       }
 
+      if (section === 'BUILD') {
+        const buildHat = bar % 2 === 0
+          ? [0,1,0,1, 0,1,0,1, 0,1,1,1, 1,1,1,1]
+          : [0,1,0,1, 0,1,1,1, 1,1,1,1, 1,1,1,1];
+        return {
+          kick: toStepLane(kygoBasic, { velocity: 0.79, gate: '16n' }),
+          snare: toStepLane(bar % 2 === 0 ? kygoSnap : kygoClap, { velocity: 0.7, gate: '16n' }),
+          hihat: toStepLane(buildHat, { velocity: 0.54, gate: '16n', accentEvery: 3 })
+        };
+      }
+
+      const introOutroHat = bar % 2 === 0
+        ? [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]
+        : [1,0,0,0, 0,0,1,0, 1,0,0,0, 0,0,1,0];
       return {
-        kick: toStepLane(bar % 8 < 4 ? patternBank.kick.kygo_basic : patternBank.kick.kygo_bounce, { velocity: 0.78, gate: '16n' }),
-        snare: toStepLane(bar % 4 === 0 ? patternBank.snare.kygo_clap : patternBank.snare.kygo_rim, { velocity: 0.7, gate: '16n' }),
-        hihat: toStepLane([1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0], { velocity: 0.5, gate: '16n' })
+        kick: toStepLane(bar % 8 < 4 ? kygoBasic : kygoBounce, { velocity: 0.78, gate: '16n' }),
+        snare: toStepLane(bar % 4 === 0 ? kygoClap : kygoRim, { velocity: 0.7, gate: '16n' }),
+        hihat: toStepLane(introOutroHat, { velocity: 0.5, gate: '16n' })
       };
     },
-    generateBass: ({ chordInfo, bar }) => toNoteLane([
-      chordInfo.bass, null, null, chordInfo.bass,
-      null, null, bar % 2 === 0 ? chordInfo.bass : null, null,
-      chordInfo.bass, null, null, chordInfo.bass,
-      null, null, chordInfo.bass, null
-    ], { velocity: 0.76, gate: '8n' }),
-    generateStabs: ({ section, bar }) => {
-      if (section === 'MAIN') {
-        return toStepLane(bar % 2 === 0
-          ? [1,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,1,0]
-          : [0,0,0,0, 0,0,1,0, 1,0,0,0, 0,0,0,0], { velocity: 0.72, gate: '8n' });
+    generateBass: ({ chordInfo, section, bar }) => {
+      const bass = chordInfo.bass;
+      const bassUp = shiftOctave(chordInfo.bass, 1);
+
+      if (section === 'BREAK') {
+        return toNoteLane([
+          bass, null, null, null,
+          null, null, null, null,
+          bass, null, null, null,
+          null, null, null, null
+        ], { velocity: 0.72, gate: '8n' });
       }
-      return getStabPattern(section, bar);
-    }
+
+      if (section === 'DROP') {
+        return toNoteLane([
+          bass, null, null, bassUp,
+          null, bass, null, null,
+          bass, null, null, bassUp,
+          null, bar % 2 === 0 ? bass : null, null, bass
+        ], { velocity: 0.8, gate: '8n', slideEvery: 4 });
+      }
+
+      return toNoteLane([
+        bass, null, null, bass,
+        null, null, bar % 2 === 0 ? bass : null, null,
+        bass, null, null, bass,
+        null, null, bass, null
+      ], { velocity: 0.76, gate: '8n' });
+    },
+    generateStabs: ({ section, bar }) => getStabPattern(section, bar)
   };
 }
 
@@ -560,12 +595,7 @@ function createDubstepGenerator(patternBank) {
         null, null, null, null
       ], { velocity: 0.84, gate: '8n', slideEvery: 4 });
     },
-    generateStabs: ({ section }) => {
-      if (section === 'DROP') {
-        return toStepLane([1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0], { velocity: 0.76, gate: '8n' });
-      }
-      return toStepLane(new Array(LEGACY_STEP_COUNT).fill(0), { velocity: 0.7, gate: '8n' });
-    }
+    generateStabs: ({ section, bar }) => getStabPattern(section, bar)
   };
 }
 
@@ -600,14 +630,7 @@ function createTranceGenerator(patternBank) {
       chordInfo.bass, null, chordInfo.bass, null,
       bar % 2 === 0 ? chordInfo.bass : null, null, chordInfo.bass, null
     ], { velocity: 0.82, gate: '8n' }),
-    generateStabs: ({ section, bar }) => {
-      if (section === 'MAIN' || section === 'DROP') {
-        return toStepLane(bar % 2 === 0
-          ? [1,0,0,0, 0,0,1,0, 1,0,0,0, 0,0,1,0]
-          : [0,0,1,0, 1,0,0,0, 0,0,1,0, 1,0,0,0], { velocity: 0.78, gate: '8n' });
-      }
-      return getStabPattern(section, bar);
-    }
+    generateStabs: ({ section, bar }) => getStabPattern(section, bar)
   };
 }
 
@@ -640,14 +663,7 @@ function createHouseGenerator(patternBank) {
       chordInfo.bass, null, null, null,
       null, chordInfo.bass, null, null
     ], { velocity: 0.8, gate: '8n' }),
-    generateStabs: ({ section, bar }) => {
-      if (section === 'MAIN' || section === 'DROP') {
-        return toStepLane(bar % 2 === 0
-          ? [0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0]
-          : [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0], { velocity: 0.72, gate: '8n' });
-      }
-      return getStabPattern(section, bar);
-    }
+    generateStabs: ({ section, bar }) => getStabPattern(section, bar)
   };
 }
 
@@ -673,14 +689,7 @@ function createGarageGenerator(patternBank) {
       chordInfo.bass, null, null, null,
       null, chordInfo.bass, null, null
     ], { velocity: 0.82, gate: '8n', slideEvery: 4 }),
-    generateStabs: ({ section, bar }) => {
-      if (section === 'MAIN' || section === 'DROP') {
-        return toStepLane(bar % 2 === 0
-          ? [0,0,1,0, 0,0,0,1, 0,0,1,0, 0,0,0,0]
-          : [0,0,0,1, 0,0,1,0, 0,0,0,1, 0,0,1,0], { velocity: 0.74, gate: '8n' });
-      }
-      return getStabPattern(section, bar);
-    }
+    generateStabs: ({ section, bar }) => getStabPattern(section, bar)
   };
 }
 

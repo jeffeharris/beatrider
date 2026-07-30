@@ -46,46 +46,11 @@ export const sidechain = new Tone.Compressor({
   release: 0.1
 }).connect(masterHighpass);
 
-// Instruments
-export const kick = new Tone.MembraneSynth({
-  pitchDecay: 0.05,
-  octaves: 10,
-  oscillator: { type: "sine" },
-  envelope: {
-    attack: 0.001,
-    decay: 0.4,
-    sustain: 0.01,
-    release: 1.4
-  }
-}).connect(masterHighpass); // Kick bypasses sidechain to keep punch
-
-export const snare = new Tone.NoiseSynth({
-  noise: { type: "white" },
-  envelope: {
-    attack: 0.001,
-    decay: 0.15,
-    sustain: 0
-  }
-}).connect(sidechain);
-
-// Hi-hat using filtered noise for more realistic sound
+// Hi-hat filter - drum samples route through this for genre-specific brightness
 export const hihatFilter = new Tone.Filter({
   frequency: 10000,
   type: "highpass"
 }).connect(sidechain);
-
-export const hihat = new Tone.NoiseSynth({
-  noise: {
-    type: "white"
-  },
-  envelope: {
-    attack: 0.001,
-    decay: 0.02,
-    sustain: 0,
-    release: 0.03
-  },
-  volume: -10
-}).connect(hihatFilter);
 
 // Acid with automated filter - trying to approximate 18dB slope with cascaded filters
 export const acidFilter1 = new Tone.Filter({
@@ -354,6 +319,7 @@ export const patternBank = {
   }
 };
 const genreGenerators = createGenreGenerators(patternBank);
+const SUPPORTED_DRUM_SAMPLE_GENRES = ['techno', 'house', 'garage', 'dnb', 'tropical', 'dubstep', 'trance'];
 
 // State
 export let currentBar = 0;
@@ -366,7 +332,66 @@ export let tensionLevel = 30;
 export let lastSection = '';
 export let isTransitioning = false;
 export let riserActive = false;
-let currentSceneHumanize = { kick: 0.003, snare: 0.005, hihat: 0.008, acid: 0.004, stab: 0.006, sub: 0.002 };
+let currentSceneHumanize = { kick: 0, snare: 0, hihat: 0, acid: 0, stab: 0, sub: 0 };
+
+const MOOD_PROFILES = {
+  chill: {
+    motifMemoryBars: 8,
+    motifRetention: 0.8,
+    motifMutationChance: 0.08,
+    callResponseAmount: 0.2,
+    callResponseDelaySteps: 3
+  },
+  driving: {
+    motifMemoryBars: 6,
+    motifRetention: 0.68,
+    motifMutationChance: 0.14,
+    callResponseAmount: 0.28,
+    callResponseDelaySteps: 2
+  },
+  peak: {
+    motifMemoryBars: 4,
+    motifRetention: 0.58,
+    motifMutationChance: 0.2,
+    callResponseAmount: 0.38,
+    callResponseDelaySteps: 2
+  },
+  acid: {
+    motifMemoryBars: 4,
+    motifRetention: 0.62,
+    motifMutationChance: 0.24,
+    callResponseAmount: 0.32,
+    callResponseDelaySteps: 1
+  },
+  dark: {
+    motifMemoryBars: 8,
+    motifRetention: 0.78,
+    motifMutationChance: 0.1,
+    callResponseAmount: 0.22,
+    callResponseDelaySteps: 4
+  },
+  hypnotic: {
+    motifMemoryBars: 10,
+    motifRetention: 0.86,
+    motifMutationChance: 0.06,
+    callResponseAmount: 0.18,
+    callResponseDelaySteps: 4
+  },
+  anthem: {
+    motifMemoryBars: 4,
+    motifRetention: 0.6,
+    motifMutationChance: 0.2,
+    callResponseAmount: 0.42,
+    callResponseDelaySteps: 2
+  }
+};
+let currentMoodProfileKey = 'driving';
+let currentMoodProfile = MOOD_PROFILES.driving;
+const stabMotifMemory = {
+  section: null,
+  startBar: -1,
+  lane: null
+};
 
 // Setter functions for mutable state (needed because ES module live bindings
 // can only be reassigned from within the module that declares them)
@@ -379,6 +404,13 @@ export function setLastSection(v) { lastSection = v; }
 export function setCurrentGenre(v) { currentGenre = v; }
 export function setRaveSynth(v) { raveSynth = v; }
 export function setRiserActive(v) { riserActive = v; }
+export function setMoodProfile(profileKey = 'driving') {
+  const key = Object.prototype.hasOwnProperty.call(MOOD_PROFILES, profileKey) ? profileKey : 'driving';
+  currentMoodProfileKey = key;
+  currentMoodProfile = MOOD_PROFILES[key];
+}
+export function getMoodProfileKey() { return currentMoodProfileKey; }
+const drumSampleKits = {};
 export function setNative24ModeEnabled(v) { setNative24Enabled(v); }
 export function isNative24ModeEnabled() { return isNative24Enabled(); }
 let audioMetricsEnabled = false;
@@ -395,11 +427,113 @@ function setParamAtTime(param, value, atTime) {
   param.value = value;
 }
 
-export function applyGenreScene(genre = currentGenre, atTime) {
-  const scene = GENRE_SCENES[genre] || GENRE_SCENES.techno;
-  const time = typeof atTime === 'number' ? atTime : undefined;
+function samplePathFor(genre, kind) {
+  const g = SUPPORTED_DRUM_SAMPLE_GENRES.includes(genre) ? genre : 'techno';
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+  return `${normalizedBase}audio/drums/${g}/${kind}.wav`;
+}
 
-  if (scene.raveSynth === 'dnbReese') {
+function ensureDrumSampleKit(genre = currentGenre) {
+  const g = SUPPORTED_DRUM_SAMPLE_GENRES.includes(genre) ? genre : 'techno';
+  if (drumSampleKits[g]) return drumSampleKits[g];
+
+  const kickSample = new Tone.Player({ url: samplePathFor(g, 'kick') }).connect(masterHighpass);
+  const snareSample = new Tone.Player({ url: samplePathFor(g, 'snare') }).connect(sidechain);
+  const hatSample = new Tone.Player({ url: samplePathFor(g, 'hat') }).connect(hihatFilter);
+  kickSample.fadeOut = 0.01;
+  snareSample.fadeOut = 0.01;
+  hatSample.fadeOut = 0.005;
+  drumSampleKits[g] = { kickSample, snareSample, hatSample };
+  return drumSampleKits[g];
+}
+
+// Preload all drum sample kits at module init
+SUPPORTED_DRUM_SAMPLE_GENRES.forEach(g => ensureDrumSampleKit(g));
+
+// --- Stab sample system ---
+// Each genre has a single-note stab sample (assumed pitch C4).
+// Tone.Sampler pitch-shifts it to play any chord note.
+const stabSamplers = {};
+
+function stabSamplePathFor(genre) {
+  const g = SUPPORTED_DRUM_SAMPLE_GENRES.includes(genre) ? genre : 'techno';
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+  return `${normalizedBase}audio/stabs/${g}/stab.wav`;
+}
+
+function ensureStabSampler(genre = currentGenre) {
+  const g = SUPPORTED_DRUM_SAMPLE_GENRES.includes(genre) ? genre : 'techno';
+  if (stabSamplers[g]) return stabSamplers[g];
+
+  const sampler = new Tone.Sampler({
+    urls: { "C4": stabSamplePathFor(g) },
+    release: 0.1,
+    onload: () => {
+      // Auto-switch to sampler if this genre is currently active,
+      // but skip genres that prefer their synthesized sound
+      const synthPreferredGenres = ['tropical'];
+      if (currentGenre === g && !synthPreferredGenres.includes(g)) setRaveSynth(sampler);
+    }
+  }).connect(stabFilter);
+  stabSamplers[g] = sampler;
+  return sampler;
+}
+
+// Preload all stab samplers at module init
+SUPPORTED_DRUM_SAMPLE_GENRES.forEach(g => ensureStabSampler(g));
+
+function volumeDbFromVelocity(velocity = 0.8, baseDb = -6) {
+  const v = Math.max(0.001, Math.min(1, velocity));
+  return baseDb + (20 * Math.log10(v));
+}
+
+function getCurrentDrumKit() {
+  return drumSampleKits[currentGenre] || null;
+}
+
+function triggerStab(event, time, chordToPlay = currentChordInfo.chord) {
+  const velocity = event.velocity || 0.72;
+  chordToPlay.forEach((note, i) => {
+    const noteTime = time + i * 0.015;
+    raveSynth.triggerAttackRelease(note, event.gate || "8n", noteTime, velocity);
+  });
+}
+
+function triggerKick(event, time) {
+  const velocity = event.velocity || 0.8;
+  const kit = getCurrentDrumKit();
+  if (!kit?.kickSample?.loaded) return;
+  kit.kickSample.volume.setValueAtTime(volumeDbFromVelocity(velocity, -5), time);
+  kit.kickSample.start(time);
+}
+
+function triggerSnare(event, time) {
+  const velocity = event.velocity || 0.75;
+  const kit = getCurrentDrumKit();
+  if (!kit?.snareSample?.loaded) return;
+  kit.snareSample.volume.setValueAtTime(volumeDbFromVelocity(velocity, -7), time);
+  kit.snareSample.start(time);
+}
+
+function triggerHat(event, time) {
+  const velocity = event.velocity || 0.5;
+  const kit = getCurrentDrumKit();
+  if (!kit?.hatSample?.loaded) return;
+  kit.hatSample.volume.setValueAtTime(volumeDbFromVelocity(velocity, -10), time);
+  kit.hatSample.start(time);
+}
+
+export function applyGenreScene(genre = currentGenre) {
+  const scene = GENRE_SCENES[genre] || GENRE_SCENES.techno;
+
+  // Use stab sampler if loaded, but prefer synth for genres where it sounds better
+  const synthPreferredGenres = ['tropical'];
+  const sampler = ensureStabSampler(genre);
+  if (sampler?.loaded && !synthPreferredGenres.includes(genre)) {
+    setRaveSynth(sampler);
+  } else if (scene.raveSynth === 'dnbReese') {
     setRaveSynth(dnbReese);
   } else if (scene.raveSynth === 'tropicalPluck') {
     setRaveSynth(tropicalPluck);
@@ -407,19 +541,12 @@ export function applyGenreScene(genre = currentGenre, atTime) {
     setRaveSynth(technoStab);
   }
 
-  if (kick?.oscillator?.frequency) {
-    setParamAtTime(kick.oscillator.frequency, scene.kick.frequency, time);
-  }
-  if (typeof scene.kick.octaves === 'number') {
-    kick.octaves = scene.kick.octaves;
-  }
-
-  setParamAtTime(hihatFilter.frequency, scene.hihat.highpass, time);
-  setParamAtTime(sidechain.ratio, scene.sidechain.ratio, time);
-  setParamAtTime(sidechain.threshold, scene.sidechain.threshold, time);
-  setParamAtTime(stabReverb.wet, scene.stab.wet, time);
-  setParamAtTime(stabFilter.frequency, scene.stab.lowpass, time);
-  setParamAtTime(acidDistortion.wet, scene.acid.drive, time);
+  hihatFilter.frequency.value = scene.hihat.highpass;
+  sidechain.ratio.value = scene.sidechain.ratio;
+  sidechain.threshold.value = scene.sidechain.threshold;
+  if (stabReverb.wet) stabReverb.wet.value = scene.stab.wet;
+  stabFilter.frequency.value = scene.stab.lowpass;
+  acidDistortion.wet.value = scene.acid.drive;
 
   if (typeof scene.sub.low === 'number') subEQ.low.value = scene.sub.low;
   if (typeof scene.sub.mid === 'number') subEQ.mid.value = scene.sub.mid;
@@ -427,6 +554,7 @@ export function applyGenreScene(genre = currentGenre, atTime) {
   if (typeof scene.sub.volume === 'number') subBass.volume.value = scene.sub.volume;
 
   currentSceneHumanize = scene.humanize || currentSceneHumanize;
+  ensureDrumSampleKit(genre);
 }
 
 // Mute states - initialized from saved data
@@ -537,21 +665,220 @@ export function isApproachingTransition(bar) {
   return isApproachingTransitionForGenre(currentGenre, bar);
 }
 
-// Generate patterns based on section and energy
+// Convert binary pattern array to step event array for the sequencer
+function binaryToStepEvents(pattern, velocity = 0.8, gate = '16n') {
+  return pattern.map(on => ({
+    on: !!on,
+    velocity: on ? velocity : 0,
+    gate,
+    accent: false,
+    slide: false
+  }));
+}
+
+// Generate patterns based on section and energy (main branch logic - simple & groovy)
 export function generatePatterns(section, bar, energy) {
-  return generateGenrePatterns(
-    currentGenre,
-    {
-      section,
-      bar,
-      energy,
-      tension: tensionLevel,
-      chordInfo: currentChordInfo,
-      acidSequence
-    },
-    genreGenerators,
-    patternBank
-  );
+  const patterns = {};
+  const isFill = isApproachingTransitionForGenre(currentGenre, bar);
+
+  if (isFill) {
+    patterns.kick = binaryToStepEvents(patternBank.kick.fill);
+    patterns.snare = binaryToStepEvents(patternBank.snare.fill);
+    patterns.hihat = binaryToStepEvents(new Array(16).fill(1), 0.6, '32n');
+  } else {
+    if (section === 'DROP') {
+      if (currentGenre === 'dnb') {
+        patterns.kick = binaryToStepEvents(patternBank.kick.dnb_jump);
+        patterns.snare = binaryToStepEvents(patternBank.snare.dnb_roll);
+      } else if (currentGenre === 'tropical') {
+        patterns.kick = binaryToStepEvents(patternBank.kick.kygo_bounce);
+        patterns.snare = binaryToStepEvents(patternBank.snare.kygo_clap);
+      } else if (currentGenre === 'dubstep') {
+        patterns.kick = binaryToStepEvents(patternBank.kick.dubstep_roll);
+        patterns.snare = binaryToStepEvents(patternBank.snare.dubstep_trap || patternBank.snare.dubstep_basic);
+      } else if (currentGenre === 'trance') {
+        patterns.kick = binaryToStepEvents(patternBank.kick.trance_uplifting);
+        patterns.snare = binaryToStepEvents(patternBank.snare.trance_uplift);
+      } else if (currentGenre === 'house') {
+        patterns.kick = binaryToStepEvents(patternBank.kick.house_drive);
+        patterns.snare = binaryToStepEvents(patternBank.snare.house_clap);
+      } else if (currentGenre === 'garage') {
+        patterns.kick = binaryToStepEvents(patternBank.kick.garage_shuffle);
+        patterns.snare = binaryToStepEvents(patternBank.snare.garage_ghost || patternBank.snare.garage_clap);
+      } else {
+        patterns.kick = binaryToStepEvents(bar % 8 < 4 ? patternBank.kick.chicago : patternBank.kick.detroit);
+        patterns.snare = binaryToStepEvents(energy > 70 ? patternBank.snare.detroit : patternBank.snare.backbeat);
+      }
+    } else if (section === 'MAIN') {
+      if (currentGenre === 'dnb') {
+        const dnbKicks = [patternBank.kick.dnb_basic, patternBank.kick.dnb_amen];
+        patterns.kick = binaryToStepEvents(dnbKicks[Math.floor((bar / 4) % dnbKicks.length)]);
+        patterns.snare = binaryToStepEvents(patternBank.snare.dnb_basic);
+      } else if (currentGenre === 'tropical') {
+        patterns.kick = binaryToStepEvents(patternBank.kick.kygo_basic);
+        patterns.snare = binaryToStepEvents(patternBank.snare.kygo_rim || patternBank.snare.kygo_clap);
+      } else if (currentGenre === 'dubstep') {
+        patterns.kick = binaryToStepEvents(patternBank.kick.dubstep_basic);
+        patterns.snare = binaryToStepEvents(patternBank.snare.dubstep_basic);
+      } else if (currentGenre === 'trance') {
+        patterns.kick = binaryToStepEvents(patternBank.kick.trance_kick);
+        patterns.snare = binaryToStepEvents(patternBank.snare.trance_clap);
+      } else if (currentGenre === 'house') {
+        patterns.kick = binaryToStepEvents(bar % 8 < 4 ? patternBank.kick.house_classic : patternBank.kick.house_shuffle);
+        patterns.snare = binaryToStepEvents(patternBank.snare.house_clap);
+      } else if (currentGenre === 'garage') {
+        patterns.kick = binaryToStepEvents(bar % 8 < 4 ? patternBank.kick.garage_2step : patternBank.kick.garage_shuffle);
+        patterns.snare = binaryToStepEvents(patternBank.snare.garage_clap);
+      } else {
+        const kickStyles = [patternBank.kick.fourOnFloor, patternBank.kick.berlin, patternBank.kick.detroit];
+        patterns.kick = binaryToStepEvents(kickStyles[Math.floor((bar / 4) % kickStyles.length)]);
+        patterns.snare = binaryToStepEvents(patternBank.snare.backbeat);
+      }
+    } else if (section === 'BUILD') {
+      patterns.kick = binaryToStepEvents(patternBank.kick.halfTime);
+      patterns.snare = binaryToStepEvents(patternBank.snare.minimal);
+    } else if (section === 'BREAK') {
+      patterns.kick = binaryToStepEvents(patternBank.kick.minimal);
+      patterns.snare = binaryToStepEvents(new Array(16).fill(0));
+    } else {
+      patterns.kick = binaryToStepEvents(patternBank.kick.halfTime);
+      patterns.snare = binaryToStepEvents(patternBank.snare.minimal);
+    }
+
+    // Hi-hat patterns - genre-specific but deterministic
+    if (currentGenre === 'dnb') {
+      patterns.hihat = binaryToStepEvents(
+        tensionLevel > 70 ? new Array(16).fill(1) : [1,0,1,1, 1,0,1,1, 1,0,1,1, 1,0,1,1], 0.6);
+    } else if (currentGenre === 'tropical') {
+      patterns.hihat = binaryToStepEvents(
+        section === 'DROP' ? [0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1] : [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0], 0.5);
+    } else if (currentGenre === 'dubstep') {
+      patterns.hihat = binaryToStepEvents([0,0,1,0, 0,0,0,0, 0,0,1,0, 0,0,0,0], 0.5);
+    } else if (currentGenre === 'trance') {
+      patterns.hihat = binaryToStepEvents([1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0], 0.55);
+    } else if (currentGenre === 'house') {
+      patterns.hihat = binaryToStepEvents([0,1,0,1, 1,0,1,0, 0,1,0,1, 1,0,1,0], 0.55);
+    } else if (currentGenre === 'garage') {
+      patterns.hihat = binaryToStepEvents([0,1,1,0, 1,0,1,0, 0,1,1,0, 1,0,1,0], 0.55);
+    } else {
+      // Techno - dynamic based on energy AND tension
+      const hihatPattern = [];
+      const hihatDensity = (energy / 100) * 0.5 + (tensionLevel / 100) * 0.5;
+      for (let i = 0; i < 16; i++) {
+        if (tensionLevel > 70 && i % 2 === 1) {
+          hihatPattern[i] = 1;
+        } else {
+          hihatPattern[i] = Math.random() < hihatDensity ? 1 : 0;
+        }
+      }
+      patterns.hihat = binaryToStepEvents(hihatPattern, 0.55);
+    }
+  }
+
+  // Simple stab patterns - sparse for impact
+  const stabPatterns = [
+    [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+    [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+    [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,0],
+    new Array(16).fill(0)
+  ];
+
+  if (section === 'BREAK') {
+    patterns.stab = binaryToStepEvents(stabPatterns[3], 0.7, '8n');
+  } else if (section === 'DROP') {
+    patterns.stab = binaryToStepEvents(bar % 4 === 0 ? stabPatterns[0] : stabPatterns[3], 0.8, '8n');
+  } else if (section === 'BUILD') {
+    patterns.stab = binaryToStepEvents(bar % 2 === 1 ? stabPatterns[2] : stabPatterns[3], 0.7, '8n');
+  } else if (section === 'MAIN') {
+    patterns.stab = binaryToStepEvents(bar % 2 === 0 ? stabPatterns[1] : stabPatterns[3], 0.7, '8n');
+  } else {
+    patterns.stab = binaryToStepEvents(bar % 4 === 0 ? stabPatterns[1] : stabPatterns[3], 0.65, '8n');
+  }
+
+  return patterns;
+}
+
+function cloneStabLane(stabLane = []) {
+  return stabLane.map((step) => ({ ...step }));
+}
+
+function shouldUseMotif(section) {
+  return section === 'MAIN' || section === 'DROP' || section === 'BUILD';
+}
+
+function applyMotifMemoryToStabs(stabLane, section, bar) {
+  if (!shouldUseMotif(section) || !Array.isArray(stabLane) || stabLane.length === 0) {
+    return stabLane;
+  }
+
+  const profile = currentMoodProfile || MOOD_PROFILES.driving;
+  const motifBars = Math.max(2, profile.motifMemoryBars || 4);
+  const isExpired = stabMotifMemory.startBar < 0 || (bar - stabMotifMemory.startBar) >= motifBars;
+  const sectionChanged = stabMotifMemory.section !== section;
+
+  if (!stabMotifMemory.lane || isExpired || sectionChanged) {
+    stabMotifMemory.section = section;
+    stabMotifMemory.startBar = bar;
+    stabMotifMemory.lane = cloneStabLane(stabLane);
+    return stabLane;
+  }
+
+  const retention = Math.max(0, Math.min(1, profile.motifRetention || 0.7));
+  const mutateChance = Math.max(0, Math.min(1, profile.motifMutationChance || 0.12));
+  const merged = cloneStabLane(stabLane);
+  const motifLane = stabMotifMemory.lane;
+
+  for (let i = 0; i < merged.length; i++) {
+    const motifStep = motifLane[i];
+    const step = merged[i];
+    if (!motifStep) continue;
+
+    if (motifStep.on && Math.random() < retention) {
+      step.on = true;
+      step.velocity = Math.max(step.velocity || 0, (motifStep.velocity || 0.7) * 0.95);
+      step.gate = step.gate || motifStep.gate || '8n';
+      step.accent = !!step.accent || !!motifStep.accent;
+    } else if (step.on && Math.random() < mutateChance) {
+      step.on = false;
+      step.velocity = 0;
+    }
+  }
+
+  return merged;
+}
+
+function applyCallResponseToStabs(stabLane, section, bar) {
+  if (!shouldUseMotif(section) || !Array.isArray(stabLane) || stabLane.length === 0) {
+    return stabLane;
+  }
+
+  const profile = currentMoodProfile || MOOD_PROFILES.driving;
+  const responseAmount = Math.max(0, Math.min(1, profile.callResponseAmount || 0));
+  if (responseAmount <= 0) return stabLane;
+
+  // Alternate bars: even bars carry call, odd bars carry response.
+  if (bar % 2 === 0) return stabLane;
+
+  const delay = Math.max(1, Math.min(stabLane.length - 1, profile.callResponseDelaySteps || 2));
+  const withResponse = cloneStabLane(stabLane);
+
+  for (let i = 0; i < stabLane.length; i++) {
+    const src = stabLane[i];
+    if (!src?.on) continue;
+    if (i % 4 !== 0 && !src.accent) continue;
+
+    const targetIdx = (i + delay) % stabLane.length;
+    const target = withResponse[targetIdx];
+    if (!target) continue;
+    if (target.on) continue;
+
+    target.on = true;
+    target.velocity = Math.max(target.velocity || 0, (src.velocity || 0.7) * responseAmount);
+    target.gate = src.gate || '8n';
+    target.accent = false;
+  }
+
+  return withResponse;
 }
 
 // Sequences
@@ -660,7 +987,7 @@ function ensureLoopsCreated() {
     const event = toStepEvent(currentKickPattern[step]);
     if (event.on && !muteStates.kick) {
       const humanTime = humanize(time, currentSceneHumanize.kick);
-      kick.triggerAttackRelease("C1", event.gate || "16n", humanTime, event.velocity || 0.8);
+      triggerKick(event, humanTime);
       sidechain.ratio.setValueAtTime(20, humanTime);
       sidechain.ratio.linearRampToValueAtTime(8, humanTime + 0.1);
       Tone.Draw.schedule(() => {
@@ -678,7 +1005,7 @@ function ensureLoopsCreated() {
     const event = toStepEvent(currentSnarePattern[step]);
     if (event.on && !muteStates.snare) {
       const humanTime = humanize(time, currentSceneHumanize.snare);
-      snare.triggerAttackRelease(event.gate || "16n", humanTime, event.velocity || 0.75);
+      triggerSnare(event, humanTime);
       Tone.Draw.schedule(() => {
         flashIndicator('snareIndicator');
         if (window.GameAPI && window.GameAPI.onSnare) {
@@ -694,10 +1021,7 @@ function ensureLoopsCreated() {
     const event = toStepEvent(currentHihatPattern[step]);
     if (event.on && !muteStates.hat) {
       const humanTime = humanize(time, currentSceneHumanize.hihat);
-      const velocity = Math.max(0.2, event.velocity || 0.5);
-      const duration = event.gate || "16n";
-      hihat.triggerAttackRelease(duration, humanTime);
-      hihat.volume.setValueAtTime(-15 + (velocity * 10), humanTime);
+      triggerHat(event, humanTime);
       Tone.Draw.schedule(() => {
         flashIndicator('hatIndicator');
         if (Math.random() < 0.2 && window.GameAPI && window.GameAPI.onHihat) {
@@ -759,10 +1083,7 @@ function ensureLoopsCreated() {
         );
       }
 
-      chordToPlay.forEach((note, i) => {
-        const noteTime = humanTime + i * 0.015;
-        raveSynth.triggerAttackRelease(note, event.gate || "8n", noteTime, event.velocity || 0.72);
-      });
+      triggerStab(event, humanTime, chordToPlay);
 
       Tone.Draw.schedule(() => {
         flashIndicator('stabIndicator');

@@ -132,7 +132,7 @@ export function createGameSounds({ sidechain, acidFilter1, stabReverb, savedData
         envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.01 },
         filter: { frequency: 3000, rolloff: -12 },
         filterEnvelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01, baseFrequency: 1500, octaves: -1 },
-        volume: -12
+        volume: -22
       }).connect(sidechain),
 
       // 1: Acid stab - mimics the 303 acid line
@@ -141,14 +141,14 @@ export function createGameSounds({ sidechain, acidFilter1, stabReverb, savedData
         envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.02 },
         filter: { frequency: 2000, rolloff: -24, Q: 8 },
         filterEnvelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.02, baseFrequency: 800, octaves: 2 },
-        volume: -10
+        volume: -20
       }).connect(acidFilter1), // Route through acid filter for consistency
 
       // 2: Chord stab - harmonizes with the techno stabs
       new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "square4" },
         envelope: { attack: 0.001, decay: 0.02, sustain: 0, release: 0.01 },
-        volume: -14
+        volume: -24
       }).connect(stabReverb), // Use the stab reverb for space
 
       // 3: Echo Pulse - metallic sound with delay
@@ -157,7 +157,7 @@ export function createGameSounds({ sidechain, acidFilter1, stabReverb, savedData
         envelope: { attack: 0.001, decay: 0.04, sustain: 0.2, release: 0.05 },
         filter: { frequency: 4000, rolloff: -12, Q: 3 },
         filterEnvelope: { attack: 0.001, decay: 0.02, sustain: 0.5, release: 0.02, baseFrequency: 2000, octaves: 2 },
-        volume: -8
+        volume: -18
       }).connect(new Tone.FeedbackDelay("16n", 0.5).connect(gameReverb)), // Add echo effect
 
       // 4: Pluck - avoid PluckSynth in non-secure contexts (requires AudioWorklet)
@@ -166,13 +166,13 @@ export function createGameSounds({ sidechain, acidFilter1, stabReverb, savedData
             attackNoise: 0.8,
             dampening: 4000,
             resonance: 0.9,
-            volume: -10
+            volume: -20
           }).connect(gameReverb)
         : new Tone.MonoSynth({
             oscillator: { type: "triangle" },
             envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.08 },
             filter: { frequency: 3200, rolloff: -12, Q: 2 },
-            volume: -10
+            volume: -20
           }).connect(gameReverb),
 
       // 5: Pew Pew - classic laser with pitch sweep
@@ -180,27 +180,27 @@ export function createGameSounds({ sidechain, acidFilter1, stabReverb, savedData
         oscillator: { type: "sine" },
         envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.05 },
         portamento: 0.08, // Glide between pitches
-        volume: -6
+        volume: -16
       }).connect(sidechain)
     ],
 
     currentLaserSound: savedData.settings?.laserSound || 0, // Load saved laser sound preference
 
-    // Explosion - filtered noise burst that sounds like a snare hit
+    // Explosion - muted (was adding noise over the music)
     explosion: new Tone.NoiseSynth({
       noise: { type: "pink" },
       envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.02 },
-      volume: -8
-    }).connect(new Tone.Filter(1200, "highpass").connect(sidechain)),
+      volume: -Infinity
+    }).connect(sidechain),
 
-    // Enemy destroy - distorted version of the enemy spawn sound
+    // Enemy destroy - muted (was adding noise over the music)
     enemyDestroy: new Tone.MonoSynth({
       oscillator: { type: "sawtooth" },
       envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 },
       filter: { frequency: 800, rolloff: -24, Q: 8 },
       filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1, baseFrequency: 200, octaves: 2 },
-      volume: -10
-    }).connect(new Tone.Distortion(0.8).connect(sidechain)),
+      volume: -Infinity
+    }).connect(sidechain),
 
     // Obstacle hit - low thud with pitch bend
     obstacleHit: new Tone.MonoSynth({

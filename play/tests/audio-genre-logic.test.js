@@ -81,17 +81,19 @@ test('16-step adapter maps to 24-step with pulse preservation', () => {
   assert.equal(out.filter(Boolean).length, source.filter(Boolean).length);
 });
 
-test('native 24-step mode is opt-in for house and garage', () => {
+test('native 24-step mode is opt-in for house, garage, and tropical', () => {
   setNative24Enabled(false);
   assert.equal(isNative24Enabled(), false);
   assert.equal(getStepCountForGenre('house'), 16);
   assert.equal(getStepCountForGenre('garage'), 16);
+  assert.equal(getStepCountForGenre('tropical'), 16);
   assert.equal(getStepCountForGenre('techno'), 16);
 
   setNative24Enabled(true);
   assert.equal(isNative24Enabled(), true);
   assert.equal(getStepCountForGenre('house'), 24);
   assert.equal(getStepCountForGenre('garage'), 24);
+  assert.equal(getStepCountForGenre('tropical'), 24);
   assert.equal(getStepCountForGenre('techno'), 16);
 
   // Leave test process in default-safe state.
@@ -137,9 +139,9 @@ test('generators return complete 24-step event lanes', () => {
   }
 });
 
-test('house and garage emit 24-step lanes when native24 mode enabled', () => {
+test('house, garage, and tropical emit 24-step lanes when native24 mode enabled', () => {
   setNative24Enabled(true);
-  for (const genre of ['house', 'garage']) {
+  for (const genre of ['house', 'garage', 'tropical']) {
     const section = getSectionForGenre(genre, 20);
     const patterns = generateGenrePatterns(
       genre,

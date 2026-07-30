@@ -16,6 +16,8 @@ export const DEFAULT_SETTINGS = {
     touchSensitivity: 30,
     laserSound: 0,
     musicPreset: 'driving',
+    drumSourceMode: 'synth',
+    stabSourceMode: 'synth',
     customMusic: {
       bpm: 128,
       energy: 60,
@@ -69,6 +71,8 @@ function migrateData(data) {
         touchSensitivity: 30,
         laserSound: 0,
         musicPreset: 'driving',
+        drumSourceMode: 'synth',
+        stabSourceMode: 'synth',
         customMusic: {
           bpm: 128,
           energy: 60,

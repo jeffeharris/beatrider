@@ -16,12 +16,13 @@ import {
   ensureTransportScheduled,
   applyTension,
   applyGenreScene,
+  setMoodProfile,
+  getMoodProfileKey,
   setNative24ModeEnabled,
   isNative24ModeEnabled,
   setAudioMetricsEnabled,
   isAudioMetricsEnabled,
-  GENRE_CONFIGS,
-  kick
+  GENRE_CONFIGS
 } from './music-engine.js';
 import { gameSounds } from './game-sounds.js';
 import { logAudioDebug } from './debug-log.js';
@@ -35,13 +36,13 @@ const uiState = {
 
 // Music preset definitions
 const MUSIC_PRESETS = {
-  'chill': { energy: 30, tension: 20, description: 'Laid back minimal' },
-  'driving': { energy: 60, tension: 40, description: 'Classic driving' },
-  'peak': { energy: 85, tension: 70, description: 'Peak time energy' },
-  'acid': { energy: 75, tension: 90, description: '303 madness' },
-  'dark': { energy: 40, tension: 80, description: 'Dark & brooding' },
-  'hypnotic': { energy: 50, tension: 60, description: 'Repetitive & hypnotic' },
-  'anthem': { energy: 90, tension: 60, description: 'Stadium anthem' }
+  'chill': { energy: 28, tension: 22, description: 'Smooth pockets, long motifs', profile: 'chill' },
+  'driving': { energy: 62, tension: 42, description: 'Steady pulse, evolving hooks', profile: 'driving' },
+  'peak': { energy: 86, tension: 74, description: 'Dense drop energy', profile: 'peak' },
+  'acid': { energy: 78, tension: 90, description: 'Mutating acid pressure', profile: 'acid' },
+  'dark': { energy: 42, tension: 82, description: 'Sparse and moody', profile: 'dark' },
+  'hypnotic': { energy: 52, tension: 58, description: 'Long memory, subtle changes', profile: 'hypnotic' },
+  'anthem': { energy: 92, tension: 64, description: 'Big calls and responses', profile: 'anthem' }
 };
 
 // Difficulty preset definitions
@@ -62,8 +63,6 @@ let genreOverlayFadeOutTimeout = null;
 
 let currentDifficulty = DIFFICULTY_PRESETS.normal;
 const isAudioRunning = () => Tone?.context?.state === 'running';
-let pendingGenreSwitch = null;
-let pendingGenreSwitchTimer = null;
 const withTransport = (fn) => {
   if (!isAudioRunning()) return false;
   fn(Tone.Transport);
@@ -201,15 +200,12 @@ function switchGenre(genre) {
 }
 
 function switchGenreWithOptions(genre, options = {}) {
-  const {
-    scheduleTime = null,
-    bpmRampMeasures = 1
-  } = options;
+  const { bpmRampMeasures = 1 } = options;
   const previousGenre = currentGenre;
   setCurrentGenre(genre);
   const config = GENRE_CONFIGS[genre];
   logAudioDebug(
-    `apply genre=${genre} from=${previousGenre || 'none'} scheduled=${typeof scheduleTime === 'number'} rampMeasures=${bpmRampMeasures}`
+    `apply genre=${genre} from=${previousGenre || 'none'} rampMeasures=${bpmRampMeasures}`
   );
 
   // Track genre change (only if actually changed)
@@ -228,11 +224,12 @@ function switchGenreWithOptions(genre, options = {}) {
   bpmSlider.max = config.bpmMax;
   bpmSlider.value = config.bpmDefault;
 
-  // Update BPM (ramped when scheduled on a quantized boundary)
-  if (typeof scheduleTime === 'number' && Tone.Transport.state === 'started') {
+  // Ramp BPM over a few bars when playing, snap when stopped
+  if (Tone.Transport.state === 'started') {
+    const now = Tone.now();
     const rampSeconds = Tone.Time(`${Math.max(1, bpmRampMeasures)}m`).toSeconds();
-    Tone.Transport.bpm.cancelAndHoldAtTime(scheduleTime);
-    Tone.Transport.bpm.linearRampToValueAtTime(config.bpmDefault, scheduleTime + rampSeconds);
+    Tone.Transport.bpm.cancelAndHoldAtTime(now);
+    Tone.Transport.bpm.linearRampToValueAtTime(config.bpmDefault, now + rampSeconds);
   } else {
     withTransport((transport) => {
       transport.bpm.value = config.bpmDefault;
@@ -241,9 +238,7 @@ function switchGenreWithOptions(genre, options = {}) {
   document.getElementById('bpmDisplay').textContent = config.bpmDefault;
 
   // Apply complete genre scene (sound design + mix profile + timing profile)
-  if (typeof kick !== 'undefined') {
-    applyGenreScene(genre, scheduleTime);
-  }
+  applyGenreScene(genre);
 
   // Update button styles
   const genreButtonMap = {
@@ -265,61 +260,19 @@ function switchGenreWithOptions(genre, options = {}) {
   });
 
   // Force pattern update on next bar
-  updatePatterns(typeof scheduleTime === 'number' ? scheduleTime : 0);
+  updatePatterns();
 }
 
-function requestGenreSwitch(genre, options = {}) {
-  const {
-    quantized = true,
-    bpmRampMeasures = null
-  } = options;
-
-  const currentBpm = withTransport((transport) => transport.bpm.value)
+function requestGenreSwitch(genre) {
+  const currentBpm = Tone.Transport.state === 'started'
     ? Tone.Transport.bpm.value
     : parseInt(document.getElementById('bpmSlider')?.value || '132', 10);
   const targetBpm = GENRE_CONFIGS[genre]?.bpmDefault || currentBpm;
-  const autoRampMeasures = getRampMeasuresForBpmDelta(Math.abs(targetBpm - currentBpm));
-  const finalRampMeasures = typeof bpmRampMeasures === 'number' ? bpmRampMeasures : autoRampMeasures;
+  const bpmRampMeasures = getRampMeasuresForBpmDelta(Math.abs(targetBpm - currentBpm));
   logAudioDebug(
-    `request genre=${genre} quantized=${quantized} bpm=${Math.round(currentBpm)}->${Math.round(targetBpm)} rampMeasures=${finalRampMeasures}`
+    `genre switch=${genre} bpm=${Math.round(currentBpm)}->${Math.round(targetBpm)} rampMeasures=${bpmRampMeasures}`
   );
-
-  if (!quantized || Tone.Transport.state !== 'started') {
-    switchGenreWithOptions(genre, { bpmRampMeasures: finalRampMeasures });
-    return;
-  }
-
-  pendingGenreSwitch = {
-    genre,
-    bpmRampMeasures: finalRampMeasures,
-    requestBar: currentBar
-  };
-
-  const genreName = GENRE_CONFIGS[genre]?.name || genre;
-  const status = document.getElementById('status');
-  if (status) {
-    status.textContent = `NEXT: ${genreName}`;
-  }
-
-  if (!pendingGenreSwitchTimer) {
-    pendingGenreSwitchTimer = setInterval(() => {
-      if (!pendingGenreSwitch) return;
-      if (Tone.Transport.state !== 'started') {
-        const queued = pendingGenreSwitch;
-        pendingGenreSwitch = null;
-        logAudioDebug(`flush queued genre=${queued.genre} (transport not started)`);
-        switchGenreWithOptions(queued.genre, { bpmRampMeasures: queued.bpmRampMeasures });
-        return;
-      }
-
-      if (currentBar !== pendingGenreSwitch.requestBar) {
-        const queued = pendingGenreSwitch;
-        pendingGenreSwitch = null;
-        logAudioDebug(`flush queued genre=${queued.genre} at bar=${currentBar}`);
-        switchGenreWithOptions(queued.genre, { bpmRampMeasures: queued.bpmRampMeasures });
-      }
-    }, 50);
-  }
+  switchGenreWithOptions(genre, { bpmRampMeasures });
 }
 
 // Handle touch events for transparency
@@ -493,6 +446,7 @@ export function setupMusicUI() {
       // Apply preset values (no BPM - let genre control that)
       setEnergyLevel(preset.energy);
       setTensionLevel(preset.tension);
+      setMoodProfile(preset.profile || presetKey);
 
       // Update sliders (energy and tension only)
       document.getElementById('energySlider').value = preset.energy;
@@ -553,8 +507,9 @@ export function setupMusicUI() {
   document.getElementById('bpmDisplay').textContent = 132;
   // Set initial genre button highlighting
   switchGenre('techno');
+  setMoodProfile('driving');
 
-  // Debug/runtime A/B toggle for native 24-step on supported genres (house/garage)
+  // Debug/runtime A/B toggle for native 24-step on supported genres (house/garage/tropical)
   window.setNative24Mode = (enabled) => {
     setNative24ModeEnabled(enabled);
     updateNative24UI(isNative24ModeEnabled());
@@ -635,12 +590,15 @@ export function setupMusicUI() {
         const preset = MUSIC_PRESETS[savedData.settings.musicPreset];
         setEnergyLevel(preset.energy);
         setTensionLevel(preset.tension);
+        setMoodProfile(preset.profile || savedData.settings.musicPreset);
         document.getElementById('musicPresetSelector').value = savedData.settings.musicPreset;
         document.getElementById('musicPresetDisplay').textContent = preset.description;
         document.getElementById('energySlider').value = preset.energy;
         document.getElementById('energyDisplay').textContent = preset.energy;
         document.getElementById('tensionSlider').value = preset.tension;
         document.getElementById('tensionDisplay').textContent = preset.tension;
+      } else {
+        setMoodProfile(getMoodProfileKey());
       }
 
       // Apply saved difficulty UI
