@@ -1,6 +1,7 @@
 const TEST_MODE_PARAM = 'testMode';
 const DEFAULT_SEED = 1337;
-const FIXED_STEP_MS = 1000 / 60;
+export const FIXED_STEP_MS = 10;
+const STEP_EPSILON_MS = 1e-9;
 const MAX_RENDERED_ENTITIES = 20;
 
 function currentSearch() {
@@ -206,6 +207,7 @@ export function installTestModeRuntime(game, Phaser) {
   configureDeterministicRandom(Phaser, options);
   let clockMs = 0;
   let loopTime = 0;
+  let pendingMs = 0;
   let scene = null;
 
   const render = () => JSON.stringify(buildGameSnapshot(scene, options, clockMs));
@@ -228,6 +230,7 @@ export function installTestModeRuntime(game, Phaser) {
       game.loop.smoothStep = false;
       loopTime = game.loop.lastTime || performance.now();
       clockMs = 0;
+      pendingMs = 0;
       applyTestScenario(scene, options.scenario);
     },
     applyScenario(name) {
@@ -267,21 +270,22 @@ export function installTestModeRuntime(game, Phaser) {
 
   window.BeatriderTest = runtime;
   window.advanceTime = async (durationMs = FIXED_STEP_MS) => {
-    const duration = Math.max(0, Number(durationMs) || 0);
-    if (!scene || duration === 0) return;
+    const duration = Number(durationMs);
+    if (!scene || !Number.isFinite(duration) || duration <= 0) return;
 
-    let remaining = duration;
-    while (remaining > 0.0001) {
-      const step = Math.min(FIXED_STEP_MS, remaining);
-      loopTime += step;
-      clockMs += step;
+    pendingMs += duration;
+    const stepCount = Math.floor((pendingMs + STEP_EPSILON_MS) / FIXED_STEP_MS);
+    pendingMs = Math.max(0, pendingMs - stepCount * FIXED_STEP_MS);
+
+    for (let i = 0; i < stepCount; i++) {
+      loopTime += FIXED_STEP_MS;
+      clockMs += FIXED_STEP_MS;
       scene.__testTimeAdvancing = true;
       try {
         game.loop.step(loopTime);
       } finally {
         scene.__testTimeAdvancing = false;
       }
-      remaining -= step;
     }
   };
 

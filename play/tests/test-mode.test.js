@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   buildGameSnapshot,
   createSeededRandom,
+  FIXED_STEP_MS,
   getTestOptions,
+  installTestModeRuntime,
   isTestMode
 } from '../src/testing/test-mode.js';
 import { createSilentGameSounds } from '../src/testing/silent-game-sounds.js';
@@ -69,4 +71,73 @@ test('silent game sounds implement the sound API without scheduling audio', () =
     sounds.jumpCharge.frequency.exponentialRampToValueAtTime(440, 1);
     sounds.jumpCharge.triggerRelease();
   });
+});
+
+test('advanceTime uses cohesive 10ms steps and carries partial time between calls', async () => {
+  const originalWindow = globalThis.window;
+  const originalRandom = Math.random;
+  const stepTimes = [];
+  const loop = {
+    lastTime: 100,
+    smoothStep: true,
+    sleep() {},
+    step(time) {
+      stepTimes.push(time);
+      this.lastTime = time;
+    }
+  };
+  const game = { loop };
+  const scene = {
+    stateSlices: {
+      player: {},
+      combat: {},
+      flow: {},
+      input: {}
+    },
+    enemies: [],
+    bullets: [],
+    obstacles: [],
+    powerUps: [],
+    floatingStars: [],
+    trails: []
+  };
+
+  try {
+    globalThis.window = {
+      location: { search: '?testMode=1&seed=42' },
+      innerWidth: 1280,
+      innerHeight: 720
+    };
+    const runtime = installTestModeRuntime(game, {});
+    runtime.attachScene(scene);
+
+    await window.advanceTime(7);
+    assert.equal(runtime.clockMs, 0);
+    assert.deepEqual(stepTimes, []);
+
+    await window.advanceTime(3);
+    assert.equal(runtime.clockMs, FIXED_STEP_MS);
+    assert.deepEqual(stepTimes, [110]);
+
+    await window.advanceTime(25);
+    assert.equal(runtime.clockMs, 30);
+    assert.deepEqual(stepTimes, [110, 120, 130]);
+
+    await window.advanceTime(5);
+    assert.equal(runtime.clockMs, 40);
+    assert.deepEqual(stepTimes, [110, 120, 130, 140]);
+
+    await window.advanceTime(Infinity);
+    await window.advanceTime(-10);
+    assert.equal(runtime.clockMs, 40);
+
+    for (let i = 0; i < 100; i++) {
+      await window.advanceTime(0.1);
+    }
+    assert.equal(runtime.clockMs, 50);
+    assert.equal(stepTimes.at(-1), 150);
+  } finally {
+    Math.random = originalRandom;
+    globalThis.window = originalWindow;
+  }
 });

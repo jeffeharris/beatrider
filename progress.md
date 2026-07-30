@@ -16,6 +16,8 @@ Implemented:
 - Two independent seeded enemy runs now produce byte-identical state snapshots.
 - Shield collision and power-up collection scenarios passed; screenshots were inspected.
 - The unflagged preview still follows the normal startup path. Its existing preview-only `/sw.js` 404 remains because the worker lives above `play/dist`.
+- The deterministic clock now uses cohesive 10 ms simulation steps and carries
+  partial requested time across `advanceTime()` calls.
 
 TODO:
 - None. Final unit tests, production build, diff check, deterministic replay,
