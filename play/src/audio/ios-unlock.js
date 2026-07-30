@@ -10,8 +10,16 @@ export const isSafariAudio = /Safari/.test(navigator.userAgent) && !/Chrome/.tes
 export let iosAudioUnlocked = false;
 let unlockInFlight = null;
 
-// Silent audio data URI (tiny valid MP3) - most reliable iOS unlock method
-const IOS_UNLOCK_AUDIO_PATHS = ['/play/audio/unlock.wav', './audio/unlock.wav'];
+// Near-silent one-shot played through an HTML5 Audio element — the most reliable
+// way to unlock audio on iOS. The base-relative path is derived rather than
+// hardcoded so this resolves under both `/play/` (web) and the native WebView's
+// origin root; the literal fallbacks stay as a last resort.
+const UNLOCK_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+const IOS_UNLOCK_AUDIO_PATHS = [
+  `${UNLOCK_BASE.endsWith('/') ? UNLOCK_BASE : `${UNLOCK_BASE}/`}audio/unlock.wav`,
+  './audio/unlock.wav',
+  '/play/audio/unlock.wav',
+];
 
 /**
  * @param {object|null} ToneModule - The Tone.js namespace, or null for HTML5-only unlock

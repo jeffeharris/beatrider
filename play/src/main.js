@@ -1,6 +1,12 @@
 import Phaser from 'phaser';
 import StartupScene from './scenes/startup-scene.js';
 import { useCanvas, isMac, isSafariBrowser, isChrome } from './config.js';
+import { initNative } from './native/bootstrap.js';
+
+// Native shell setup (status bar, stale service workers). No-ops on the web, and
+// deliberately not awaited — nothing in the boot path depends on it, and the
+// game should never wait on a plugin round-trip to show its first frame.
+initNative();
 
 // ============================================
 // ANALYTICS
@@ -120,7 +126,11 @@ setTimeout(() => {
 // SERVICE WORKER (PWA)
 // ============================================
 
-if ('serviceWorker' in navigator) {
+// Skipped in the native build: the bundle is already on local disk, `../sw.js`
+// resolves above the WebView's webroot anyway, and a second cache layer can
+// serve stale assets across an app update. `__NATIVE_BUILD__` is a build-time
+// constant, so this whole block is eliminated from the native bundle.
+if (!__NATIVE_BUILD__ && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('../sw.js')
       .then(registration => {
