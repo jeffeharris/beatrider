@@ -32,15 +32,20 @@
   <meta name="apple-mobile-web-app-title" content="Beatrider">
   <link rel="apple-touch-icon" href="./icon-192.png">
 
-  <!-- Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6SQJ9NR8SD"></script>
+  <!-- Google Analytics (disabled in deterministic test mode) -->
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-6SQJ9NR8SD', {
-      send_page_view: true
-    });
+    window.__BEATRIDER_TEST_MODE__ = new URLSearchParams(window.location.search).get('testMode') === '1';
+    if (!window.__BEATRIDER_TEST_MODE__) {
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function(){ window.dataLayer.push(arguments); };
+      window.gtag('js', new Date());
+      window.gtag('config', 'G-6SQJ9NR8SD', { send_page_view: true });
+
+      const analyticsScript = document.createElement('script');
+      analyticsScript.async = true;
+      analyticsScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-6SQJ9NR8SD';
+      document.head.appendChild(analyticsScript);
+    }
   </script>
 
   <link rel="stylesheet" href="./styles/game.css">

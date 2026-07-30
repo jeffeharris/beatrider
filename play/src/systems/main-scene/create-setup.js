@@ -10,4 +10,5 @@ export function createMainSceneSystem(data) {
   startMusicAndWatchdog.call(this);
   initializeSceneWorldAndHUD.call(this);
   setupSceneGameApi.call(this);
+  window.BeatriderTest?.attachScene(this);
 }
