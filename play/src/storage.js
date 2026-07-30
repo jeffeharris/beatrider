@@ -1,6 +1,8 @@
 // ============================================
 // STORAGE SYSTEM - MUST BE FIRST
 // ============================================
+import { isTestMode } from './testing/test-mode.js';
+
 export const STORAGE_KEY = 'beatrider_data';
 const STORAGE_VERSION = 2; // Version number for migrations
 
@@ -97,6 +99,10 @@ function migrateData(data) {
 }
 
 export function loadGameData() {
+  if (isTestMode()) {
+    return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  }
+
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data) {
@@ -118,6 +124,8 @@ export function loadGameData() {
 }
 
 export function saveGameData(data) {
+  if (isTestMode()) return;
+
   try {
     const current = loadGameData();
     const updated = deepMerge(current, data);
@@ -133,6 +141,8 @@ let saveTimer = null;
 let pendingData = {};
 
 export function saveGameDataDebounced(data) {
+  if (isTestMode()) return;
+
   // Accumulate changes
   pendingData = deepMerge(pendingData, data);
 

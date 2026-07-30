@@ -1,6 +1,8 @@
 import * as Tone from 'tone';
 import { sidechain, acidFilter1, stabReverb } from './music-engine.js';
 import { savedData } from '../storage.js';
+import { isTestMode } from '../testing/test-mode.js';
+import { createSilentGameSounds } from '../testing/silent-game-sounds.js';
 
 const hasSecureAudioWorklet = () =>
   typeof window !== 'undefined' &&
@@ -176,4 +178,6 @@ export function createGameSounds({ sidechain, acidFilter1, stabReverb, savedData
 }
 
 // Eagerly create the game sounds instance with imported dependencies
-export const gameSounds = createGameSounds({ sidechain, acidFilter1, stabReverb, savedData });
+export const gameSounds = isTestMode()
+  ? createSilentGameSounds(savedData)
+  : createGameSounds({ sidechain, acidFilter1, stabReverb, savedData });

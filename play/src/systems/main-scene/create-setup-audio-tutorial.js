@@ -10,6 +10,7 @@ import {
   recoverMusicLoops
 } from '../../audio/music-engine.js';
 import { uiState, updatePlayPauseButton } from '../../audio/music-ui.js';
+import { isTestMode } from '../../testing/test-mode.js';
 
 export function setupSceneVisualBaseAndTutorialUI() {
   this.cameras.main.setBackgroundColor('#000');
@@ -62,6 +63,13 @@ export function setupSceneVisualBaseAndTutorialUI() {
 }
 
 export function startMusicAndWatchdog() {
+  if (isTestMode()) {
+    uiState.isPlaying = false;
+    const status = document.getElementById('status');
+    if (status) status.textContent = 'TEST MODE';
+    return;
+  }
+
   const { flow } = this.stateSlices;
   if (typeof Tone !== 'undefined' && Tone.Transport.state !== 'started') {
     const startMusic = async () => {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { gameState, isMobile } from '../config.js';
 import { unlockIOSAudio } from '../audio/ios-unlock.js';
+import { isTestMode } from '../testing/test-mode.js';
 
 export default class StartupScene extends Phaser.Scene {
   constructor() {
@@ -314,26 +315,33 @@ export default class StartupScene extends Phaser.Scene {
 
         // Dynamically import Tone, MainScene, and music UI in parallel.
         // This defers all AudioContext creation until this user gesture.
-        const [Tone, { default: MainScene }, { setupMusicUI }] = await Promise.all([
-          import('tone'),
+        const testMode = isTestMode();
+        const [Tone, { default: MainScene }, musicUI] = await Promise.all([
+          testMode ? Promise.resolve(null) : import('tone'),
           import('./main-scene.js'),
-          import('../audio/music-ui.js')
+          testMode ? Promise.resolve(null) : import('../audio/music-ui.js')
         ]);
 
         // Fire-and-forget audio init (don't block game start on audio)
-        initializeAudio(Tone).catch((error) => {
-          console.error('Audio init failed:', error);
-        });
+        if (!testMode) {
+          initializeAudio(Tone).catch((error) => {
+            console.error('Audio init failed:', error);
+          });
+        }
 
         // Register the dynamically-loaded Main scene and wire up music UI
         this.scene.add('Main', MainScene, false);
-        setupMusicUI();
+        musicUI?.setupMusicUI();
 
         // Transition to game
-        this.cameras.main.fadeOut(500, 0, 0, 0);
-        this.time.delayedCall(500, () => {
+        if (testMode) {
           this.scene.start('Main', { tutorialMode });
-        });
+        } else {
+          this.cameras.main.fadeOut(500, 0, 0, 0);
+          this.time.delayedCall(500, () => {
+            this.scene.start('Main', { tutorialMode });
+          });
+        }
       } catch (error) {
         console.error('Failed to load game modules:', error);
         gameStarting = false;
@@ -366,6 +374,10 @@ export default class StartupScene extends Phaser.Scene {
 
     // Touch/click to start
     this.input.on('pointerdown', handleStartClick);
+
+    if (isTestMode()) {
+      void startNormalGame();
+    }
   }
 
   drawGrid() {
