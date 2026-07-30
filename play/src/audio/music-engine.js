@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import { savedData } from '../storage.js';
-import { recordSequenceTick, startLatencyProbe } from './latency-probe.js';
+import { recordSequenceTick, attachTone } from './latency-probe.js';
 
 const hasSecureAudioWorklet = () =>
   typeof window !== 'undefined' &&
@@ -1033,7 +1033,8 @@ export function ensureTransportScheduled() {
   transportScheduled = true;
 }
 
-// No-ops unless ?latency=1 (see latency-probe.js). Started at module scope so a
-// cold-start measurement covers the very first bar, which is when a WebView's
-// audio path is least warmed up and worst-behaved.
-startLatencyProbe(Tone);
+// Hand the probe its Tone reference. The probe itself is started far earlier
+// from main.js — this module is only imported once the player starts the game
+// (see the dynamic import in startup-scene.js), which is deliberately after the
+// user gesture that permits an AudioContext.
+attachTone(Tone);
