@@ -19,6 +19,18 @@ let lateTicks = 0;  // callbacks that fired at/after their scheduled audio time
 let totalTicks = 0;
 let overlayEl = null;
 
+// Tone is loaded lazily — startup-scene.js only imports it once the player
+// starts the game, specifically so no AudioContext is created before a user
+// gesture. The probe therefore cannot hold a Tone reference at startup; it is
+// handed one via attachTone() when the audio engine finally loads, and reports
+// "waiting for audio" until then.
+let toneRef = null;
+
+/** Called by music-engine.js at module scope, once Tone is actually loaded. */
+export function attachTone(Tone) {
+  if (Tone) toneRef = Tone;
+}
+
 export function isLatencyProbeEnabled() {
   if (enabled !== null) return enabled;
   enabled = false;
@@ -60,7 +72,7 @@ export function isLatencyProbeEnabled() {
  * - lookAhead:     Tone's scheduler headroom. Absorbs main-thread jank, but it
  *                  does NOT reduce output latency — it only prevents late notes.
  */
-export function getAudioPathInfo(Tone) {
+export function getAudioPathInfo(Tone = toneRef) {
   const ctx = Tone?.context;
   const raw = ctx?.rawContext ?? ctx;
   if (!raw) return null;
@@ -97,6 +109,7 @@ export function getAudioPathInfo(Tone) {
  */
 export function recordSequenceTick(Tone, scheduledTime) {
   if (!isLatencyProbeEnabled()) return;
+  if (Tone && !toneRef) toneRef = Tone;
 
   const ctx = Tone?.context;
   const raw = ctx?.rawContext ?? ctx;
@@ -121,7 +134,7 @@ function percentile(sorted, p) {
  * Full report. Also exposed as `window.__latency()` so it can be pulled from a
  * remote-debugging console on a real handset without any UI.
  */
-export function getLatencyReport(Tone) {
+export function getLatencyReport(Tone = toneRef) {
   const path = getAudioPathInfo(Tone);
   const sorted = [...ticks].sort((a, b) => a - b);
   const mean = ticks.length ? ticks.reduce((a, b) => a + b, 0) / ticks.length : null;
@@ -188,18 +201,24 @@ function ensureOverlay() {
  * a small always-on overlay. Safe to call unconditionally — it no-ops unless
  * the probe is enabled.
  */
-export function startLatencyProbe(Tone, { intervalMs = 500 } = {}) {
+export function startLatencyProbe({ intervalMs = 500 } = {}) {
   if (!isLatencyProbeEnabled()) return () => {};
 
   if (typeof window !== 'undefined') {
-    window.__latency = () => getLatencyReport(Tone);
-    window.__latencyLine = () => formatLatencyReport(getLatencyReport(Tone));
+    window.__latency = () => getLatencyReport();
+    window.__latencyLine = () => formatLatencyReport(getLatencyReport());
   }
 
   const el = ensureOverlay();
   const timer = setInterval(() => {
-    const report = getLatencyReport(Tone);
     if (!el) return;
+    if (!toneRef) {
+      // Expected on the start screen: Tone is not imported until the player
+      // begins, so there is no AudioContext to measure yet.
+      el.textContent = 'latency probe ready\nwaiting for audio…\n(start the game)';
+      return;
+    }
+    const report = getLatencyReport();
     const s = report.scheduling;
     el.textContent = [
       `sr ${report.sampleRate ?? 'n/a'}  state ${report.state ?? 'n/a'}`,

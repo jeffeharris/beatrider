@@ -2,6 +2,13 @@ import * as Phaser from 'phaser';
 import StartupScene from './scenes/startup-scene.js';
 import { useCanvas, isMac, isSafariBrowser, isChrome } from './config.js';
 import { initNative } from './native/bootstrap.js';
+import { startLatencyProbe } from './audio/latency-probe.js';
+
+// No-ops unless ?latency=1 (see latency-probe.js). Started here rather than in
+// music-engine.js so the overlay is visible from the start screen — the engine
+// is not imported until the player begins, and a probe you cannot see before
+// then is easy to mistake for a broken one.
+startLatencyProbe();
 
 // Native shell setup (status bar, stale service workers). No-ops on the web, and
 // deliberately not awaited — nothing in the boot path depends on it, and the
