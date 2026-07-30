@@ -3,6 +3,7 @@ import { sessionHighScore } from '../../storage.js';
 import { currentGenre } from '../../audio/music-engine.js';
 import { currentDifficulty } from '../../audio/music-ui.js';
 import { initializeMainSceneStateSlices } from './state-slices.js';
+import { createGenreAttributionState } from '../../leaderboard/genre-attribution.js';
 
 export function initCreateSceneState(data) {
   this.isTutorial = data?.tutorialMode || false;
@@ -25,6 +26,11 @@ export function initCreateSceneState(data) {
 
   this.gameStartTime = this.time.now;
 
+  // Snapshot the high score as it stood before this run. sessionHighScore is bumped
+  // live during play, so it is the only reliable baseline for "did this run beat it".
+  this.runStartHighScore = sessionHighScore;
+  this.genreAttribution = createGenreAttributionState(currentGenre);
+
   this.recentDeaths = [];
   this.adaptiveState = {
     isAssisting: false,
@@ -34,7 +40,7 @@ export function initCreateSceneState(data) {
   };
 
   window.trackEvent('game_start', {
-    difficulty: currentDifficulty?.name || 'normal',
+    difficulty: currentDifficulty?.key || 'normal',
     genre: currentGenre || 'techno',
     grid_enabled: gameState.gridEnabled,
     high_score: sessionHighScore,

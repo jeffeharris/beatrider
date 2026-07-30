@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, DAMAGE_VALUES } from '../../config.js';
-import { sessionHighScore, setSessionHighScore } from '../../storage.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import {
   applyPoints,
@@ -195,9 +194,10 @@ for(let i=this.obstacles.length-1; i>=0; i--){
       if (lethal) {
         // No shield — instant death (original behavior)
         flow.invincible = true;
-        if(combat.score > sessionHighScore) {
-          setSessionHighScore(combat.score);
-        }
+        // High score is persisted as it is beaten during play (update-loop-bullets.js)
+        // and finalised on the game-over screen. Bumping it here as well made the
+        // game-over check compare the score against itself, so "NEW HIGH SCORE!"
+        // never fired.
         this._createSplatEffect(this.player.x, this.player.y);
         try {
           gameSounds.obstacleHit.triggerAttackRelease("C2", "8n");

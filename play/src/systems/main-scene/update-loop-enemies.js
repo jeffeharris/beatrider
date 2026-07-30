@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, LANES, DAMAGE_VALUES } from '../../config.js';
-import { sessionHighScore, setSessionHighScore } from '../../storage.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import { applyDamage } from './damage-state.js';
 
@@ -122,9 +121,10 @@ for(let i=this.enemies.length-1; i>=0; i--){
     if (lethal) {
       // No shield — instant death (original behavior)
       flow.invincible = true;
-      if(combat.score > sessionHighScore) {
-        setSessionHighScore(combat.score);
-      }
+      // High score is persisted as it is beaten during play (update-loop-bullets.js)
+      // and finalised on the game-over screen. Bumping it here as well made the
+      // game-over check compare the score against itself, so "NEW HIGH SCORE!"
+      // never fired.
       const enemyScale = 0.1 + e.progress * 1.2;
       this._createDeathExplosion(this.player.x, this.player.y, e.x, e.y, enemyScale);
       try {

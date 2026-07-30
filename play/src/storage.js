@@ -1,13 +1,18 @@
 // ============================================
 // STORAGE SYSTEM - MUST BE FIRST
 // ============================================
+// Pure, dependency-free leaf import - safe despite this module needing to run first,
+// since ES modules fully evaluate imports before the body below executes.
+import { seedLeaderboardFromLegacyHighScore } from './leaderboard/leaderboard-entry.js';
+
 export const STORAGE_KEY = 'beatrider_data';
-const STORAGE_VERSION = 2; // Version number for migrations
+const STORAGE_VERSION = 3; // Version number for migrations
 
 // Default settings structure
 export const DEFAULT_SETTINGS = {
   version: STORAGE_VERSION,
   highScore: 0,
+  leaderboard: [],
   settings: {
     gridEnabled: true,
     character: 'default',
@@ -53,47 +58,63 @@ function isObject(item) {
   return item && typeof item === 'object' && !Array.isArray(item);
 }
 
-// Migrate data from older versions
+// Migrate data from older versions.
+// Each step upgrades by exactly one version so the ladder composes for any starting point.
 function migrateData(data) {
-  // No version or version 1: flat structure to nested
-  if (!data.version || data.version < 2) {
-    const migrated = {
-      version: STORAGE_VERSION,
-      highScore: data.highScore || 0,
-      settings: {
-        gridEnabled: data.gridEnabled !== undefined ? data.gridEnabled : true,
-        character: 'default',
-        difficulty: 'normal',
-        touchSensitivity: 30,
-        laserSound: 0,
-        musicPreset: 'driving',
-        customMusic: {
-          bpm: 128,
-          energy: 60,
-          tension: 40
-        },
-        trackMutes: {
-          kick: false,
-          snare: false,
-          hat: false,
-          acid: false,
-          stab: false,
-          sub: false
-        }
+  let migrated = data;
+  if (!migrated.version || migrated.version < 2) migrated = migrateV1ToV2(migrated);
+  if (migrated.version < 3) migrated = migrateV2ToV3(migrated);
+  return migrated;
+}
+
+// v2 -> v3: the single scalar high score becomes a leaderboard table.
+// `highScore` is left in place; it still drives the HUD and the game-over banner.
+function migrateV2ToV3(data) {
+  return {
+    ...data,
+    version: 3,
+    leaderboard: Array.isArray(data.leaderboard)
+      ? data.leaderboard
+      : seedLeaderboardFromLegacyHighScore(data.highScore)
+  };
+}
+
+// v1 (or unversioned) -> v2: flat structure to nested settings
+function migrateV1ToV2(data) {
+  const migrated = {
+    version: 2,
+    highScore: data.highScore || 0,
+    settings: {
+      gridEnabled: data.gridEnabled !== undefined ? data.gridEnabled : true,
+      character: 'default',
+      difficulty: 'normal',
+      touchSensitivity: 30,
+      laserSound: 0,
+      musicPreset: 'driving',
+      customMusic: {
+        bpm: 128,
+        energy: 60,
+        tension: 40
+      },
+      trackMutes: {
+        kick: false,
+        snare: false,
+        hat: false,
+        acid: false,
+        stab: false,
+        sub: false
       }
-    };
-
-    // Check for legacy touchSensitivity key
-    const legacySensitivity = localStorage.getItem('touchSensitivity');
-    if (legacySensitivity) {
-      migrated.settings.touchSensitivity = parseInt(legacySensitivity) || 30;
-      localStorage.removeItem('touchSensitivity');
     }
+  };
 
-    return migrated;
+  // Check for legacy touchSensitivity key
+  const legacySensitivity = localStorage.getItem('touchSensitivity');
+  if (legacySensitivity) {
+    migrated.settings.touchSensitivity = parseInt(legacySensitivity) || 30;
+    localStorage.removeItem('touchSensitivity');
   }
 
-  return data;
+  return migrated;
 }
 
 export function loadGameData() {

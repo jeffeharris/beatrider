@@ -1,6 +1,13 @@
 import Phaser from 'phaser';
 import { gameState, isMobile } from '../config.js';
 import { unlockIOSAudio } from '../audio/ios-unlock.js';
+import {
+  consumeHighScoreClick,
+  createHighScoresButtonSystem,
+  isHighScorePanelOpen,
+  repositionHighScoreUiSystem,
+  toggleHighScorePanelSystem
+} from '../systems/startup-scene/leaderboard-panel.js';
 
 export default class StartupScene extends Phaser.Scene {
   constructor() {
@@ -237,9 +244,12 @@ export default class StartupScene extends Phaser.Scene {
       aboutText.setAlpha(0.6);
     });
 
-    aboutText.on('pointerdown', () => {
+    aboutText.on('pointerdown', (pointer) => {
+      pointer.event.stopPropagation();
       window.open('../', '_blank');
     });
+
+    createHighScoresButtonSystem.call(this);
 
     // Floating particles in background
     this.particles = [];
@@ -341,26 +351,45 @@ export default class StartupScene extends Phaser.Scene {
       }
     };
 
+    // While the high scores panel is up, the start inputs dismiss it instead of playing.
+    const dismissHighScoresIfOpen = () => {
+      if (!isHighScorePanelOpen.call(this)) return false;
+      toggleHighScorePanelSystem.call(this, false);
+      return true;
+    };
+
     // Start normal game handler
     const startNormalGame = async () => {
+      if (dismissHighScoresIfOpen()) return;
       await startGame(false);
     };
 
     // Tutorial button handler - always starts tutorial
     this.tutorialText.on('pointerdown', async (pointer) => {
       pointer.event.stopPropagation();
+      if (dismissHighScoresIfOpen()) return;
       await startGame(true);
     });
 
-    // Listen for space key to start normal game
-    this.input.keyboard.once('keydown-SPACE', startNormalGame);
+    // Listen for space key to start normal game. Bound with on() rather than once() so a
+    // press that only dismisses the high scores panel doesn't consume the handler;
+    // startGame's own gameStarting guard still prevents a double start.
+    this.input.keyboard.on('keydown-SPACE', startNormalGame);
+    this.input.keyboard.on('keydown-ESC', dismissHighScoresIfOpen);
 
-    // Touch/click handler that checks if tutorial was clicked
+    // Touch/click handler that ignores taps landing on the screen's own buttons.
+    // The scene-wide handler fires even when a button handled the tap, so each
+    // interactive element needs excluding by bounds.
     const handleStartClick = async (pointer) => {
-      const bounds = this.tutorialText.getBounds();
-      if (bounds.contains(pointer.x, pointer.y)) {
+      // The high scores button and its backdrop deal with their own taps.
+      if (consumeHighScoreClick.call(this)) return;
+      if (dismissHighScoresIfOpen()) return;
+
+      const buttons = [this.tutorialText, aboutText, this.highScoresButton];
+      if (buttons.some(button => button?.getBounds().contains(pointer.x, pointer.y))) {
         return;
       }
+
       await startNormalGame();
     };
 
@@ -440,6 +469,8 @@ export default class StartupScene extends Phaser.Scene {
         this.invisibleButton.width = WIDTH;
         this.invisibleButton.height = HEIGHT;
       }
+
+      repositionHighScoreUiSystem.call(this);
 
       if (this.particles) {
         this.particles.forEach(particle => {
