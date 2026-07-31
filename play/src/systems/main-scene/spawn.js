@@ -1,7 +1,8 @@
 import { gameState, isMobile, ENEMY_SPEED_BASE } from '../../config.js';
+import { getVanishY, depthForProgress } from './perspective.js';
 
 export function spawnEnemySystem(lane, speed, texture = 'enemyTex') {
-  const vanishY = gameState.HEIGHT * 0.15;
+  const vanishY = getVanishY();
   const e = this.add.image(this._laneX(lane, 0), vanishY, texture);
   e.lane = lane;
   e.progress = 0;
@@ -11,13 +12,13 @@ export function spawnEnemySystem(lane, speed, texture = 'enemyTex') {
   e.h = e.baseSize;
   e.enemyType = texture;
   e.setScale(0.1);
-  e.setDepth(100);
+  e.setDepth(depthForProgress(0));
   e.trailPoints = [];
   this.enemies.push(e);
 }
 
 export function spawnObstacleSystem(lane) {
-  const vanishY = gameState.HEIGHT * 0.15;
+  const vanishY = getVanishY();
   const baseX = this._laneX(lane, 0);
 
   // Keep sizing formula in place for future obstacle variants.
@@ -32,7 +33,7 @@ export function spawnObstacleSystem(lane) {
   o.w = o.baseSize;
   o.h = Math.floor(22 * gameState.MOBILE_SCALE);
   o.setScale(0.1);
-  o.setDepth(150);
+  o.setDepth(depthForProgress(0));
   o.trailPoints = [];
   o.isObstacle = true;
   this.obstacles.push(o);
@@ -48,7 +49,7 @@ export function spawnFloatingStarSystem(obstacle) {
   const star = this.add.image(obstacle.x, obstacle.y - 25, 'starTex');
   star.attachedObstacle = obstacle;
   star.setScale(1.0);
-  star.setDepth(160);
+  star.setDepth(depthForProgress(0) + 2);
   star.collected = false;
   star.rotationSpeed = 0.05;
   star.floatOffset = 0;
@@ -57,19 +58,19 @@ export function spawnFloatingStarSystem(obstacle) {
 }
 
 export function spawnPowerUpSystem(lane) {
-  const vanishY = gameState.HEIGHT * 0.15;
+  const vanishY = getVanishY();
   const p = this.add.image(this._laneX(lane, 0), vanishY, 'powerUpTex');
   p.lane = lane;
   p.progress = 0;
   p.vy = ENEMY_SPEED_BASE * 1.2;
   p.baseSize = Math.floor(20 * gameState.MOBILE_SCALE);
   p.setScale(0.1);
-  p.setDepth(100);
+  p.setDepth(depthForProgress(0));
   this.powerUps.push(p);
 }
 
 export function spawnDrifterSystem(lane) {
-  const vanishY = gameState.HEIGHT * 0.15;
+  const vanishY = getVanishY();
   const d = this.add.image(this._laneX(lane, 0), vanishY, 'drifterTex');
   d.lane = lane;
   d.targetLane = lane;
@@ -82,7 +83,7 @@ export function spawnDrifterSystem(lane) {
   d.isDrifter = true;
   d.driftTimer = 0;
   d.setScale(0.1);
-  d.setDepth(100);
+  d.setDepth(depthForProgress(0));
   d.trailPoints = [];
   this.enemies.push(d);
 }

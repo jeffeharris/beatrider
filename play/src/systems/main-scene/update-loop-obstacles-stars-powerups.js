@@ -8,10 +8,10 @@ import {
   resolveComboForChain,
   updateMaxComboReached
 } from './score-combo-state.js';
+import { projectY, entityScale, hitboxScale, depthForProgress } from './perspective.js';
 
 export function updateObstaclesStarsPowerUpsSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
-const vanishY = gameState.HEIGHT * 0.15;
 for(let i=this.floatingStars.length-1; i>=0; i--){
   const star = this.floatingStars[i];
   
@@ -21,7 +21,7 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
   
   if(obstacleExists) {
     // Follow the obstacle position
-    const scale = 0.1 + obstacle.progress * 1.2;
+    const scale = entityScale(obstacle.progress);
     
     // Floating motion (up and down)
     star.floatOffset += star.floatSpeed * dt;
@@ -31,6 +31,7 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
     star.x = obstacle.x;
     star.y = obstacle.y - (60 * scale) + floatY; // Scale the offset with perspective
     star.setScale(scale); // Just use obstacle's scale for perspective
+    star.setDepth(depthForProgress(obstacle.progress) + 2); // Just in front of its obstacle
     
     // Spin the star
     star.rotation += star.rotationSpeed;
@@ -137,13 +138,15 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
 for(let i=this.obstacles.length-1; i>=0; i--){
   const o=this.obstacles[i];
   o.progress += (o.vy * dt/1000) / (gameState.HEIGHT * 0.8) + pulseShift;
-  const y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(o.progress, 2.5);
-  o.y = y;
+  o.y = projectY(o.progress);
   o.x = this._laneX(o.lane, o.progress) + pulseXShift;
-  const scale = 0.1 + o.progress * 1.2;
+  o.setDepth(depthForProgress(o.progress));
+  const scale = entityScale(o.progress);
   o.setScale(scale, scale * 1.2); // Much taller shields
-  o.w = o.baseSize * scale;
-  o.h = 22 * scale * 1.2; // Adjusted height for collision
+  // Collision uses the far-locked scale so the zoom stays purely cosmetic.
+  const hitScale = hitboxScale(o.progress);
+  o.w = o.baseSize * hitScale;
+  o.h = 22 * hitScale * 1.2; // Adjusted height for collision
   
   // Animate the whole obstacle with shimmer effect on the barrier part
   if (!o.shimmerTime) o.shimmerTime = 0;
@@ -234,10 +237,10 @@ for(let i=this.obstacles.length-1; i>=0; i--){
 for(let i=this.powerUps.length-1; i>=0; i--){
   const p=this.powerUps[i];
   p.progress += (p.vy * dt/1000) / (gameState.HEIGHT * 0.8) + pulseShift;
-  const y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(p.progress, 2.5);
-  p.y = y;
+  p.y = projectY(p.progress);
   p.x = this._laneX(p.lane, p.progress) + pulseXShift;
-  const scale = 0.1 + p.progress * 1.2;
+  p.setDepth(depthForProgress(p.progress));
+  const scale = entityScale(p.progress);
   p.setScale(scale);
   p.angle += dt * 0.2; // Rotate
   

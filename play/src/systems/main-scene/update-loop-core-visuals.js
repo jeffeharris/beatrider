@@ -1,6 +1,71 @@
 import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { gameState } from '../../config.js';
+import {
+  updatePerspective,
+  getVanishY,
+  getVanishX,
+  getZoom,
+  CAMERA_LOCK_AMOUNT,
+  CAMERA_JUMP_FOLLOW,
+  CAMERA_LOCK_LAG_MS
+} from './perspective.js';
+
+/**
+ * Drives the perspective zoom from the rapid-fire buff. Because power-ups reset
+ * rapidFireTimer rather than adding to it, the buff can be sustained indefinitely
+ * by chaining pickups - so the zoom follows the boolean, not a fixed schedule.
+ * Must run before anything projects this frame.
+ */
+export function updatePerspectiveZoom(dt) {
+  const { combat } = this.stateSlices;
+  const wantNear = combat.rapidFire;
+
+  // Punch the camera on the rising edge only, so a chained pickup refreshes the
+  // buff without re-shaking mid-effect.
+  if (wantNear && !this.perspectiveEngaged) {
+    this.cameras.main.shake(300, 0.010);
+    this.cameras.main.flash(200, 0, 170, 80);
+  }
+  this.perspectiveEngaged = wantNear;
+
+  updatePerspective(dt, wantNear);
+  this.vanishY = getVanishY();
+  updateFollowCamera.call(this, dt);
+}
+
+/**
+ * Third-person follow cam: the viewport pans laterally to track the ship, and
+ * the vanishing point rides along with it so the camera keeps facing down the
+ * track. Panning without the yaw slides the corridor away; yawing without the
+ * pan reads as a fixed camera turning. It needs both.
+ *
+ * This never touches player.x, so lane logic, collision and the depth curve are
+ * unaffected. The lag is deliberate - catching up over CAMERA_LOCK_LAG_MS rather
+ * than snapping is what makes it read as a camera rather than a rigid offset.
+ */
+function updateFollowCamera(dt) {
+  const cam = this.cameras.main;
+  const zoom = getZoom();
+  const targetX = (this.player.x - gameState.WIDTH / 2) * CAMERA_LOCK_AMOUNT * zoom;
+  // Rises with a jump. player.y is above PLAYER_Y mid-air, so this goes negative
+  // and the world drops down the screen underneath you.
+  const targetY = (this.player.y - gameState.PLAYER_Y) * CAMERA_JUMP_FOLLOW * zoom;
+
+  // Frame-rate independent exponential catch-up.
+  const catchUp = 1 - Math.exp(-dt / CAMERA_LOCK_LAG_MS);
+  cam.scrollX += (targetX - cam.scrollX) * catchUp;
+  cam.scrollY += (targetY - cam.scrollY) * catchUp;
+
+  // Settle exactly at centre so a retreated camera leaves no sub-pixel drift.
+  if (zoom === 0) {
+    if (Math.abs(cam.scrollX) < 0.5) cam.scrollX = 0;
+    if (Math.abs(cam.scrollY) < 0.5) cam.scrollY = 0;
+  }
+
+  this.vanishX = getVanishX(cam.scrollX);
+}
 
 export function updateIdleWobble(dt) {
   const { player } = this.stateSlices;

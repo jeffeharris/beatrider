@@ -43,9 +43,18 @@ window.GameAPI = {
 ### Game Systems
 
 **Perspective Rendering**
-- 5 lanes with exponential distance curve: `y = vanishY + (HEIGHT - vanishY) * Math.pow(progress, 2.5)`
+- All projection lives in `play/src/systems/main-scene/perspective.js` - never hardcode the curve
+- Entities store `progress` (0 = horizon, 1 = at the player); screen Y is re-derived each frame
+  via `projectY(progress)`, and sprite size via `entityScale(progress)`
+- Default (`FAR_PERSPECTIVE`): `vanishY = HEIGHT * 0.15`, exponent 2.5, scale `0.1 + progress * 1.2`
+- During rapid fire the parameters ease to `NEAR_PERSPECTIVE` (horizon 0.32, exponent 1.3) over
+  1.2s, giving a "coming at you" view; the starfield takes 35% of the shift so it reads as distant
+- Purely cosmetic: progress advances independently of the projection, and collisions gate on
+  progress (0.94-0.97), so zooming never changes difficulty or hit windows
+- The zoom is module state - every path that starts a round must call `resetPerspective()`
+  (both `initCreateSceneState` and `resetRoundState` in `game-over.js` do)
 - Off-screen rubber-band mechanics with 800ms grace period
-- Lane X calculation accounts for perspective convergence
+- Lane X calculation accounts for perspective convergence (linear in progress; `vanishX` never moves)
 
 **Collision & Movement**
 - AABB collision disabled during 150ms lane transitions
