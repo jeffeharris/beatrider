@@ -230,7 +230,21 @@ export function resumeGameSystem() {
     this.pauseFeedbackContainer = null;
   }
 
-  if (Tone.Transport.state === 'paused') {
+  // An interruption (phone call, Siri, alarm) or a spell in the background can
+  // leave the AudioContext suspended, and starting the Transport on a suspended
+  // context resumes the game silently — visuals running, no sound. Resume the
+  // context first in that case, then start the Transport once it is actually
+  // running. The common path is untouched and stays synchronous.
+  if (Tone.context.state === 'suspended') {
+    Tone.context.resume()
+      .then(() => {
+        if (Tone.Transport.state === 'paused') Tone.Transport.start();
+      })
+      .catch(() => {
+        // Nothing more we can do from JS; the native session handles its half
+        // (see configureAudioSession in ios/App/App/AppDelegate.swift).
+      });
+  } else if (Tone.Transport.state === 'paused') {
     Tone.Transport.start();
   }
 

@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import * as Tone from 'tone';
-import { gameState, LANES } from '../../config.js';
-import { sessionHighScore, setSessionHighScore } from '../../storage.js';
+import { gameState, LANES, DAMAGE_VALUES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import { projectY, entityScale, hitboxScale, depthForProgress } from './perspective.js';
+import { applyDamage } from './damage-state.js';
 
 export function updateEnemiesSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
@@ -97,33 +97,45 @@ for(let i=this.enemies.length-1; i>=0; i--){
     !playerState.stretching &&
     !flow.invincible &&
     this._aabb(e, this.player)
-  ){ 
-    // Set invincible immediately to prevent multiple deaths
-    flow.invincible = true;
-    
-    // Save highscore before restarting
-    if(combat.score > sessionHighScore) {
-      setSessionHighScore(combat.score);
+  ){
+    const damageType = e.isDrifter ? 'drifter' : (e.enemyType || 'enemyTex');
+    const damage = DAMAGE_VALUES[damageType] || 15;
+    const { nextShield, lethal } = applyDamage({ shield: combat.shield, damage });
+
+    if (lethal) {
+      // No shield — instant death (original behavior)
+      flow.invincible = true;
+      // High score is persisted as it is beaten during play (update-loop-bullets.js)
+      // and finalised on the game-over screen. Bumping it here as well made the
+      // game-over check compare the score against itself, so "NEW HIGH SCORE!"
+      // never fired.
+      this._createDeathExplosion(this.player.x, this.player.y, e.x, e.y, entityScale(e.progress));
+      try {
+        const now = Tone.now();
+        gameSounds.obstacleHit.triggerAttackRelease("G2", "16n", now);
+        gameSounds.obstacleHit.triggerAttackRelease("D2", "16n", now + 0.05);
+        gameSounds.obstacleHit.triggerAttackRelease("G1", "16n", now + 0.1);
+        gameSounds.explosion.triggerAttackRelease("8n", now + 0.02);
+      } catch(e) {}
+      this.player.setVisible(false);
+      e.destroy();
+      this.showGameOverScreen();
+    } else {
+      // Shield absorbs hit — flash white, camera shake, destroy enemy
+      combat.shield = nextShield;
+      this.player.setTint(0xffffff);
+      this.time.delayedCall(100, () => {
+        if (combat.rapidFire) {
+          this.player.setTint(combat.rapidFireFromShield ? 0xff00ff : 0x00ff00);
+        } else {
+          this.player.clearTint();
+        }
+      });
+      this.cameras.main.shake(200, 0.01);
+      this._createExplosion(e.x, e.y, 0xff3366, 6, 0.5);
+      e.destroy();
+      this.enemies.splice(i, 1);
     }
-    
-    // Create dramatic explosion for enemy hit with proper scale
-    this._createDeathExplosion(this.player.x, this.player.y, e.x, e.y, entityScale(e.progress));
-    
-    try {
-      // Player death sound - descending pitch
-      const now = Tone.now();
-      gameSounds.obstacleHit.triggerAttackRelease("G2", "16n", now);
-      gameSounds.obstacleHit.triggerAttackRelease("D2", "16n", now + 0.05);
-      gameSounds.obstacleHit.triggerAttackRelease("G1", "16n", now + 0.1);
-      gameSounds.explosion.triggerAttackRelease("8n", now + 0.02);
-    } catch(e) {}
-    
-    // Hide player and enemy immediately
-    this.player.setVisible(false);
-    e.destroy();
-    
-    // Show game over screen
-    this.showGameOverScreen();
   }
 }
 

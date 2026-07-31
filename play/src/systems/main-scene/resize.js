@@ -1,5 +1,6 @@
 import { gameState, isMobile, updateDimensions } from '../../config.js';
 import { getVanishY } from './perspective.js';
+import { resizeResourceBarSystem } from './resource-bar.js';
 
 export function resizeMainSceneSystem() {
   const { player } = this.stateSlices;
@@ -44,6 +45,8 @@ export function resizeMainSceneSystem() {
   if (this.stars) {
     this.createStarfield();
   }
+
+  resizeResourceBarSystem.call(this);
 
   if (this.gridVisible && this.gridGraphics) {
     this._drawPerspectiveGrid();

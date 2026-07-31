@@ -9,9 +9,18 @@ import {
   appendRecentDeath,
   buildSurvivalStats,
   getScoreBucket,
+  resolveGameOverLayout,
   shouldEnableAdaptiveAssist
 } from './game-over-state.js';
 import { resetPerspective, depthForProgress, PLAYER_PROGRESS } from './perspective.js';
+import { createGenreAttributionState, summarizeGenreAttribution } from '../../leaderboard/genre-attribution.js';
+import { buildLeaderboardEntry } from '../../leaderboard/leaderboard-entry.js';
+import { loadLeaderboard, recordLeaderboardEntry } from '../../leaderboard/leaderboard-store.js';
+import { renderLeaderboardTable } from '../../leaderboard/leaderboard-view.js';
+
+// The between-rounds countdown holds long enough to read the table before auto-restart.
+const RESTART_COUNTDOWN_SECONDS = 6;
+const RESTART_DELAY_MS = 7300;
 
 function updateRecentDeathsAndAdaptiveAssist(scene, score) {
   scene.recentDeaths = appendRecentDeath(scene.recentDeaths || [], score, 3);
@@ -38,7 +47,7 @@ function trackGameOverAnalytics(scene, combat, scoreBucket) {
     beats_survived: combat.beats,
     session_time: sessionTime,
     control_type: window.controlType,
-    difficulty: currentDifficulty?.name || 'normal',
+    difficulty: currentDifficulty?.key || 'normal',
     genre: currentGenre || 'techno',
     grid_enabled: gameState.gridEnabled
   });
@@ -52,11 +61,16 @@ function trackGameOverAnalytics(scene, combat, scoreBucket) {
 }
 
 function updateHighScoreIfNeeded(scene, score) {
-  const beatHighScore = score > sessionHighScore;
-  if (!beatHighScore) return false;
+  // Compare against the high score as it stood when this run began, not the live
+  // sessionHighScore: that is bumped on every qualifying kill during play
+  // (update-loop-bullets.js), so by the time we get here it already equals the score
+  // and the comparison could never be true.
+  const previousHigh = scene.runStartHighScore ?? 0;
+  if (score <= previousHigh) return false;
 
-  const previousHigh = sessionHighScore;
-  setSessionHighScore(score);
+  if (score > sessionHighScore) {
+    setSessionHighScore(score);
+  }
   saveGameData({ highScore: sessionHighScore });
 
   window.trackEvent('new_high_score', {
@@ -68,7 +82,25 @@ function updateHighScoreIfNeeded(scene, score) {
   return true;
 }
 
-function createGameOverUi(scene, { score, beatHighScore, survivalStats }) {
+function recordRunOnLeaderboard(scene, { score, survivalStats }) {
+  const genreSummary = summarizeGenreAttribution(scene.genreAttribution, {
+    elapsedMs: scene.time.now - scene.gameStartTime
+  });
+
+  // Tutorial runs are not real attempts, so they are shown the table but never join it.
+  if (scene.isTutorial) {
+    return { entries: loadLeaderboard(), rank: null };
+  }
+
+  return recordLeaderboardEntry(buildLeaderboardEntry({
+    score,
+    genreSummary,
+    difficultyKey: currentDifficulty?.key,
+    durationSeconds: survivalStats.survivalSeconds
+  }));
+}
+
+function createGameOverUi(scene, { score, beatHighScore, survivalStats, leaderboard, leaderboardRank }) {
   const overlay = scene.add.graphics();
   overlay.fillStyle(0x000000, 0.7);
   overlay.fillRect(0, 0, gameState.WIDTH, gameState.HEIGHT);
@@ -84,7 +116,33 @@ function createGameOverUi(scene, { score, beatHighScore, survivalStats }) {
   const smallFontSize = `${Math.floor(screenRef * 0.03 * mobileMult)}px`;
   const tinyFontSize = `${Math.floor(screenRef * 0.025 * mobileMult)}px`;
 
-  const scoreLabel = scene.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 - screenRef * 0.08, 'SCORE', {
+  // Build the table first: everything else is laid out around its measured height.
+  const leaderboardTable = renderLeaderboardTable(scene, {
+    x: gameState.WIDTH / 2,
+    y: 0,
+    entries: leaderboard,
+    variant: 'compact',
+    fontSize: tinyFontSize,
+    depth: 20001,
+    highlightRank: leaderboardRank
+  });
+  leaderboardTable.container.setAlpha(0);
+
+  const {
+    centerY,
+    topOffset,
+    statsOffset,
+    leaderboardTitleOffset,
+    leaderboardOffset,
+    restartOffset
+  } = resolveGameOverLayout({
+    screenRef,
+    beatHighScore,
+    leaderboardHeight: leaderboardTable.height,
+    viewportHeight: gameState.HEIGHT
+  });
+
+  const scoreLabel = scene.add.text(gameState.WIDTH / 2, centerY - topOffset, 'SCORE', {
     font: `${medFontSize} monospace`,
     fill: '#0f0'
   });
@@ -92,7 +150,7 @@ function createGameOverUi(scene, { score, beatHighScore, survivalStats }) {
   scoreLabel.setAlpha(0);
   scoreLabel.setDepth(20001);
 
-  const scoreText = scene.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2, score.toString(), {
+  const scoreText = scene.add.text(gameState.WIDTH / 2, centerY, score.toString(), {
     font: `${bigFontSize} monospace`,
     fill: beatHighScore ? '#ffff00' : '#00ffcc'
   });
@@ -105,7 +163,7 @@ function createGameOverUi(scene, { score, beatHighScore, survivalStats }) {
   let highScoreText = null;
 
   if (beatHighScore) {
-    congratsText = scene.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 + screenRef * 0.1, 'NEW HIGH SCORE!', {
+    congratsText = scene.add.text(gameState.WIDTH / 2, centerY + screenRef * 0.1, 'NEW HIGH SCORE!', {
       font: `${medFontSize} monospace`,
       fill: '#ff00ff'
     });
@@ -124,7 +182,7 @@ function createGameOverUi(scene, { score, beatHighScore, survivalStats }) {
       ease: 'Sine.inOut'
     });
   } else {
-    highScoreText = scene.add.text(gameState.WIDTH / 2, gameState.HEIGHT / 2 + screenRef * 0.1, `HIGH SCORE: ${sessionHighScore}`, {
+    highScoreText = scene.add.text(gameState.WIDTH / 2, centerY + screenRef * 0.1, `HIGH SCORE: ${sessionHighScore}`, {
       font: `${smallFontSize} monospace`,
       fill: '#ff0'
     });
@@ -140,14 +198,12 @@ function createGameOverUi(scene, { score, beatHighScore, survivalStats }) {
     });
   }
 
-  const statsY = beatHighScore
-    ? gameState.HEIGHT / 2 + screenRef * 0.15
-    : gameState.HEIGHT / 2 + screenRef * 0.13;
+  const statsY = centerY + statsOffset;
 
   const survivalStatsText = scene.add.text(
     gameState.WIDTH / 2,
     statsY,
-    `Survived: ${survivalStats.survivalTimeString}  •  ${survivalStats.pointsPerSecond} pts/sec`,
+    `Survived: ${survivalStats.survivalTimeString}  •  ${survivalStats.pointsPerMinute} pts/min`,
     {
       font: `${tinyFontSize} monospace`,
       fill: '#00ffcc'
@@ -164,7 +220,24 @@ function createGameOverUi(scene, { score, beatHighScore, survivalStats }) {
     delay: 1000
   });
 
-  const restartText = scene.add.text(gameState.WIDTH / 2, statsY + screenRef * 0.06, 'RESTARTING IN 3...', {
+  const leaderboardTitle = scene.add.text(gameState.WIDTH / 2, centerY + leaderboardTitleOffset, 'HIGH SCORES', {
+    font: `${tinyFontSize} monospace`,
+    fill: '#00ff00'
+  });
+  leaderboardTitle.setOrigin(0.5);
+  leaderboardTitle.setAlpha(0);
+  leaderboardTitle.setDepth(20001);
+
+  leaderboardTable.container.y = centerY + leaderboardOffset;
+
+  scene.tweens.add({
+    targets: [leaderboardTitle, leaderboardTable.container],
+    alpha: 1,
+    duration: 600,
+    delay: 1200
+  });
+
+  const restartText = scene.add.text(gameState.WIDTH / 2, centerY + restartOffset, `RESTARTING IN ${RESTART_COUNTDOWN_SECONDS}...`, {
     font: `${smallFontSize} monospace`,
     fill: '#00ffcc'
   });
@@ -179,12 +252,14 @@ function createGameOverUi(scene, { score, beatHighScore, survivalStats }) {
     congratsText,
     highScoreText,
     survivalStatsText,
+    leaderboardTitle,
+    leaderboardTable,
     restartText
   };
 }
 
 function startCountdown(scene, restartText) {
-  let countdown = 3;
+  let countdown = RESTART_COUNTDOWN_SECONDS;
   scene.time.addEvent({
     delay: 1000,
     callback: () => {
@@ -203,7 +278,7 @@ function startCountdown(scene, restartText) {
         ease: 'Power2'
       });
     },
-    repeat: 2
+    repeat: RESTART_COUNTDOWN_SECONDS - 1
   });
 }
 
@@ -273,6 +348,10 @@ function resetRoundState(scene, slices) {
   scene.comboText.setAlpha(0);
 
   scene.gameStartTime = scene.time.now;
+  // Re-baseline per-run tracking alongside the clock the next round is measured from.
+  scene.runStartHighScore = sessionHighScore;
+  scene.genreAttribution = createGenreAttributionState(currentGenre);
+
   scene.player.clearTint();
   scene.player.x = scene._laneX(2);
   scene.player.setVisible(true);
@@ -304,28 +383,26 @@ function resetRoundState(scene, slices) {
 }
 
 function scheduleRoundRestart(scene, ui, slices) {
-  scene.time.delayedCall(4300, () => {
+  scene.time.delayedCall(RESTART_DELAY_MS, () => {
+    const fadeTargets = [
+      ui.overlay,
+      ui.scoreLabel,
+      ui.scoreText,
+      ui.restartText,
+      ui.congratsText,
+      ui.highScoreText,
+      ui.survivalStatsText,
+      ui.leaderboardTitle,
+      ui.leaderboardTable?.container
+    ].filter(Boolean);
+
     scene.tweens.add({
-      targets: [
-        ui.overlay,
-        ui.scoreLabel,
-        ui.scoreText,
-        ui.restartText,
-        ui.congratsText,
-        ui.highScoreText,
-        ui.survivalStatsText
-      ].filter(Boolean),
+      targets: fadeTargets,
       alpha: 0,
       duration: 300,
       onComplete: () => {
-        ui.overlay.destroy();
-        ui.scoreLabel.destroy();
-        ui.scoreText.destroy();
-        ui.restartText.destroy();
-        if (ui.congratsText) ui.congratsText.destroy();
-        if (ui.highScoreText) ui.highScoreText.destroy();
-        if (ui.survivalStatsText) ui.survivalStatsText.destroy();
-
+        // Destroying the table container also destroys its row texts.
+        fadeTargets.forEach(target => target.destroy());
         resetRoundState(scene, slices);
       }
     });
@@ -355,10 +432,17 @@ export function showGameOverScreenSystem() {
   trackGameOverAnalytics(this, combat, scoreBucket);
 
   const beatHighScore = updateHighScoreIfNeeded(this, combat.score);
+  const { entries, rank } = recordRunOnLeaderboard(this, {
+    score: combat.score,
+    survivalStats
+  });
+
   const ui = createGameOverUi(this, {
     score: combat.score,
     beatHighScore,
-    survivalStats
+    survivalStats,
+    leaderboard: entries,
+    leaderboardRank: rank
   });
 
   startCountdown(this, ui.restartText);

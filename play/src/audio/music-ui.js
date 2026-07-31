@@ -2,7 +2,7 @@
 // All DOM event listeners for music controls, settings panel, genre switching, etc.
 
 import * as Tone from 'tone';
-import { saveGameDataDebounced, savedData } from '../storage.js';
+import { DEFAULT_CHARACTER_ID, saveGameDataDebounced, savedData } from '../storage.js';
 import { unlockIOSAudio } from './ios-unlock.js';
 import {
   energyLevel, setEnergyLevel,
@@ -42,15 +42,26 @@ const MUSIC_PRESETS = {
   'anthem': { energy: 90, tension: 60, description: 'Stadium anthem' }
 };
 
-// Difficulty preset definitions
+// Difficulty preset definitions.
+// `key` is the identity of the preset - analytics and leaderboard entries read it.
+// (It exists because callers used to read a `name` field that was never defined, so
+// every recorded difficulty silently fell back to 'normal'.)
 const DIFFICULTY_PRESETS = {
-  'zen': { speedMult: 0.5, fireMult: 2.0, spawnMult: 0.5, description: 'Relaxed' },
-  'normal': { speedMult: 1.0, fireMult: 1.0, spawnMult: 1.0, description: 'Standard' },
-  'intense': { speedMult: 1.5, fireMult: 0.8, spawnMult: 1.3, description: 'Challenging' },
-  'chaos': { speedMult: 2.0, fireMult: 0.5, spawnMult: 2.0, description: 'Maximum chaos' }
+  'zen': { key: 'zen', speedMult: 0.5, fireMult: 2.0, spawnMult: 0.5, description: 'Relaxed' },
+  'normal': { key: 'normal', speedMult: 1.0, fireMult: 1.0, spawnMult: 1.0, description: 'Standard' },
+  'intense': { key: 'intense', speedMult: 1.5, fireMult: 0.8, spawnMult: 1.3, description: 'Challenging' },
+  'chaos': { key: 'chaos', speedMult: 2.0, fireMult: 0.5, spawnMult: 2.0, description: 'Maximum chaos' }
 };
 
-let currentDifficulty = DIFFICULTY_PRESETS.normal;
+const CHARACTER_LABELS = {
+  unicorn: 'Unicorn',
+  classic: 'Classic'
+};
+
+// Derive from saved settings, not a hardcoded default: the settings panel only restored
+// the <select> value on load, so a player who had chosen e.g. chaos was shown "chaos"
+// but actually played on normal until they re-picked it.
+let currentDifficulty = DIFFICULTY_PRESETS[savedData.settings?.difficulty] || DIFFICULTY_PRESETS.normal;
 const isAudioRunning = () => Tone?.context?.state === 'running';
 const withTransport = (fn) => {
   if (!isAudioRunning()) return false;
@@ -339,6 +350,24 @@ export function setupMusicUI() {
     saveGameDataDebounced({ settings: { laserSound: gameSounds.currentLaserSound } });
   });
 
+  // Character selector
+  document.getElementById('characterSelector')?.addEventListener('change', (e) => {
+    const character = CHARACTER_LABELS[e.target.value] ? e.target.value : DEFAULT_CHARACTER_ID;
+    const label = CHARACTER_LABELS[character];
+    document.getElementById('characterDisplay').textContent = label;
+
+    const gameScene = window.gameScene;
+    if (gameScene && typeof gameScene.setPlayerCharacter === 'function') {
+      gameScene.setPlayerCharacter(character);
+    }
+
+    saveGameDataDebounced({ settings: { character } });
+    trackEventSafe('settings_change', {
+      setting_type: 'character',
+      character
+    });
+  });
+
   // Music preset selector
   document.getElementById('musicPresetSelector')?.addEventListener('change', (e) => {
     const presetKey = e.target.value;
@@ -386,7 +415,7 @@ export function setupMusicUI() {
       trackEventSafe('settings_change', {
         setting_type: 'difficulty',
         difficulty_level: diffKey,
-        multiplier: currentDifficulty.multiplier
+        multiplier: currentDifficulty.speedMult
       });
     }
   });
@@ -454,6 +483,23 @@ export function setupMusicUI() {
         document.getElementById('soundSelector').value = savedData.settings.laserSound;
         const soundNames = ['Triangle', 'Acid', 'Chord', 'Echo', 'Pluck', 'Pew Pew'];
         document.getElementById('soundDisplay').textContent = soundNames[savedData.settings.laserSound];
+      }
+
+      // Apply saved character UI and active scene character
+      const savedCharacter = CHARACTER_LABELS[savedData.settings.character]
+        ? savedData.settings.character
+        : DEFAULT_CHARACTER_ID;
+      const characterSelector = document.getElementById('characterSelector');
+      const characterDisplay = document.getElementById('characterDisplay');
+      if (characterSelector) {
+        characterSelector.value = savedCharacter;
+      }
+      if (characterDisplay) {
+        characterDisplay.textContent = CHARACTER_LABELS[savedCharacter];
+      }
+      const gameScene = window.gameScene;
+      if (gameScene && typeof gameScene.setPlayerCharacter === 'function') {
+        gameScene.setPlayerCharacter(savedCharacter);
       }
 
       // Apply mute states to UI

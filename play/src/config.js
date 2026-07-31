@@ -29,6 +29,18 @@ export const BULLET_SPEED = 520;
 export const FIRE_COOLDOWN = 110;
 export const HORIZONTAL_SHOOTING = true; // Enable horizontal shooting across lanes
 
+// Resource system (ammo / shield / energy)
+export const MAX_AMMO = 100;
+export const MAX_SHIELD = 50;
+export const ENERGY_PER_PICKUP = 25;
+export const FALLBACK_FIRE_COOLDOWN = 1000; // 1 shot/sec when ammo empty
+export const DAMAGE_VALUES = {
+  enemyTex: 15,       // Red enemies
+  fastEnemyTex: 25,   // Yellow fast enemies
+  drifter: 40,        // Purple drifters
+  obstacle: 50        // Energy shield obstacles
+};
+
 // Arc shot tuning parameters
 export const ARC_SHOT_BASE_SAFE_DISTANCE = 0.4; // Base 40% of path immune to obstacles
 export const ARC_SHOT_HEIGHT_BONUS = 0.3; // Additional 30% max based on jump height

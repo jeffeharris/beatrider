@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { gameState, LANES, BULLET_SPEED, FIRE_COOLDOWN, HORIZONTAL_SHOOTING, ARC_SHOT_BASE_SAFE_DISTANCE, ARC_SHOT_HEIGHT_BONUS, ARC_SHOT_MAX_JUMP_HEIGHT, pulsePatternPool, sectionPatternMap } from '../../config.js';
+import { gameState, LANES, BULLET_SPEED, FIRE_COOLDOWN, FALLBACK_FIRE_COOLDOWN, HORIZONTAL_SHOOTING, ARC_SHOT_BASE_SAFE_DISTANCE, ARC_SHOT_HEIGHT_BONUS, ARC_SHOT_MAX_JUMP_HEIGHT, pulsePatternPool, sectionPatternMap } from '../../config.js';
 import { currentBar, getSection } from '../../audio/music-engine.js';
 import { currentDifficulty, DIFFICULTY_PRESETS } from '../../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
@@ -123,9 +123,19 @@ export function fireSystem() {
   const now = this.time.now;
   if (this.fireBlockTime && now < this.fireBlockTime) return;
 
-  const cooldown = (combat.rapidFire ? FIRE_COOLDOWN / 3 : FIRE_COOLDOWN) * currentDifficulty.fireMult;
+  let cooldown;
+  if (combat.ammo <= 0) {
+    cooldown = FALLBACK_FIRE_COOLDOWN * currentDifficulty.fireMult;
+  } else {
+    cooldown = (combat.rapidFire ? FIRE_COOLDOWN / 3 : FIRE_COOLDOWN) * currentDifficulty.fireMult;
+  }
   if (now - this.lastShotAt < cooldown) return;
   this.lastShotAt = now;
+
+  // Consume ammo (fallback shots and shield-overflow rapid fire don't cost ammo)
+  if (combat.ammo > 0 && !combat.rapidFireFromShield) {
+    combat.ammo--;
+  }
 
   this.wobbleVelocity.y = 3;
   if (!player.jumping) {

@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import { savedData } from '../storage.js';
+import { recordSequenceTick, attachTone } from './latency-probe.js';
 
 const hasSecureAudioWorklet = () =>
   typeof window !== 'undefined' &&
@@ -629,6 +630,16 @@ export function generatePatterns(section, bar, energy) {
 let kickLoop, snareLoop, hihatLoop, acidLoop, chordLoop, subLoop;
 let loopsStarted = false;
 let lastSequenceCallbackTime = 0;
+
+/**
+ * Every sequencer callback reports through here: it feeds the music watchdog
+ * (which restarts stalled loops) and, when enabled, the latency probe. Keeping
+ * both on one seam means a new loop can't silently skip either.
+ */
+function noteSequenceCallback(time) {
+  lastSequenceCallbackTime = time;
+  recordSequenceTick(Tone, time);
+}
 const STEP_SEQUENCE = Array.from({ length: 16 }, (_, i) => i);
 let currentKickPattern = new Array(16).fill(0);
 let currentSnarePattern = new Array(16).fill(0);
@@ -674,7 +685,7 @@ function ensureLoopsCreated() {
 
   // Kick with micro-timing
   kickLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const note = currentKickPattern[step];
     if (note && !muteStates.kick) {
       const humanTime = humanize(time, 0.003);
@@ -692,7 +703,7 @@ function ensureLoopsCreated() {
 
   // Snare with more looseness
   snareLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const note = currentSnarePattern[step];
     if (note && !muteStates.snare) {
       const humanTime = humanize(time, 0.005);
@@ -708,7 +719,7 @@ function ensureLoopsCreated() {
 
   // Hi-hat with most variation
   hihatLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const note = currentHihatPattern[step];
     if (note && !muteStates.hat) {
       const humanTime = humanize(time, 0.008);
@@ -727,7 +738,7 @@ function ensureLoopsCreated() {
 
   // Acid with melodic sequence - slight timing variations and accent
   acidLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const note = acidSequence[step];
     if (note && !muteStates.acid) {
       const humanTime = humanize(time, 0.004);
@@ -755,7 +766,7 @@ function ensureLoopsCreated() {
 
   // Stabs with slight spread and filter variation
   chordLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const hit = currentStabPattern[step];
     if (hit && !muteStates.stab) {
       const humanTime = humanize(time, 0.006);
@@ -793,7 +804,7 @@ function ensureLoopsCreated() {
 
   // Sub bass pattern - genre-specific
   subLoop = new Tone.Sequence((time, step) => {
-    lastSequenceCallbackTime = time;
+    noteSequenceCallback(time);
     const note = currentSubPattern[step];
     if (note && !muteStates.sub) {
       const humanTime = humanize(time, 0.002);
@@ -1021,3 +1032,9 @@ export function ensureTransportScheduled() {
   Tone.Transport.scheduleRepeat((time) => evolve(time), "1m");
   transportScheduled = true;
 }
+
+// Hand the probe its Tone reference. The probe itself is started far earlier
+// from main.js — this module is only imported once the player starts the game
+// (see the dynamic import in startup-scene.js), which is deliberately after the
+// user gesture that permits an AudioContext.
+attachTone(Tone);

@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import * as Tone from 'tone';
-import { gameState } from '../../config.js';
-import { sessionHighScore, setSessionHighScore } from '../../storage.js';
+import { gameState, DAMAGE_VALUES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import {
   applyPoints,
@@ -9,6 +8,7 @@ import {
   updateMaxComboReached
 } from './score-combo-state.js';
 import { projectY, entityScale, hitboxScale, depthForProgress } from './perspective.js';
+import { applyDamage, fillResourcesFromPickup } from './damage-state.js';
 
 export function updateObstaclesStarsPowerUpsSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
@@ -182,7 +182,7 @@ for(let i=this.obstacles.length-1; i>=0; i--){
   
   // Check collision with player (can jump over obstacles!)
   // 3D collision: obstacles only collide when near player (0.94-0.97), can step behind them after
-  if(o.progress > 0.94 && o.progress < 0.97 && o.lane === playerState.lane) {
+  if(o.progress > 0.94 && o.progress < 0.97 && o.lane === playerState.lane && !o.playerCollisionHandled) {
     if (playerState.jumping || playerState.stretching) {
       // Successfully jumped over obstacle - track for tutorial
       if (this.isTutorial && !o.tutorialCounted) {
@@ -190,33 +190,44 @@ for(let i=this.obstacles.length-1; i>=0; i--){
         this.tutorialProgress.jumpsMade++;
       }
     } else if (!flow.invincible) {
-      // Hit obstacle - game over
-      // Set invincible immediately to prevent multiple deaths
-      flow.invincible = true;
-      
-      // Save highscore before restarting
-      if(combat.score > sessionHighScore) {
-        setSessionHighScore(combat.score);
-      }
-      
-      // Create splat effect for hitting wall
-      this._createSplatEffect(this.player.x, this.player.y);
-      
-      try {
-        // Low impact thud with pitch bend down
-        gameSounds.obstacleHit.triggerAttackRelease("C2", "8n");
-        gameSounds.explosion.triggerAttackRelease("8n");
-      } catch(e) {}
-      
-      // Show game over screen
-      this.showGameOverScreen();
-      
-      // Clean up any stars attached to this obstacle
-      for(let j = this.floatingStars.length - 1; j >= 0; j--) {
-        if(this.floatingStars[j].attachedObstacle === o) {
-          this.floatingStars[j].destroy();
-          this.floatingStars.splice(j, 1);
+      o.playerCollisionHandled = true;
+      const damage = DAMAGE_VALUES.obstacle;
+      const { nextShield, lethal } = applyDamage({ shield: combat.shield, damage });
+
+      if (lethal) {
+        // No shield — instant death (original behavior)
+        flow.invincible = true;
+        // High score is persisted as it is beaten during play (update-loop-bullets.js)
+        // and finalised on the game-over screen. Bumping it here as well made the
+        // game-over check compare the score against itself, so "NEW HIGH SCORE!"
+        // never fired.
+        this._createSplatEffect(this.player.x, this.player.y);
+        try {
+          gameSounds.obstacleHit.triggerAttackRelease("C2", "8n");
+          gameSounds.explosion.triggerAttackRelease("8n");
+        } catch(e) {}
+        this.showGameOverScreen();
+        for(let j = this.floatingStars.length - 1; j >= 0; j--) {
+          if(this.floatingStars[j].attachedObstacle === o) {
+            this.floatingStars[j].destroy();
+            this.floatingStars.splice(j, 1);
+          }
         }
+      } else {
+        // Shield absorbs obstacle hit — flash white, strong camera shake
+        combat.shield = nextShield;
+        this.player.setTint(0xffffff);
+        this.time.delayedCall(100, () => {
+          if (combat.rapidFire) {
+            this.player.setTint(combat.rapidFireFromShield ? 0xff00ff : 0x00ff00);
+          } else {
+            this.player.clearTint();
+          }
+        });
+        this.cameras.main.shake(300, 0.02);
+        try {
+          gameSounds.obstacleHit.triggerAttackRelease("E2", "16n");
+        } catch(e) {}
       }
     }
   }
@@ -254,21 +265,32 @@ for(let i=this.powerUps.length-1; i>=0; i--){
       comboMultiplier: 1
     });
     combat.score = scoreResult.nextScore;
-    this.scoreText.setText(combat.score.toString()); // Update score display
-    
+    this.scoreText.setText(combat.score.toString());
+
     // Track for tutorial
     if (this.isTutorial) {
       this.tutorialProgress.powerUpsCollected = (this.tutorialProgress.powerUpsCollected || 0) + 1;
     }
-    
-    combat.rapidFire = true;
-    combat.rapidFireTimer = 5000;
-    this.player.setTint(0x00ff00); // Green tint
-    
+
+    // Energy flow: ammo → shield → rapid fire
+    const { nextAmmo, nextShield, triggerRapidFire } = fillResourcesFromPickup({
+      ammo: combat.ammo,
+      shield: combat.shield
+    });
+    combat.ammo = nextAmmo;
+    combat.shield = nextShield;
+
+    if (triggerRapidFire) {
+      combat.rapidFire = true;
+      combat.rapidFireTimer = 5000;
+      combat.rapidFireFromShield = true;
+      this.player.setTint(0xff00ff); // Magenta tint for shield-overflow rapid fire
+    }
+
     // Add jello wobble reaction for power-up
     this.wobbleVelocity.x = (Math.random() - 0.5) * 20;
     this.wobbleVelocity.y = -15;
-    
+
     // Excited jello bounce animation
     this.tweens.add({
       targets: this.player,
@@ -307,6 +329,7 @@ if(combat.rapidFire){
   combat.rapidFireTimer -= dt;
   if(combat.rapidFireTimer <= 0){
     combat.rapidFire = false;
+    combat.rapidFireFromShield = false;
     this.player.clearTint();
   }
 }

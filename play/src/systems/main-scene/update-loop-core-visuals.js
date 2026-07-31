@@ -69,6 +69,10 @@ function updateFollowCamera(dt) {
 
 export function updateIdleWobble(dt) {
   const { player } = this.stateSlices;
+  if (typeof this.updatePlayerCharacterCosmetics === 'function') {
+    this.updatePlayerCharacterCosmetics();
+  }
+
   if (!player.moving && !player.jumping && !player.dashing && this.player) {
     this.idleWobblePhase += dt * 0.003;
     const breathScale = 1 + Math.sin(this.idleWobblePhase) * 0.03;
