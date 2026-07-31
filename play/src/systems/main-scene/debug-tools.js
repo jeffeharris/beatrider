@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { LANES, MAIN_SCENE_TUNING } from '../../config.js';
+import { getZoom } from './perspective.js';
 
 function warnInvariant(scene, key, message) {
   const now = scene.time.now;
@@ -30,8 +31,13 @@ export function setupDebugToolsSystem() {
 
 export function assertMainSceneStateDev() {
   if (!import.meta.env.DEV) return;
-  const { player, flow } = this.stateSlices;
+  const { player, flow, combat } = this.stateSlices;
 
+  // The zoom lives in module state, so every path that starts a round has to
+  // reset it. Catch a new restart path that forgets to.
+  if (!combat.rapidFire && getZoom() > 0 && this.time.now - this.gameStartTime < 100) {
+    warnInvariant(this, 'perspective-not-reset', 'round started with a stale perspective zoom');
+  }
   if (flow.paused && flow.gameOver) {
     warnInvariant(this, 'paused-and-gameover', 'paused and game-over are both true');
   }

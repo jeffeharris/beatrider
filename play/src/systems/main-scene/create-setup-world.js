@@ -2,6 +2,7 @@ import { gameState, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../con
 import { sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
+import { depthForProgress, PLAYER_PROGRESS } from './perspective.js';
 
 function computeWorldSizes() {
   const screenReference = Math.min(gameState.WIDTH, gameState.HEIGHT);
@@ -104,7 +105,8 @@ function initializeSceneEntities(scene, sizes) {
   scene.player = scene.add.image(scene._laneX(playerState.lane), gameState.PLAYER_Y, 'playerTex');
   scene.player.w = sizes.playerSize;
   scene.player.h = sizes.playerSize;
-  scene.player.setDepth(500);
+  // The ship's own place on the depth axis: anything nearer draws over it.
+  scene.player.setDepth(depthForProgress(PLAYER_PROGRESS));
 
   scene.chargeGlow = scene.add.graphics();
   scene.chargeGlow.setDepth(-1);
@@ -191,6 +193,17 @@ function createHud(scene) {
 
   scene.comboMeter = scene.add.graphics();
   scene.comboMeterY = meterY;
+
+  // Above the player (500) so large sprites never cover the readout - at the near
+  // perspective they reach the bottom corners where the score sits.
+  for (const el of [
+    scene.highScoreLabel, scene.highScoreText,
+    scene.scoreLabel, scene.scoreText,
+    scene.comboText, scene.comboMeterBg, scene.comboMeter
+  ]) {
+    el.setDepth(9000);
+    el.setScrollFactor(0);
+  }
 }
 
 function wireSceneUiAndDebug(scene) {
