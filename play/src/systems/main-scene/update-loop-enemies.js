@@ -2,11 +2,11 @@ import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameState, LANES, DAMAGE_VALUES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { projectY, entityScale, hitboxScale, depthForProgress } from './perspective.js';
 import { applyDamage } from './damage-state.js';
 
 export function updateEnemiesSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
-const vanishY = gameState.HEIGHT * 0.15;
 for(let i=this.enemies.length-1; i>=0; i--){
   const e=this.enemies[i]; 
   
@@ -28,41 +28,23 @@ for(let i=this.enemies.length-1; i>=0; i--){
   }
   
   // Calculate position on exponential curve (same as grid)
-  const y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(e.progress, 2.5);
-  e.y = y;
+  e.y = projectY(e.progress);
   
   // Update X position along perspective lane + pulse shift
   e.x = this._laneX(e.lane, e.progress) + pulseXShift;
   
-  // Check if enemy should be in front or behind obstacles based on progress
-  // Find the closest obstacle ahead in the same lane
-  let closestObstacleAhead = null;
-  let minDistance = Infinity;
-  
-  for(let obstacle of this.obstacles) {
-    if(Math.floor(obstacle.lane) === Math.floor(e.lane)) {
-      // Only consider obstacles that are ahead or at same position
-      if(obstacle.progress >= e.progress) {
-        const distance = obstacle.progress - e.progress;
-        if(distance < minDistance) {
-          minDistance = distance;
-          closestObstacleAhead = obstacle;
-        }
-      }
-    }
-  }
-  
-  // If there's an obstacle ahead in our lane, be behind it
-  // Otherwise be in front (we've passed all obstacles in our lane)
-  e.setDepth(closestObstacleAhead ? 80 : 180); // 80 = behind obstacles, 180 = in front
-  
+  // Depth follows position down the track, so ordering against obstacles - and
+  // against the player - falls out of the geometry instead of being guessed.
+  e.setDepth(depthForProgress(e.progress));
+
+
   // Add position to trail history
   if(!e.trailPoints) e.trailPoints = [];
   e.trailPoints.push({x: e.x, y: e.y, alpha: 1.0});
   if(e.trailPoints.length > 8) e.trailPoints.shift(); // Keep trail short
   
   // Scale based on distance
-  let scale = 0.1 + e.progress * 1.2; // Start tiny, grow to normal size
+  let scale = entityScale(e.progress); // Start tiny, grow to normal size
   
   // Apply pulse effect for all enemy types
   if(e.pulseTime) {
@@ -93,14 +75,16 @@ for(let i=this.enemies.length-1; i>=0; i--){
   
   e.setScale(scale);
   
-  // Update collision box
+  // Update collision box - hitboxScale, not the zoomed visual scale, so the
+  // perspective shift never changes how easy you are to hit.
+  const hitSize = e.baseSize * hitboxScale(e.progress);
   if(e.isDrifter) {
     // Drifters have tighter collision boxes (70% of visual size)
-    e.w = e.baseSize * scale * 0.7;
-    e.h = e.baseSize * scale * 0.7;
+    e.w = hitSize * 0.7;
+    e.h = hitSize * 0.7;
   } else {
-    e.w = e.baseSize * scale;
-    e.h = e.baseSize * scale;
+    e.w = hitSize;
+    e.h = hitSize;
   }
   
   // Remove or check collision (can't hit while jumping or stretching)
@@ -125,8 +109,7 @@ for(let i=this.enemies.length-1; i>=0; i--){
       // and finalised on the game-over screen. Bumping it here as well made the
       // game-over check compare the score against itself, so "NEW HIGH SCORE!"
       // never fired.
-      const enemyScale = 0.1 + e.progress * 1.2;
-      this._createDeathExplosion(this.player.x, this.player.y, e.x, e.y, enemyScale);
+      this._createDeathExplosion(this.player.x, this.player.y, e.x, e.y, entityScale(e.progress));
       try {
         const now = Tone.now();
         gameSounds.obstacleHit.triggerAttackRelease("G2", "16n", now);

@@ -1,6 +1,119 @@
 import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { gameState } from '../../config.js';
+import {
+  updatePerspective,
+  getVanishY,
+  getVanishX,
+  getZoom,
+  CAMERA_LOCK_AMOUNT,
+  CAMERA_JUMP_FOLLOW,
+  getCameraZoom,
+  setCameraScrollY,
+  CAMERA_LOCK_LAG_MS
+} from './perspective.js';
+
+/**
+ * Drives the perspective zoom from the rapid-fire buff. Because power-ups reset
+ * rapidFireTimer rather than adding to it, the buff can be sustained indefinitely
+ * by chaining pickups - so the zoom follows the boolean, not a fixed schedule.
+ * Must run before anything projects this frame.
+ */
+export function updatePerspectiveZoom(dt) {
+  const { combat } = this.stateSlices;
+  const wantNear = combat.rapidFire;
+
+  // Punch the camera on the rising edge only, so a chained pickup refreshes the
+  // buff without re-shaking mid-effect.
+  if (wantNear && !this.perspectiveEngaged) {
+    this.cameras.main.shake(300, 0.010);
+    this.cameras.main.flash(200, 0, 170, 80);
+  }
+  this.perspectiveEngaged = wantNear;
+
+  updatePerspective(dt, wantNear);
+
+  updateFollowCamera.call(this, dt);
+}
+
+/**
+ * Third-person follow cam: the viewport pans laterally to track the ship, and
+ * the vanishing point rides along with it so the camera keeps facing down the
+ * track. Panning without the yaw slides the corridor away; yawing without the
+ * pan reads as a fixed camera turning. It needs both.
+ *
+ * This never touches player.x, so lane logic, collision and the depth curve are
+ * unaffected. The lag is deliberate - catching up over CAMERA_LOCK_LAG_MS rather
+ * than snapping is what makes it read as a camera rather than a rigid offset.
+ */
+function updateFollowCamera(dt) {
+  const cam = this.cameras.main;
+  const zoom = getZoom();
+  const midX = gameState.WIDTH / 2;
+  const midY = gameState.HEIGHT / 2;
+
+  // Dolly in on the ship. A viewport magnification, not a per-sprite scale, so
+  // the ship grows with everything else rather than staying stubbornly small.
+  const camZoom = getCameraZoom();
+  cam.setZoom(camZoom);
+
+  // Where the ship should sit on screen: pulled toward centre laterally, and
+  // still gaining some height on a jump so it reads as leaving the ground.
+  const wantScreenX = midX + (this.player.x - midX) * (1 - CAMERA_LOCK_AMOUNT * zoom);
+  const wantScreenY = gameState.PLAYER_Y
+    + (this.player.y - gameState.PLAYER_Y) * (1 - CAMERA_JUMP_FOLLOW * zoom);
+
+  // Phaser magnifies around the camera midpoint, not around whatever is being
+  // followed - so solve for the scroll that lands the ship where we want it.
+  // At zoom 1 this reduces exactly to a plain follow offset.
+  const targetX = this.player.x - midX - (wantScreenX - midX) / camZoom;
+  const targetY = this.player.y - midY - (wantScreenY - midY) / camZoom;
+
+  // Frame-rate independent exponential catch-up.
+  const catchUp = 1 - Math.exp(-dt / CAMERA_LOCK_LAG_MS);
+  cam.scrollX += (targetX - cam.scrollX) * catchUp;
+  cam.scrollY += (targetY - cam.scrollY) * catchUp;
+
+  // Settle exactly at centre so a retreated camera leaves no sub-pixel drift.
+  if (zoom === 0) {
+    if (Math.abs(cam.scrollX) < 0.5) cam.scrollX = 0;
+    if (Math.abs(cam.scrollY) < 0.5) cam.scrollY = 0;
+  }
+
+  // Both axes pin their vanishing reference to the camera: X so it keeps facing
+  // down the track, Y so a jump rises instead of tilting.
+  setCameraScrollY(cam.scrollY);
+  this.vanishX = getVanishX(cam.scrollX);
+  this.vanishY = getVanishY();
+
+  updateHudFrame.call(this, cam);
+}
+
+/**
+ * Holds the HUD still while the camera dollies in.
+ *
+ * setScrollFactor(0) only pins an object against scrolling - zoom still
+ * magnifies it about the camera midpoint, which pushes the bottom-left readouts
+ * clean off the screen. Undoing that transform on the container lets every child
+ * keep its design coordinates, so layout code elsewhere needs no changes.
+ *
+ * For a scroll-factor-0 object Phaser renders at (x - mid) * zoom + mid, so
+ * placing the container at (0 - mid) / zoom + mid with scale 1/zoom lands a
+ * child at design coordinate c exactly where it sat before the zoom.
+ */
+function updateHudFrame(cam) {
+  const hud = this.hudContainer;
+  if (!hud) return;
+
+  const zoom = cam.zoom;
+  const midX = gameState.WIDTH / 2;
+  const midY = gameState.HEIGHT / 2;
+
+  hud.setScale(1 / zoom);
+  hud.x = midX - midX / zoom;
+  hud.y = midY - midY / zoom;
+}
 
 export function updateIdleWobble(dt) {
   const { player } = this.stateSlices;

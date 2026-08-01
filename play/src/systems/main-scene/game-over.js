@@ -12,6 +12,7 @@ import {
   resolveGameOverLayout,
   shouldEnableAdaptiveAssist
 } from './game-over-state.js';
+import { resetPerspective, depthForProgress, PLAYER_PROGRESS } from './perspective.js';
 import { createGenreAttributionState, summarizeGenreAttribution } from '../../leaderboard/genre-attribution.js';
 import { buildLeaderboardEntry } from '../../leaderboard/leaderboard-entry.js';
 import { loadLeaderboard, recordLeaderboardEntry } from '../../leaderboard/leaderboard-store.js';
@@ -334,6 +335,16 @@ function resetRoundState(scene, slices) {
   const { player, combat, flow, input } = slices;
 
   applyGameResetTransition({ player, combat, flow, input });
+
+  // This path reuses the running scene, so create() never re-runs - the round
+  // starts here rather than in initCreateSceneState, and has to reset the
+  // perspective itself or it inherits the previous round's camera.
+  resetPerspective();
+  scene.perspectiveEngaged = false;
+  scene.cameras.main.scrollX = 0;
+  scene.cameras.main.scrollY = 0;
+  scene.cameras.main.setZoom(1);
+
   scene.scoreText.setText('0');
   scene.comboText.setAlpha(0);
 
@@ -345,7 +356,7 @@ function resetRoundState(scene, slices) {
   scene.player.clearTint();
   scene.player.x = scene._laneX(2);
   scene.player.setVisible(true);
-  scene.player.setDepth(500);
+  scene.player.setDepth(depthForProgress(PLAYER_PROGRESS));
   scene.crouchTimer = 0;
   if (scene.chargeGlow) scene.chargeGlow.setVisible(false);
 
@@ -404,6 +415,12 @@ export function showGameOverScreenSystem() {
   const { player, flow, combat, input } = slices;
 
   applyGameOverTransition(flow);
+
+  // The game-over UI lays out in world coords at screen centre - bring the
+  // follow cam home so a mid-zoom pan does not throw it off.
+  this.cameras.main.scrollX = 0;
+  this.cameras.main.scrollY = 0;
+  this.cameras.main.setZoom(1);
 
   updateRecentDeathsAndAdaptiveAssist(this, combat.score);
 

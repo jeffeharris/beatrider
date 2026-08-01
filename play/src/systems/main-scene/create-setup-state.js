@@ -3,6 +3,7 @@ import { sessionHighScore } from '../../storage.js';
 import { currentGenre } from '../../audio/music-engine.js';
 import { currentDifficulty } from '../../audio/music-ui.js';
 import { initializeMainSceneStateSlices } from './state-slices.js';
+import { resetPerspective, getVanishY } from './perspective.js';
 import { createGenreAttributionState } from '../../leaderboard/genre-attribution.js';
 
 export function initCreateSceneState(data) {
@@ -18,8 +19,14 @@ export function initCreateSceneState(data) {
   };
   this.tutorialWaveStarted = false;
 
+  // The zoom is module state, so a restart must not inherit the previous run's camera.
+  resetPerspective();
+  this.perspectiveEngaged = false;
+  this.cameras.main.scrollX = 0;
+  this.cameras.main.scrollY = 0;
+  this.cameras.main.setZoom(1);
   this.vanishX = gameState.WIDTH / 2;
-  this.vanishY = gameState.HEIGHT * 0.15;
+  this.vanishY = getVanishY();
 
   this.sessionStartTime = Date.now();
   this.maxComboReached = 0;

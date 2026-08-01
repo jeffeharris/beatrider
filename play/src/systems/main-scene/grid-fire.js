@@ -3,6 +3,10 @@ import { gameState, LANES, BULLET_SPEED, FIRE_COOLDOWN, FALLBACK_FIRE_COOLDOWN, 
 import { currentBar, getSection } from '../../audio/music-engine.js';
 import { currentDifficulty, DIFFICULTY_PRESETS } from '../../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
+import {
+  projectY, getVanishY, getVanishX, unprojectProgress,
+  laneOffsetFactor, laneFieldX, depthForProgress, PLAYER_PROGRESS
+} from './perspective.js';
 
 export function pulseGridSystem() {
   this.pulseActive = true;
@@ -43,14 +47,24 @@ export function pulseGridSystem() {
   }
 }
 
+/** X of a point on the grid floor, given its X at the player's row and a depth. */
+function laneEdgeX(bottomX, t) {
+  // laneFieldX keeps the corridor's screen width constant under the camera
+  // dolly - entities go through the same narrowing in _laneX, so the grid and
+  // the things travelling down it stay locked together.
+  return this.vanishX + (laneFieldX(bottomX) - this.vanishX) * laneOffsetFactor(t);
+}
+
 export function drawPerspectiveGridSystem() {
   if (!this.gridGraphics) {
     this.gridGraphics = this.add.graphics();
     this.gridOffset = 0;
   }
 
-  this.vanishX = gameState.WIDTH / 2;
-  this.vanishY = gameState.HEIGHT * 0.15;
+  // vanishX/vanishY are owned by updatePerspectiveZoom, which runs earlier in the
+  // frame - reading them here keeps the grid on the same lean as the entities.
+  this.vanishX = getVanishX(this.cameras.main.scrollX);
+  this.vanishY = getVanishY();
 
   if (!this.gridGraphics.scene) {
     this.gridGraphics = this.add.graphics();
@@ -71,24 +85,29 @@ export function drawPerspectiveGridSystem() {
     let lastY = this.vanishY;
 
     for (let t = 0.1; t <= 1; t += 0.1) {
-      const y = this.vanishY + (gameState.HEIGHT - this.vanishY) * Math.pow(t, 2.5);
-      const x = this.vanishX + (bottomX - this.vanishX) * t;
+      const y = projectY(t);
+      const x = laneEdgeX.call(this, bottomX, t);
       this.gridGraphics.lineBetween(lastX, lastY, x, y);
       lastX = x;
       lastY = y;
     }
-    this.gridGraphics.lineBetween(lastX, lastY, bottomX, gameState.HEIGHT);
+    this.gridGraphics.lineBetween(lastX, lastY, laneEdgeX.call(this, bottomX, 1), projectY(1));
   }
 
   for (let i = 0; i < numLines; i++) {
     const t = (i + this.gridOffset % 1) / numLines;
-    const y = this.vanishY + (gameState.HEIGHT - this.vanishY) * Math.pow(t, 2.5);
+    const y = projectY(t);
     if (y < this.vanishY || y > gameState.HEIGHT) continue;
 
-    const width = gameState.WIDTH * (0.1 + t * 1.5);
+    // Span exactly the lane field at this depth, using the same projection the
+    // lane lines use - otherwise the rungs drift off the verticals as the
+    // vanishing point leans, and the grid stops reading as one surface.
     const alpha = 0.3 - t * 0.2;
     this.gridGraphics.lineStyle(2, 0x00ff00, alpha);
-    this.gridGraphics.lineBetween(gameState.WIDTH / 2 - width / 2, y, gameState.WIDTH / 2 + width / 2, y);
+    this.gridGraphics.lineBetween(
+      laneEdgeX.call(this, 0, t), y,
+      laneEdgeX.call(this, gameState.WIDTH, t), y
+    );
   }
 }
 
@@ -135,7 +154,7 @@ export function fireSystem() {
 
   const b = this.add.image(this.player.x, this.player.y, 'bulletTex');
   b.lane = lane;
-  b.setDepth(50);
+  b.setDepth(depthForProgress(PLAYER_PROGRESS));
 
   let bulletColor = 0xffffff;
   switch (combat.combo) {
@@ -166,9 +185,9 @@ export function fireSystem() {
   b.lastY = this.player.y;
   b.rotationSpeed = combat.combo >= 6 ? 0.3 : 0;
 
-  const vanishY = gameState.HEIGHT * 0.15;
-  const normalizedY = (this.player.y - vanishY) / (gameState.HEIGHT - vanishY);
-  b.progress = Math.pow(normalizedY, 1 / 2.5);
+  // Depth is derived from the player's screen Y through the live curve, so shots
+  // fired mid-zoom still spawn at the right distance.
+  b.progress = unprojectProgress(this.player.y);
 
   if (HORIZONTAL_SHOOTING && isOffScreen) {
     const direction = lane < 0 ? 1 : -1;

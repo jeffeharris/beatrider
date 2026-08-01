@@ -2,6 +2,7 @@ import { gameState, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../con
 import { DEFAULT_CHARACTER_ID, loadGameData, sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
+import { depthForProgress, PLAYER_PROGRESS } from './perspective.js';
 import { createResourceBarSystem } from './resource-bar.js';
 
 function computeWorldSizes() {
@@ -51,30 +52,34 @@ function getPlayerTextureForCharacter(characterId) {
 function createUnicornParts(scene) {
   if (scene.unicornParts) return;
 
+  // The rig was authored around the ship's old fixed depth of 500. Offsets keep
+  // the parts glued to it now that the ship sits at its true depth on the track.
+  const body = depthForProgress(PLAYER_PROGRESS);
+
   const head = scene.add.image(scene.player.x, scene.player.y, 'unicornHeadTex');
-  head.setDepth(501);
+  head.setDepth(body + 1);
   const horn = scene.add.image(scene.player.x, scene.player.y, 'unicornHornTex');
-  horn.setDepth(510);
+  horn.setDepth(body + 10);
   const leftEar = scene.add.image(scene.player.x, scene.player.y, 'unicornEarTex');
-  leftEar.setDepth(503);
+  leftEar.setDepth(body + 3);
   const rightEar = scene.add.image(scene.player.x, scene.player.y, 'unicornEarTex');
-  rightEar.setDepth(503);
+  rightEar.setDepth(body + 3);
 
   const maneCount = 4;
   const mane = [];
   for (let i = 0; i < maneCount; i++) {
     const strand = scene.add.image(scene.player.x, scene.player.y, 'unicornManeTex');
-    strand.setDepth(506 + i);
+    strand.setDepth(body + 6 + i);
     mane.push(strand);
   }
 
   const leftHoof = scene.add.image(scene.player.x, scene.player.y, 'unicornHoofTex');
-  leftHoof.setDepth(498);
+  leftHoof.setDepth(body - 2);
   const rightHoof = scene.add.image(scene.player.x, scene.player.y, 'unicornHoofTex');
-  rightHoof.setDepth(498);
+  rightHoof.setDepth(body - 2);
 
   const tail = scene.add.image(scene.player.x, scene.player.y, 'unicornTailTex');
-  tail.setDepth(499);
+  tail.setDepth(body - 1);
 
   scene.unicornParts = {
     head,
@@ -411,7 +416,8 @@ function initializeSceneEntities(scene, sizes) {
   scene.player = scene.add.image(scene._laneX(playerState.lane), gameState.PLAYER_Y, initialTexture);
   scene.player.w = sizes.playerSize;
   scene.player.h = sizes.playerSize;
-  scene.player.setDepth(500);
+  // The ship's own place on the depth axis: anything nearer draws over it.
+  scene.player.setDepth(depthForProgress(PLAYER_PROGRESS));
 
   scene.setPlayerCharacter = (characterId = DEFAULT_CHARACTER_ID) => {
     const normalized = normalizeCharacterId(characterId);
@@ -521,6 +527,28 @@ function createHud(scene) {
 
   scene.comboMeter = scene.add.graphics();
   scene.comboMeterY = meterY;
+
+  // One container holds the whole HUD so the follow camera's zoom can be undone
+  // in a single place (see updateHudFrame). Children keep their design
+  // coordinates as container-locals, so every layout write elsewhere - resize,
+  // the combo meter, the resource bar - keeps working untouched.
+  //
+  // Above the player so large sprites never cover the readout: at the near
+  // perspective they reach the bottom corners where the score sits.
+  scene.hudContainer = scene.add.container(0, 0);
+  scene.hudContainer.setDepth(9000);
+  scene.hudContainer.setScrollFactor(0);
+  scene.hudContainer.add([
+    scene.highScoreLabel, scene.highScoreText,
+    scene.scoreLabel, scene.scoreText,
+    scene.comboText, scene.comboMeterBg, scene.comboMeter
+  ]);
+}
+
+/** Anything added here rides the HUD frame instead of the world. */
+export function attachToHudFrame(scene, ...objects) {
+  if (!scene.hudContainer) return;
+  scene.hudContainer.add(objects.filter(Boolean));
 }
 
 function wireSceneUiAndDebug(scene) {
@@ -542,5 +570,6 @@ export function initializeSceneWorldAndHUD() {
   initializeRuntimeState(this);
   createHud(this);
   createResourceBarSystem(this);
+  attachToHudFrame(this, this.resourceBarBg, this.resourceBarFg, this.ammoLabel, this.shieldLabel);
   wireSceneUiAndDebug(this);
 }

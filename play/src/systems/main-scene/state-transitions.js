@@ -79,3 +79,14 @@ export function recoverOffScreenPlayer(params) {
   combat.offScreenTimer = 0;
   return true;
 }
+
+/**
+ * Correct the player's lateral lane position without disturbing active Y,
+ * rotation, or scale tweens (especially the jump landing tween).
+ *
+ * @param {{x:number}} playerSprite
+ * @param {number} expectedX
+ */
+export function correctPlayerLanePosition(playerSprite, expectedX) {
+  playerSprite.x = expectedX;
+}

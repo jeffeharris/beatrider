@@ -1,4 +1,5 @@
 import { gameState } from '../../config.js';
+import { getPerspective, STARFIELD_ZOOM_STRENGTH } from './perspective.js';
 
 export function createStarfieldSystem() {
   if (this.starGraphics) {
@@ -32,7 +33,8 @@ export function updateStarfieldSystem(dt) {
   if (!this.starGraphics) return;
   this.starGraphics.clear();
 
-  const vanishY = gameState.HEIGHT * 0.15;
+  // Stars read as distant, so they only take a fraction of the perspective shift.
+  const { vanishY, exponent } = getPerspective(STARFIELD_ZOOM_STRENGTH);
   const vanishX = gameState.WIDTH / 2;
 
   for (let layer = 0; layer < 3; layer++) {
@@ -45,12 +47,14 @@ export function updateStarfieldSystem(dt) {
         star.baseY = Math.random() * gameState.HEIGHT * 2 - gameState.HEIGHT;
       }
 
-      const curvedProgress = Math.pow(star.progress, 2.5);
+      const curvedProgress = Math.pow(star.progress, exponent);
       const y = vanishY + (star.baseY - vanishY) * curvedProgress;
       const x = vanishX + (star.baseX - vanishX) * curvedProgress;
 
       if (x < -50 || x > gameState.WIDTH + 50) continue;
 
+      // Deliberately not entityScale(): stars keep their own ramp and stay the
+      // same size through a zoom, so the backdrop reads as distant.
       const size = star.size * (0.1 + star.progress * 1.5);
       star.twinkle += dt * 0.003;
       const twinkleAlpha = 0.8 + Math.sin(star.twinkle) * 0.2;

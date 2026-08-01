@@ -1,5 +1,5 @@
 import { updateTutorialAndAdaptiveState, handlePauseAndGridInput } from './update-loop-core-state.js';
-import { updateIdleWobble, updateTimeBasedTouchCharge, updateComboMeter, updatePulseAndGrid } from './update-loop-core-visuals.js';
+import { updateIdleWobble, updateTimeBasedTouchCharge, updateComboMeter, updatePulseAndGrid, updatePerspectiveZoom } from './update-loop-core-visuals.js';
 import { updateResourceBarSystem } from './resource-bar.js';
 import { handleMovementInputAndOffscreen, handleCrouchChargeAndJump, handleFiringInput } from './update-loop-core-player-actions.js';
 import { assertMainSceneStateDev, monitorAndHealPlayerLaneDesync, updateDebugHudSystem } from './debug-tools.js';
@@ -31,6 +31,9 @@ export function runUpdateLoopCore(dt) {
   updateTimeBasedTouchCharge.call(this, dt);
   updateComboMeter.call(this);
   updateResourceBarSystem.call(this);
+
+  // Must precede every consumer of the perspective curve this frame.
+  updatePerspectiveZoom.call(this, dt);
 
   this.updateStarfield(dt);
   this.updateTrails(dt);

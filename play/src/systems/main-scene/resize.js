@@ -1,4 +1,5 @@
 import { gameState, isMobile, updateDimensions } from '../../config.js';
+import { getVanishY } from './perspective.js';
 import { resizeResourceBarSystem } from './resource-bar.js';
 
 export function resizeMainSceneSystem() {
@@ -6,7 +7,7 @@ export function resizeMainSceneSystem() {
   updateDimensions(this.cameras.main.width, this.cameras.main.height);
 
   this.vanishX = gameState.WIDTH / 2;
-  this.vanishY = gameState.HEIGHT * 0.15;
+  this.vanishY = getVanishY();
 
   if (this.player) {
     this.player.x = this._laneX(player.lane);

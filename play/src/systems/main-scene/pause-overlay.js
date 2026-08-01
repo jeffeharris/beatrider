@@ -13,6 +13,12 @@ export function pauseGameSystem() {
 
   this.tweens.pauseAll();
 
+  // Overlays lay out in world coords at screen centre, and the update loop that
+  // drives the follow cam stops while paused - bring the camera home first.
+  this.cameras.main.scrollX = 0;
+  this.cameras.main.scrollY = 0;
+  this.cameras.main.setZoom(1);
+
   this.cameras.main.setPostPipeline('Blur');
 
   this.pauseOverlay = this.add.graphics();

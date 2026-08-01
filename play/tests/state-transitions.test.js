@@ -6,7 +6,8 @@ import {
   applyGameOverTransition,
   applyGameResetTransition,
   resolveTouchReleaseAction,
-  recoverOffScreenPlayer
+  recoverOffScreenPlayer,
+  correctPlayerLanePosition
 } from '../src/systems/main-scene/state-transitions.js';
 
 test('pause and resume transitions toggle flow.paused', () => {
@@ -71,4 +72,15 @@ test('off-screen recovery clamps lane and clears off-screen timer', () => {
   combat.offScreenTimer = 77;
   assert.equal(recoverOffScreenPlayer({ player, combat, lanes: 5 }), false);
   assert.equal(combat.offScreenTimer, 77);
+});
+
+test('lane position correction preserves active jump state and vertical position', () => {
+  const player = { jumping: true };
+  const playerSprite = { x: 100, y: 250 };
+
+  correctPlayerLanePosition(playerSprite, 140);
+
+  assert.equal(playerSprite.x, 140);
+  assert.equal(playerSprite.y, 250);
+  assert.equal(player.jumping, true);
 });
