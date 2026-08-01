@@ -24,6 +24,7 @@ export function initCreateSceneState(data) {
   this.perspectiveEngaged = false;
   this.cameras.main.scrollX = 0;
   this.cameras.main.scrollY = 0;
+  this.cameras.main.setZoom(1);
   this.vanishX = gameState.WIDTH / 2;
   this.vanishY = getVanishY();
 

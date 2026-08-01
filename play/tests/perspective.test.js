@@ -168,15 +168,19 @@ test('never returns NaN for out-of-range inputs', () => {
   assert.equal(unprojectProgress(-500), 0);
 });
 
-test('the horizon rises and sprites arrive larger when zoomed', () => {
+test('the zoom is carried by the horizon and the curve, not by sprite size', () => {
   resetPerspective();
   const farVanish = getVanishY();
   const farScale = entityScale(0.5);
+  const farMidY = projectY(0.5);
 
   settle(true);
   assert.ok(getVanishY() > farVanish, 'horizon drops down the screen, shortening the runway');
-  assert.ok(entityScale(0.5) > farScale, 'mid-distance sprites are bigger');
-  assert.ok(projectY(0.5) > farVanish, 'mid-distance depth sits lower on screen');
+  assert.ok(projectY(0.5) > farMidY, 'the flatter curve puts mid-distance depths lower on screen');
+
+  // Deliberate: growing the sprites on top of the horizon and curve shift read
+  // as too heavy, so scale stays at the far values at every zoom level.
+  assert.equal(entityScale(0.5), farScale, 'sprites are the same size when zoomed');
 });
 
 test('the starfield takes only a fraction of the shift', () => {
@@ -202,7 +206,13 @@ test('hitboxes never change with the zoom', () => {
   const near = [0, 0.25, 0.5, 0.94, 0.97, 1].map(hitboxScale);
 
   assert.deepEqual(near, far, 'collision geometry must be identical at any zoom');
-  assert.ok(entityScale(0.95) > hitboxScale(0.95), 'while the visual does grow');
+
+  // hitboxScale is pinned to FAR by construction, so it holds even if a future
+  // preset reintroduces a bigger visual ramp.
+  resetPerspective();
+  for (const p of [0.25, 0.5, 0.95]) {
+    assert.equal(hitboxScale(p), entityScale(p), 'and matches the visual at the far view');
+  }
 });
 
 test('lanes fan out in step with sprite scale, keeping lane fill constant', () => {

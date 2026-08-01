@@ -5,7 +5,7 @@ import { currentDifficulty, DIFFICULTY_PRESETS } from '../../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
 import {
   projectY, getVanishY, getVanishX, unprojectProgress,
-  laneOffsetFactor, depthForProgress, PLAYER_PROGRESS
+  laneOffsetFactor, laneFieldX, depthForProgress, PLAYER_PROGRESS
 } from './perspective.js';
 
 export function pulseGridSystem() {
@@ -49,7 +49,10 @@ export function pulseGridSystem() {
 
 /** X of a point on the grid floor, given its X at the player's row and a depth. */
 function laneEdgeX(bottomX, t) {
-  return this.vanishX + (bottomX - this.vanishX) * laneOffsetFactor(t);
+  // laneFieldX keeps the corridor's screen width constant under the camera
+  // dolly - entities go through the same narrowing in _laneX, so the grid and
+  // the things travelling down it stay locked together.
+  return this.vanishX + (laneFieldX(bottomX) - this.vanishX) * laneOffsetFactor(t);
 }
 
 export function drawPerspectiveGridSystem() {

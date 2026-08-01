@@ -29,16 +29,21 @@ export const FAR_PERSPECTIVE = Object.freeze({
 // vanishRatio and scaleRamp are the two that turn dramatic into unplayable -
 // past ~0.40 the empty sky eats the top of the screen, and past ~2.4 sprites
 // overlap enough to hide each other and blur which lane they are in.
-// laneExponent below 1.0 fans the lanes out faster. It has to: sprite scale and
-// lane spread both grow linearly with progress at FAR, which is what keeps a
-// sprite at a constant ~28% of its lane at every depth and makes lanes legible.
-// Growing scale without widening lanes breaks that invariant - 0.75 restores it.
+// Sprite scale and lane spread are deliberately left at the far values here.
+// The zoom is carried by the horizon drop, the flattened depth curve and the
+// follow camera; growing the sprites on top of that read as too heavy.
+//
+// The two move together. Lane spread only needed the 0.75 fan to keep pace with
+// a bigger scale ramp - a sprite sits at a constant ~28% of its lane at every
+// depth, and that ratio is what makes lanes legible. With scale back at the far
+// values, the fan has to come back to 1.0 or lanes end up too wide for the
+// sprites in them.
 export const NEAR_PERSPECTIVE = Object.freeze({
   vanishRatio: 0.36,
   exponent: 0.95,
-  scaleBase: 0.45,
-  scaleRamp: 2.2,
-  laneExponent: 0.75
+  scaleBase: FAR_PERSPECTIVE.scaleBase,
+  scaleRamp: FAR_PERSPECTIVE.scaleRamp,
+  laneExponent: FAR_PERSPECTIVE.laneExponent
 });
 
 export const ZOOM_IN_MS = 900;
@@ -68,11 +73,37 @@ export const CAMERA_LOCK_AMOUNT = 0.7;
  */
 export const CAMERA_JUMP_FOLLOW = 0.55;
 
+/**
+ * How far the camera dollies in toward the ship at full zoom.
+ *
+ * A real viewport magnification rather than a per-sprite scale: the ship, the
+ * grid and the enemies all grow together, so the relationship between them is
+ * untouched and it reads as moving closer rather than things inflating. The
+ * cost is framing - at 1.5 you see 1/1.5 of the width, so the outer lanes crop.
+ */
+export const CAMERA_ZOOM_NEAR = 1.5;
+
 /** Camera catch-up time constant, ms. Higher lags more - this is the handheld feel. */
 export const CAMERA_LOCK_LAG_MS = 130;
 
 /** Raw 0..1 transition position. Eased on read, never read directly. */
 let zoomT = 0;
+
+/**
+ * The camera's vertical scroll, mirrored here so the horizon can ride with it.
+ *
+ * Translating a real camera does not move the vanishing point - it sits on the
+ * optical axis, and only rotation shifts it. Scrolling the whole world including
+ * the horizon is geometrically a tilt, which is why a jump read as the camera
+ * craning upward rather than rising. Offsetting the horizon by the same scroll
+ * pins it on screen while the player's row stays put in the world, and the
+ * parallax between them falls out for free.
+ */
+let cameraScrollY = 0;
+
+export function setCameraScrollY(scrollY) {
+  cameraScrollY = scrollY;
+}
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -83,6 +114,7 @@ const smoothstep = (t) => t * t * (3 - 2 * t);
 
 export function resetPerspective() {
   zoomT = 0;
+  cameraScrollY = 0;
 }
 
 /**
@@ -107,7 +139,9 @@ export function getZoom() {
 export function getPerspective(strength = 1) {
   const t = getZoom() * strength;
   return {
-    vanishY: gameState.HEIGHT * lerp(FAR_PERSPECTIVE.vanishRatio, NEAR_PERSPECTIVE.vanishRatio, t),
+    // + cameraScrollY keeps the horizon at a fixed screen position while the
+    // camera translates, so a jump reads as rising rather than tilting.
+    vanishY: gameState.HEIGHT * lerp(FAR_PERSPECTIVE.vanishRatio, NEAR_PERSPECTIVE.vanishRatio, t) + cameraScrollY,
     exponent: lerp(FAR_PERSPECTIVE.exponent, NEAR_PERSPECTIVE.exponent, t),
     scaleBase: lerp(FAR_PERSPECTIVE.scaleBase, NEAR_PERSPECTIVE.scaleBase, t),
     scaleRamp: lerp(FAR_PERSPECTIVE.scaleRamp, NEAR_PERSPECTIVE.scaleRamp, t),
@@ -122,6 +156,33 @@ export function getPerspective(strength = 1) {
 export function laneOffsetFactor(progress) {
   const { laneExponent } = getPerspective();
   return Math.pow(Math.max(0, progress), laneExponent);
+}
+
+/** The camera's magnification at the current zoom. */
+export function getCameraZoom() {
+  return 1 + (CAMERA_ZOOM_NEAR - 1) * getZoom();
+}
+
+/**
+ * How much the lane field narrows in world space, to cancel the camera dolly.
+ *
+ * The field spans the full screen width at the player's row, so magnifying the
+ * viewport pushes its outer edges off the screen and the corridor reads as cut
+ * off rather than framed. Shrinking the field by exactly 1/cameraZoom keeps its
+ * *screen* width constant at every zoom level, so the whole frame - lanes,
+ * rungs, beat flashes - stays visible while the dolly still magnifies sprites.
+ *
+ * The tradeoff is unavoidable rather than a bug: moving closer has to cost
+ * either visible width or spacing between things. This spends the spacing.
+ */
+export function getLaneFieldScale() {
+  return 1 / getCameraZoom();
+}
+
+/** Narrow a lane-row X toward screen centre by the current field scale. */
+export function laneFieldX(x) {
+  const midX = gameState.WIDTH / 2;
+  return midX + (x - midX) * getLaneFieldScale();
 }
 
 /** Current horizon Y in screen pixels. */

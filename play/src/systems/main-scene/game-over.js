@@ -343,6 +343,7 @@ function resetRoundState(scene, slices) {
   scene.perspectiveEngaged = false;
   scene.cameras.main.scrollX = 0;
   scene.cameras.main.scrollY = 0;
+  scene.cameras.main.setZoom(1);
 
   scene.scoreText.setText('0');
   scene.comboText.setAlpha(0);
@@ -419,6 +420,7 @@ export function showGameOverScreenSystem() {
   // follow cam home so a mid-zoom pan does not throw it off.
   this.cameras.main.scrollX = 0;
   this.cameras.main.scrollY = 0;
+  this.cameras.main.setZoom(1);
 
   updateRecentDeathsAndAdaptiveAssist(this, combat.score);
 

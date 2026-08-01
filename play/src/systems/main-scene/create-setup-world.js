@@ -528,17 +528,27 @@ function createHud(scene) {
   scene.comboMeter = scene.add.graphics();
   scene.comboMeterY = meterY;
 
-  // Above the player so large sprites never cover the readout - at the near
-  // perspective they reach the bottom corners where the score sits. Scroll
-  // factor 0 keeps them put while the follow camera pans.
-  for (const el of [
+  // One container holds the whole HUD so the follow camera's zoom can be undone
+  // in a single place (see updateHudFrame). Children keep their design
+  // coordinates as container-locals, so every layout write elsewhere - resize,
+  // the combo meter, the resource bar - keeps working untouched.
+  //
+  // Above the player so large sprites never cover the readout: at the near
+  // perspective they reach the bottom corners where the score sits.
+  scene.hudContainer = scene.add.container(0, 0);
+  scene.hudContainer.setDepth(9000);
+  scene.hudContainer.setScrollFactor(0);
+  scene.hudContainer.add([
     scene.highScoreLabel, scene.highScoreText,
     scene.scoreLabel, scene.scoreText,
     scene.comboText, scene.comboMeterBg, scene.comboMeter
-  ]) {
-    el.setDepth(9000);
-    el.setScrollFactor(0);
-  }
+  ]);
+}
+
+/** Anything added here rides the HUD frame instead of the world. */
+export function attachToHudFrame(scene, ...objects) {
+  if (!scene.hudContainer) return;
+  scene.hudContainer.add(objects.filter(Boolean));
 }
 
 function wireSceneUiAndDebug(scene) {
@@ -560,5 +570,6 @@ export function initializeSceneWorldAndHUD() {
   initializeRuntimeState(this);
   createHud(this);
   createResourceBarSystem(this);
+  attachToHudFrame(this, this.resourceBarBg, this.resourceBarFg, this.ammoLabel, this.shieldLabel);
   wireSceneUiAndDebug(this);
 }

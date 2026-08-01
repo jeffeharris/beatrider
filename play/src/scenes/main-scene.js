@@ -17,7 +17,7 @@ import { pulseGridSystem, drawPerspectiveGridSystem, fireSystem } from '../syste
 import { updateMainLoopSystem } from '../systems/main-scene/update-loop.js';
 import { createMainSceneSystem } from '../systems/main-scene/create-setup.js';
 import { resizeMainSceneSystem } from '../systems/main-scene/resize.js';
-import { laneOffsetFactor } from '../systems/main-scene/perspective.js';
+import { laneOffsetFactor, laneFieldX } from '../systems/main-scene/perspective.js';
 
 export default class Main extends Phaser.Scene {
   constructor() {
@@ -93,7 +93,7 @@ export default class Main extends Phaser.Scene {
     } else if(lane >= LANES) {
       clampedLane = LANES - 0.3; // Show 30% of ship on right edge
     }
-    const bottomLaneX = clampedLane * gameState.LANE_W + gameState.LANE_W / 2;
+    const bottomLaneX = laneFieldX(clampedLane * gameState.LANE_W + gameState.LANE_W / 2);
     return vanishX + (bottomLaneX - vanishX) * laneOffsetFactor(progress);
   }
   _spawnEnemy(lane, speed, texture='enemyTex'){ 

@@ -17,6 +17,7 @@ export function pauseGameSystem() {
   // drives the follow cam stops while paused - bring the camera home first.
   this.cameras.main.scrollX = 0;
   this.cameras.main.scrollY = 0;
+  this.cameras.main.setZoom(1);
 
   this.cameras.main.setPostPipeline('Blur');
 
