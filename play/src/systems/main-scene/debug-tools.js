@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { LANES, MAIN_SCENE_TUNING } from '../../config.js';
 import { getZoom } from './perspective.js';
+import { correctPlayerLanePosition } from './state-transitions.js';
 
 function warnInvariant(scene, key, message) {
   const now = scene.time.now;
@@ -79,8 +80,10 @@ export function monitorAndHealPlayerLaneDesync() {
   const now = this.time.now;
   if (now - (this.playerLaneLastHealAt || 0) < 500) return;
 
-  this.tweens.killTweensOf(this.player);
-  this.player.x = expectedX;
+  // Lane X changes continuously while the perspective zoom eases. Correcting
+  // that axis must not kill unrelated hero tweens: doing so mid-jump drops the
+  // landing callback and leaves both the elevated Y and jump immunity latched.
+  correctPlayerLanePosition(this.player, expectedX);
   this.playerLaneDesyncFrames = 0;
   this.playerLaneLastHealAt = now;
 
