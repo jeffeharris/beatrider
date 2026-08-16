@@ -27,7 +27,8 @@ Root `python serve.py [port]` (default 5174) serves the static landing page/lega
 
 - `play/index.html` — game shell page (Vite root)
 - `play/src/main.js` — entry point; boots Phaser with the two scenes
-- `play/src/config.js` — device detection, mutable `gameState` (WIDTH/HEIGHT/LANE_W/PLAYER_Y...), gameplay constants, `PLAYER_CONFIG` (animation timings), `MAIN_SCENE_TUNING` (balancing constants), grid pulse patterns
+- `play/src/config.js` — device detection, mutable `gameState` (WIDTH/HEIGHT/LANE_W/PLAYER_Y...), gameplay constants, `PLAYER_CONFIG` (animation timings); re-exports the pure tuning data from `tuning.js`
+- `play/src/tuning.js` — pure tuning data with no imports or browser globals (`MAIN_SCENE_TUNING` balancing constants, perspective constants, grid pulse patterns), so pure modules and `node --test` can import it without stubbing; device- or viewport-dependent values belong in `config.js` instead
 - `play/src/storage.js` — versioned localStorage persistence (`beatrider_data`, migrations up to v4): high score, leaderboard, settings
 - `play/src/scenes/` — `startup-scene.js` (`StartupScene`: start screen, audio unlock) and `main-scene.js` (`Main`: core gameplay)
 - `play/src/systems/main-scene/` — ~40 modules holding the Main scene's logic (setup, update loops per entity type, movement/jump/dash, mobile controls, grid/fire, starfield, tutorial, game over, state slices)
@@ -65,7 +66,7 @@ window.GameAPI = {
 ### Perspective Rendering
 
 - 5 lanes converging on a vanishing point at `HEIGHT * 0.15`
-- All projection math lives in `play/src/systems/main-scene/perspective.js`: `projectY(progress, vanishY, height)` (exponential curve, exponent 2.5), `unprojectY` (its inverse), `perspectiveCurve`, and `perspectiveScale` (sprite scale `0.1 + progress * 1.2`). Use these helpers instead of re-inlining the formulas; they are pure and unit-tested in `tests/perspective.test.js`.
+- All projection math lives in `play/src/systems/main-scene/perspective.js`: `projectY(progress, vanishY, height)` (exponential curve, exponent 2.5), `unprojectY` (its inverse), `perspectiveCurve`, and `perspectiveScale` (sprite scale `0.1 + progress * 1.2`). Use these helpers instead of re-inlining the formulas; they are pure and unit-tested in `tests/perspective.test.js`. The underlying constants (`PERSPECTIVE_EXPONENT` etc.) live in `src/tuning.js` and are re-exported by `perspective.js`.
 - Entities carry a normalized `progress` (0 = vanishing point, 1 = player row)
 
 ### Game Systems
@@ -77,7 +78,7 @@ window.GameAPI = {
 - Scoring: red 10, yellow 25, purple drifters 50; combo up to 8x within a 2s kill window
 - Difficulty presets (`music-ui.js`): zen 0.5x / normal 1x / intense 1.5x / chaos 2x speed, with separate fire-rate and spawn multipliers
 - Difficulty also scales with beat count and an adaptive-assist state
-- Starfield: 3-layer parallax with twinkle; grid pulses follow section-based patterns (`pulsePatternPool` in config.js)
+- Starfield: 3-layer parallax with twinkle; grid pulses follow section-based patterns (`pulsePatternPool` in tuning.js, re-exported by config.js)
 - Local leaderboard with genre attribution; storage migrations keep old saves working
 
 ### Testing Pattern

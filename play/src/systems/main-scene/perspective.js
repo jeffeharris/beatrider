@@ -5,17 +5,19 @@
 // so movement accelerates toward the camera, and sprite scale grows linearly
 // with progress.
 //
-// These helpers are intentionally pure (no imports, explicit parameters) so
-// they can run under `node --test` without stubbing window/navigator the way
-// config.js requires.
+// These helpers are intentionally pure (explicit parameters, no browser
+// globals) so they can run under `node --test` without stubbing
+// window/navigator the way config.js requires. The tuning constants live in
+// src/tuning.js — itself a pure leaf module — and are re-exported here so
+// existing importers (including tests/perspective.test.js) keep working.
 
-// Exponent of the distance curve: y grows as progress^2.5.
-export const PERSPECTIVE_EXPONENT = 2.5;
+import {
+  PERSPECTIVE_EXPONENT,
+  PERSPECTIVE_SCALE_BASE,
+  PERSPECTIVE_SCALE_RANGE
+} from '../../tuning.js';
 
-// Sprite scale is PERSPECTIVE_SCALE_BASE at the vanishing point and grows by
-// PERSPECTIVE_SCALE_RANGE per unit of progress (so 1.3 at progress 1).
-export const PERSPECTIVE_SCALE_BASE = 0.1;
-export const PERSPECTIVE_SCALE_RANGE = 1.2;
+export { PERSPECTIVE_EXPONENT, PERSPECTIVE_SCALE_BASE, PERSPECTIVE_SCALE_RANGE };
 
 // The raw distance curve: progress^2.5. Exposed separately because the
 // starfield projects toward per-star base positions rather than the screen
