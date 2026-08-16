@@ -3,11 +3,19 @@ import { gameState, isMobile, LANES, ENEMY_SPEED_BASE } from '../../config.js';
 import { saveGameData } from '../../storage.js';
 import { getSection } from '../../audio/music-engine.js';
 import { currentDifficulty, uiState, updateGridButton } from '../../audio/music-ui.js';
+import { createBeatPulseState, recordBeat } from './resource-pulse.js';
 
 export function setupSceneGameApi() {
   const { flow, combat } = this.stateSlices;
   window.GameAPI = {
     onBeat: () => {
+      // Record beat timing for the HUD low-resource pulse BEFORE any early
+      // return below — the tutorial and adaptive-assist branches bail out,
+      // and the warning pulse must keep running exactly when a struggling
+      // player most needs it.
+      if (!this.beatPulse) this.beatPulse = createBeatPulseState();
+      this.beatPulse = recordBeat(this.beatPulse, this.time.now);
+
       combat.beats++;
 
       if (this.isTutorial) {
