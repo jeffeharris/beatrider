@@ -108,8 +108,12 @@ export function fireSystem() {
   const now = this.time.now;
   if (this.fireBlockTime && now < this.fireBlockTime) return;
 
+  // Capture dry-fire state before the ammo decrement below: the shot that
+  // spends the last round is still a full-powered laser.
+  const isDryFire = combat.ammo <= 0;
+
   let cooldown;
-  if (combat.ammo <= 0) {
+  if (isDryFire) {
     cooldown = FALLBACK_FIRE_COOLDOWN * currentDifficulty.fireMult;
   } else {
     cooldown = (combat.rapidFire ? FIRE_COOLDOWN / 3 : FIRE_COOLDOWN) * currentDifficulty.fireMult;
@@ -198,7 +202,14 @@ export function fireSystem() {
     b.arcDistance = 0;
   }
 
-  if (combat.rapidFire) {
+  if (isDryFire) {
+    // Empty-ammo cue: fallback shots run on a 9x cooldown, so make the state
+    // audible — a dull low click instead of a laser, still in key and lane-pitched.
+    try {
+      const note = getGameNote(lane) + '2';
+      gameSounds.emptyShot.triggerAttackRelease(note, '32n', Tone.now() + 0.01);
+    } catch (e) {}
+  } else if (combat.rapidFire) {
     b.vy *= 1.5;
     if (Math.random() < 0.3) {
       try {
