@@ -44,15 +44,7 @@ for(let i=this.bullets.length-1; i>=0; i--){
       b.arcDistance += (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
       const distanceTraveled = b.arcDistance;
       const normalY = projectY(b.progress, vanishY, gameState.HEIGHT);
-      const normalStartY = projectY(1.0, vanishY, gameState.HEIGHT); // Where normal bullets start
-      const perspectiveOffset = normalStartY - gameState.PLAYER_Y; // How much the curve differs from player position
-      const jumpHeight = gameState.PLAYER_Y - b.startY; // Positive when jumping
-      
-      // Log first frame of arc shot
-      if (!b.arcLogged) {
-        b.arcLogged = true;
-      }
-      
+
       if (distanceTraveled < b.safeDistance) {
         // Draw straight line from A to B
         const arcProgress = distanceTraveled / b.safeDistance;
@@ -69,22 +61,6 @@ for(let i=this.bullets.length-1; i>=0; i--){
         
         // Linear interpolation from A to B
         y = pointA + (pointB - pointA) * arcProgress;
-        
-        // Check at boundary
-        if (arcProgress > 0.99 && !b.boundaryChecked) {
-          const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should be pointB)
-          const nextFrameProgress = b.progress - (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
-          const nextFrameY = projectY(nextFrameProgress, vanishY, gameState.HEIGHT) - perspectiveOffset;
-          b.boundaryChecked = true;
-        }
-        
-        // Log near transition
-        if (arcProgress > 0.98 && !b.almostTransition) {
-          const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should equal pointB)
-          const normalStartProgress = 1.0 - b.safeDistance;
-          const normalStartY = projectY(normalStartProgress, vanishY, gameState.HEIGHT) - perspectiveOffset;
-          b.almostTransition = true;
-        }
       } else {
         // After safeDistance: Arc shots don't need perspective offset
         y = normalY;
