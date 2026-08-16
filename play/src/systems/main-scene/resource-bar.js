@@ -5,6 +5,11 @@ const BAR_HEIGHT = 10;
 const BAR_GAP = 4;    // gap between ammo and shield halves
 const BAR_Y = 12;
 
+const FILL_ALPHA = 0.9;          // fill alpha
+const SOCKET_ALPHA = 0.35;       // resting outline around a non-empty socket
+const EMPTY_SOCKET_ALPHA = 0.9;  // urgent outline around an empty socket
+const EMPTY_COLOR = 0xff3333;    // matches the critical fill tier
+
 function getBarX() {
   return (gameState.WIDTH - BAR_WIDTH) / 2;
 }
@@ -45,23 +50,34 @@ export function updateResourceBarSystem() {
 
   const barX = getBarX();
   const halfWidth = (BAR_WIDTH - BAR_GAP) / 2;
+  const gfx = this.resourceBarFg;
 
-  this.resourceBarFg.clear();
+  gfx.clear();
 
   // Ammo bar (left half) — fills left to right
   const ammoPercent = combat.ammo / MAX_AMMO;
   const ammoColor = ammoPercent > 0.3 ? 0x00ffcc : ammoPercent > 0.1 ? 0xffff00 : 0xff3333;
-  this.resourceBarFg.fillStyle(ammoColor, 0.9);
-  this.resourceBarFg.fillRect(barX, BAR_Y, halfWidth * ammoPercent, BAR_HEIGHT);
+  drawResourceHalf(gfx, barX, halfWidth, ammoPercent, ammoColor);
 
   // Shield bar (right half) — fills left to right
   const shieldPercent = combat.shield / MAX_SHIELD;
-  if (shieldPercent > 0) {
-    const shieldColor = shieldPercent > 0.5 ? 0xcc44ff : shieldPercent > 0.25 ? 0xff8800 : 0xff3333;
-    const shieldX = barX + halfWidth + BAR_GAP;
-    this.resourceBarFg.fillStyle(shieldColor, 0.9);
-    this.resourceBarFg.fillRect(shieldX, BAR_Y, halfWidth * shieldPercent, BAR_HEIGHT);
+  const shieldColor = shieldPercent > 0.5 ? 0xcc44ff : shieldPercent > 0.25 ? 0xff8800 : 0xff3333;
+  drawResourceHalf(gfx, barX + halfWidth + BAR_GAP, halfWidth, shieldPercent, shieldColor);
+}
+
+// One half of the bar: the fill shows the value; an outlined socket keeps the
+// slot visible even at zero. An empty shield means the next hit is lethal, so
+// that state must never be rendered as an absence of pixels — at zero the
+// socket outline turns urgent red.
+function drawResourceHalf(gfx, x, width, percent, color) {
+  if (percent > 0) {
+    gfx.fillStyle(color, FILL_ALPHA);
+    gfx.fillRect(x, BAR_Y, width * percent, BAR_HEIGHT);
+    gfx.lineStyle(1, color, SOCKET_ALPHA);
+  } else {
+    gfx.lineStyle(1, EMPTY_COLOR, EMPTY_SOCKET_ALPHA);
   }
+  gfx.strokeRect(x, BAR_Y, width, BAR_HEIGHT);
 }
 
 export function resizeResourceBarSystem() {
