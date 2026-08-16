@@ -25,4 +25,5 @@ node_modules/
 # Build output
 dist/
 play/dist/
+play/ios/App/App/public/
 _site/
