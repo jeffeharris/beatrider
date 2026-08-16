@@ -1,4 +1,5 @@
 import { gameState } from '../../config.js';
+import { perspectiveCurve } from './perspective.js';
 
 export function createStarfieldSystem() {
   if (this.starGraphics) {
@@ -45,7 +46,7 @@ export function updateStarfieldSystem(dt) {
         star.baseY = Math.random() * gameState.HEIGHT * 2 - gameState.HEIGHT;
       }
 
-      const curvedProgress = Math.pow(star.progress, 2.5);
+      const curvedProgress = perspectiveCurve(star.progress);
       const y = vanishY + (star.baseY - vanishY) * curvedProgress;
       const x = vanishX + (star.baseX - vanishX) * curvedProgress;
 

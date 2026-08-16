@@ -3,6 +3,7 @@ import * as Tone from 'tone';
 import { gameState, LANES, DAMAGE_VALUES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import { applyDamage } from './damage-state.js';
+import { projectY, perspectiveScale } from './perspective.js';
 
 export function updateEnemiesSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
@@ -28,7 +29,7 @@ for(let i=this.enemies.length-1; i>=0; i--){
   }
   
   // Calculate position on exponential curve (same as grid)
-  const y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(e.progress, 2.5);
+  const y = projectY(e.progress, vanishY, gameState.HEIGHT);
   e.y = y;
   
   // Update X position along perspective lane + pulse shift
@@ -62,7 +63,7 @@ for(let i=this.enemies.length-1; i>=0; i--){
   if(e.trailPoints.length > 8) e.trailPoints.shift(); // Keep trail short
   
   // Scale based on distance
-  let scale = 0.1 + e.progress * 1.2; // Start tiny, grow to normal size
+  let scale = perspectiveScale(e.progress); // Start tiny, grow to normal size
   
   // Apply pulse effect for all enemy types
   if(e.pulseTime) {
@@ -125,7 +126,7 @@ for(let i=this.enemies.length-1; i>=0; i--){
       // and finalised on the game-over screen. Bumping it here as well made the
       // game-over check compare the score against itself, so "NEW HIGH SCORE!"
       // never fired.
-      const enemyScale = 0.1 + e.progress * 1.2;
+      const enemyScale = perspectiveScale(e.progress);
       this._createDeathExplosion(this.player.x, this.player.y, e.x, e.y, enemyScale);
       try {
         const now = Tone.now();
