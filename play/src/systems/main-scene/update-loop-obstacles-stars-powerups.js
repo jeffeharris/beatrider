@@ -8,6 +8,7 @@ import {
   updateMaxComboReached
 } from './score-combo-state.js';
 import { applyDamage, fillResourcesFromPickup } from './damage-state.js';
+import { projectY, perspectiveScale } from './perspective.js';
 
 export function updateObstaclesStarsPowerUpsSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
@@ -21,7 +22,7 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
   
   if(obstacleExists) {
     // Follow the obstacle position
-    const scale = 0.1 + obstacle.progress * 1.2;
+    const scale = perspectiveScale(obstacle.progress);
     
     // Floating motion (up and down)
     star.floatOffset += star.floatSpeed * dt;
@@ -137,10 +138,10 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
 for(let i=this.obstacles.length-1; i>=0; i--){
   const o=this.obstacles[i];
   o.progress += (o.vy * dt/1000) / (gameState.HEIGHT * 0.8) + pulseShift;
-  const y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(o.progress, 2.5);
+  const y = projectY(o.progress, vanishY, gameState.HEIGHT);
   o.y = y;
   o.x = this._laneX(o.lane, o.progress) + pulseXShift;
-  const scale = 0.1 + o.progress * 1.2;
+  const scale = perspectiveScale(o.progress);
   o.setScale(scale, scale * 1.2); // Much taller shields
   o.w = o.baseSize * scale;
   o.h = 22 * scale * 1.2; // Adjusted height for collision
@@ -245,10 +246,10 @@ for(let i=this.obstacles.length-1; i>=0; i--){
 for(let i=this.powerUps.length-1; i>=0; i--){
   const p=this.powerUps[i];
   p.progress += (p.vy * dt/1000) / (gameState.HEIGHT * 0.8) + pulseShift;
-  const y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(p.progress, 2.5);
+  const y = projectY(p.progress, vanishY, gameState.HEIGHT);
   p.y = y;
   p.x = this._laneX(p.lane, p.progress) + pulseXShift;
-  const scale = 0.1 + p.progress * 1.2;
+  const scale = perspectiveScale(p.progress);
   p.setScale(scale);
   p.angle += dt * 0.2; // Rotate
   

@@ -3,6 +3,7 @@ import { gameState, LANES, BULLET_SPEED, FIRE_COOLDOWN, FALLBACK_FIRE_COOLDOWN, 
 import { currentBar, getSection } from '../../audio/music-engine.js';
 import { currentDifficulty, DIFFICULTY_PRESETS } from '../../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
+import { projectY, unprojectY } from './perspective.js';
 
 export function pulseGridSystem() {
   this.pulseActive = true;
@@ -71,7 +72,7 @@ export function drawPerspectiveGridSystem() {
     let lastY = this.vanishY;
 
     for (let t = 0.1; t <= 1; t += 0.1) {
-      const y = this.vanishY + (gameState.HEIGHT - this.vanishY) * Math.pow(t, 2.5);
+      const y = projectY(t, this.vanishY, gameState.HEIGHT);
       const x = this.vanishX + (bottomX - this.vanishX) * t;
       this.gridGraphics.lineBetween(lastX, lastY, x, y);
       lastX = x;
@@ -82,7 +83,7 @@ export function drawPerspectiveGridSystem() {
 
   for (let i = 0; i < numLines; i++) {
     const t = (i + this.gridOffset % 1) / numLines;
-    const y = this.vanishY + (gameState.HEIGHT - this.vanishY) * Math.pow(t, 2.5);
+    const y = projectY(t, this.vanishY, gameState.HEIGHT);
     if (y < this.vanishY || y > gameState.HEIGHT) continue;
 
     const width = gameState.WIDTH * (0.1 + t * 1.5);
@@ -107,8 +108,12 @@ export function fireSystem() {
   const now = this.time.now;
   if (this.fireBlockTime && now < this.fireBlockTime) return;
 
+  // Capture dry-fire state before the ammo decrement below: the shot that
+  // spends the last round is still a full-powered laser.
+  const isDryFire = combat.ammo <= 0;
+
   let cooldown;
-  if (combat.ammo <= 0) {
+  if (isDryFire) {
     cooldown = FALLBACK_FIRE_COOLDOWN * currentDifficulty.fireMult;
   } else {
     cooldown = (combat.rapidFire ? FIRE_COOLDOWN / 3 : FIRE_COOLDOWN) * currentDifficulty.fireMult;
@@ -167,8 +172,7 @@ export function fireSystem() {
   b.rotationSpeed = combat.combo >= 6 ? 0.3 : 0;
 
   const vanishY = gameState.HEIGHT * 0.15;
-  const normalizedY = (this.player.y - vanishY) / (gameState.HEIGHT - vanishY);
-  b.progress = Math.pow(normalizedY, 1 / 2.5);
+  b.progress = unprojectY(this.player.y, vanishY, gameState.HEIGHT);
 
   if (HORIZONTAL_SHOOTING && isOffScreen) {
     const direction = lane < 0 ? 1 : -1;
@@ -198,7 +202,14 @@ export function fireSystem() {
     b.arcDistance = 0;
   }
 
-  if (combat.rapidFire) {
+  if (isDryFire) {
+    // Empty-ammo cue: fallback shots run on a 9x cooldown, so make the state
+    // audible — a dull low click instead of a laser, still in key and lane-pitched.
+    try {
+      const note = getGameNote(lane) + '2';
+      gameSounds.emptyShot.triggerAttackRelease(note, '32n', Tone.now() + 0.01);
+    } catch (e) {}
+  } else if (combat.rapidFire) {
     b.vy *= 1.5;
     if (Math.random() < 0.3) {
       try {

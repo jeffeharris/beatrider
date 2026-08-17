@@ -138,6 +138,18 @@ export function createGameSounds({ sidechain, acidFilter1, stabReverb, savedData
 
     currentLaserSound: savedData.settings?.laserSound || 0, // Load saved laser sound preference
 
+    // Dry-fire click for fallback shots at zero ammo. Deliberately NOT part of
+    // laserSounds: that array is user-selectable (keys 1-6, saved preference,
+    // music-ui buttons) — this is a system warning cue, not a weapon option.
+    // Dull and underpowered on purpose: low, dark, quieter than any laser.
+    emptyShot: new Tone.MonoSynth({
+      oscillator: { type: "square" },
+      envelope: { attack: 0.001, decay: 0.06, sustain: 0, release: 0.02 },
+      filter: { frequency: 350, rolloff: -24, Q: 1 },
+      filterEnvelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.02, baseFrequency: 500, octaves: -1 },
+      volume: -16
+    }).connect(gameReverb),
+
     // Explosion - filtered noise burst that sounds like a snare hit
     explosion: new Tone.NoiseSynth({
       noise: { type: "pink" },

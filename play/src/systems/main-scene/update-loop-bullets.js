@@ -7,6 +7,7 @@ import {
   resolveComboFromWindow,
   updateMaxComboReached
 } from './score-combo-state.js';
+import { projectY, perspectiveScale } from './perspective.js';
 
 export function updateBulletsSystem(dt) {
 const { combat } = this.stateSlices;
@@ -21,7 +22,7 @@ for(let i=this.bullets.length-1; i>=0; i--){
     
     // Update position using current lane and constant progress
     b.x = this._laneX(b.currentLane, b.progress);
-    b.y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
+    b.y = projectY(b.progress, vanishY, gameState.HEIGHT);
     
     // Remove if bullet has crossed all lanes
     if((b.vx > 0 && b.currentLane > 5) || (b.vx < 0 && b.currentLane < -1)) {
@@ -35,23 +36,15 @@ for(let i=this.bullets.length-1; i>=0; i--){
     b.progress -= (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
     
     // Calculate base position on exponential curve
-    let y = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
+    let y = projectY(b.progress, vanishY, gameState.HEIGHT);
     
     // Apply arc trajectory if this is a jump shot
     if(b.isArcShot) {
       // Update arc distance based on bullet speed
       b.arcDistance += (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
       const distanceTraveled = b.arcDistance;
-      const normalY = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(b.progress, 2.5);
-      const normalStartY = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(1.0, 2.5); // Where normal bullets start
-      const perspectiveOffset = normalStartY - gameState.PLAYER_Y; // How much the curve differs from player position
-      const jumpHeight = gameState.PLAYER_Y - b.startY; // Positive when jumping
-      
-      // Log first frame of arc shot
-      if (!b.arcLogged) {
-        b.arcLogged = true;
-      }
-      
+      const normalY = projectY(b.progress, vanishY, gameState.HEIGHT);
+
       if (distanceTraveled < b.safeDistance) {
         // Draw straight line from A to B
         const arcProgress = distanceTraveled / b.safeDistance;
@@ -64,26 +57,10 @@ for(let i=this.bullets.length-1; i>=0; i--){
         // But we need to calculate where that is in screen Y
         const progressAtB = 1.0 - b.safeDistance;
         // This is the Y position for that progress value on the perspective curve
-        const pointB = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(progressAtB, 2.5);
+        const pointB = projectY(progressAtB, vanishY, gameState.HEIGHT);
         
         // Linear interpolation from A to B
         y = pointA + (pointB - pointA) * arcProgress;
-        
-        // Check at boundary
-        if (arcProgress > 0.99 && !b.boundaryChecked) {
-          const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should be pointB)
-          const nextFrameProgress = b.progress - (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
-          const nextFrameY = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(nextFrameProgress, 2.5) - perspectiveOffset;
-          b.boundaryChecked = true;
-        }
-        
-        // Log near transition
-        if (arcProgress > 0.98 && !b.almostTransition) {
-          const arcEndY = pointA + (pointB - pointA) * 1.0; // Where arc ends (should equal pointB)
-          const normalStartProgress = 1.0 - b.safeDistance;
-          const normalStartY = vanishY + (gameState.HEIGHT - vanishY) * Math.pow(normalStartProgress, 2.5) - perspectiveOffset;
-          b.almostTransition = true;
-        }
       } else {
         // After safeDistance: Arc shots don't need perspective offset
         y = normalY;
@@ -132,7 +109,7 @@ for(let i=this.bullets.length-1; i>=0; i--){
   }
   
   // Scale based on distance
-  const scale = 0.1 + b.progress * 1.2;
+  const scale = perspectiveScale(b.progress);
   b.setScale(scale);
   
   // Check collision with obstacles first
@@ -172,7 +149,7 @@ for(let i=this.bullets.length-1; i>=0; i--){
       const laneThreshold = e.isDrifter ? 0.3 : 0.5; // More precise lane alignment needed
       if(Math.abs(e.lane - b.lane) < laneThreshold && Math.abs(e.progress - b.progress) < progressThreshold){
         // Calculate enemy scale for explosion
-        const enemyScale = 0.1 + e.progress * 1.2; // Same formula as enemy scaling
+        const enemyScale = perspectiveScale(e.progress); // Same formula as enemy scaling
         
         // Create explosion at enemy position with proper scale
         const explosionColor = e.isDrifter ? 0x9966ff : (e.enemyType === 'fastEnemyTex' ? 0xffff00 : 0xff3366);
