@@ -9,7 +9,8 @@ const {
   perspectiveCurve,
   projectY,
   unprojectY,
-  perspectiveScale
+  perspectiveScale,
+  laneSpread
 } = await import('../src/systems/main-scene/perspective.js');
 
 // Representative screen setup: 720px tall, vanishing point at 15% and the ship
@@ -59,6 +60,12 @@ test('unprojectY is the inverse of projectY', () => {
     const roundTripped = unprojectY(y, VANISH_Y, PLAYER_Y);
     assert.ok(Math.abs(roundTripped - p) < 1e-12, `round-trip drifted for progress ${p}: got ${roundTripped}`);
   }
+});
+
+test('laneSpread is 0 at the horizon and exactly 1 on the ship row', () => {
+  assert.equal(laneSpread(0), 0);
+  assert.equal(laneSpread(PLAYER_PROGRESS), 1);
+  assert.ok(laneSpread(1) > 1);
 });
 
 test('perspectiveScale matches 0.1 + progress * 1.2 exactly', () => {

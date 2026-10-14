@@ -17,6 +17,7 @@ import { pulseGridSystem, drawPerspectiveGridSystem, fireSystem } from '../syste
 import { updateMainLoopSystem } from '../systems/main-scene/update-loop.js';
 import { createMainSceneSystem } from '../systems/main-scene/create-setup.js';
 import { resizeMainSceneSystem } from '../systems/main-scene/resize.js';
+import { laneSpread, PLAYER_PROGRESS } from '../systems/main-scene/perspective.js';
 
 export default class Main extends Phaser.Scene {
   constructor() {
@@ -81,8 +82,9 @@ export default class Main extends Phaser.Scene {
   superJump(chargePercent = 1.0) {
     return superJumpSystem.call(this, chargePercent);
   }
-  _laneX(lane, progress = 1){ 
-    // Interpolate X position between vanishing point and lane position based on progress
+  _laneX(lane, progress = PLAYER_PROGRESS){ 
+    // Interpolate X position between vanishing point and lane position based on progress.
+    // The default is the ship's row, where a lane sits at exactly bottomLaneX.
     // Use the same vanishing point as the grid
     const vanishX = this.vanishX || gameState.WIDTH / 2;
     // Clamp off-screen lanes to be partially visible
@@ -93,7 +95,7 @@ export default class Main extends Phaser.Scene {
       clampedLane = LANES - 0.3; // Show 30% of ship on right edge
     }
     const bottomLaneX = clampedLane * gameState.LANE_W + gameState.LANE_W / 2;
-    return vanishX + (bottomLaneX - vanishX) * progress;
+    return vanishX + (bottomLaneX - vanishX) * laneSpread(progress);
   }
   _spawnEnemy(lane, speed, texture='enemyTex'){ 
     return spawnEnemySystem.call(this, lane, speed, texture);

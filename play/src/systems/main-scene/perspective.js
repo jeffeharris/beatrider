@@ -47,6 +47,14 @@ export function unprojectY(y, vanishY, playerY) {
   return PLAYER_PROGRESS * Math.pow(reach, 1 / PERSPECTIVE_EXPONENT);
 }
 
+// How far a lane has fanned out from the vanishing point, as a fraction of its
+// X at the ship's row: 0 at the horizon, exactly 1 at PLAYER_PROGRESS, and a
+// little over 1 behind the ship. Pairs with projectY so an entity in your lane
+// crosses your row directly over the ship, not inward of it.
+export function laneSpread(progress) {
+  return progress / PLAYER_PROGRESS;
+}
+
 // Sprite scale for a given progress (start tiny, grow to full size).
 export function perspectiveScale(progress) {
   return PERSPECTIVE_SCALE_BASE + progress * PERSPECTIVE_SCALE_RANGE;

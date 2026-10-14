@@ -3,7 +3,7 @@ import { gameState, LANES, BULLET_SPEED, FIRE_COOLDOWN, FALLBACK_FIRE_COOLDOWN, 
 import { currentBar, getSection } from '../../audio/music-engine.js';
 import { currentDifficulty, DIFFICULTY_PRESETS } from '../../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
-import { projectY, unprojectY, PLAYER_PROGRESS } from './perspective.js';
+import { projectY, unprojectY, laneSpread, PLAYER_PROGRESS } from './perspective.js';
 
 export function pulseGridSystem() {
   this.pulseActive = true;
@@ -73,12 +73,16 @@ export function drawPerspectiveGridSystem() {
 
     for (let t = 0.1; t <= 1; t += 0.1) {
       const y = projectY(t, this.vanishY, gameState.PLAYER_Y);
-      const x = this.vanishX + (bottomX - this.vanishX) * t;
+      const x = this.vanishX + (bottomX - this.vanishX) * laneSpread(t);
       this.gridGraphics.lineBetween(lastX, lastY, x, y);
       lastX = x;
       lastY = y;
     }
-    this.gridGraphics.lineBetween(lastX, lastY, bottomX, projectY(1, this.vanishY, gameState.PLAYER_Y));
+    this.gridGraphics.lineBetween(
+      lastX, lastY,
+      this.vanishX + (bottomX - this.vanishX) * laneSpread(1),
+      projectY(1, this.vanishY, gameState.PLAYER_Y)
+    );
   }
 
   for (let i = 0; i < numLines; i++) {
