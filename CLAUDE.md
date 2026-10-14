@@ -66,12 +66,12 @@ window.GameAPI = {
 ### Perspective Rendering
 
 - 5 lanes converging on a vanishing point at `HEIGHT * 0.15`
-- All projection math lives in `play/src/systems/main-scene/perspective.js`: `projectY(progress, vanishY, height)` (exponential curve, exponent 2.5), `unprojectY` (its inverse), `perspectiveCurve`, and `perspectiveScale` (sprite scale `0.1 + progress * 1.2`). Use these helpers instead of re-inlining the formulas; they are pure and unit-tested in `tests/perspective.test.js`. The underlying constants (`PERSPECTIVE_EXPONENT` etc.) live in `src/tuning.js` and are re-exported by `perspective.js`.
-- Entities carry a normalized `progress` (0 = vanishing point, 1 = player row)
+- All projection math lives in `play/src/systems/main-scene/perspective.js`: `projectY(progress, vanishY, playerY)` (exponential curve, exponent 2.5; callers pass `gameState.PLAYER_Y`), `unprojectY` (its inverse), `laneSpread` (lane fan-out from the vanishing point, used by `_laneX` and the grid), `perspectiveCurve`, and `perspectiveScale` (sprite scale `0.1 + progress * 1.2`). Use these helpers instead of re-inlining the formulas; they are pure and unit-tested in `tests/perspective.test.js`. The underlying constants (`PERSPECTIVE_EXPONENT` etc.) live in `src/tuning.js` and are re-exported by `perspective.js`.
+- Entities carry a normalized `progress`: 0 = vanishing point, `PLAYER_PROGRESS` (0.955, in `tuning.js`) = exactly on the ship's row in both X and Y, and past that = behind the ship, heading off the bottom of the screen. `_laneX(lane)` defaults to `PLAYER_PROGRESS`, so leaving out progress gives the ship's X.
 
 ### Game Systems
 
-- Collision: lane + progress window checks (e.g. enemies hit only at progress 0.94–0.97, so you can step behind them)
+- Collision: lane + progress window checks (e.g. enemies hit only at progress 0.94–0.97, a window centred on `PLAYER_PROGRESS`, so you can step behind them)
 - Jump/crouch with charge mechanic for super jumps; arc shots when firing mid-jump pass over obstacles
 - Dash via double-tap (desktop) or quick successive touch moves
 - Resources: ammo (100) → shield (50) → rapid-fire overflow; power-ups refill in that order (`damage-state.js`)
