@@ -29,7 +29,7 @@ for(let i=this.enemies.length-1; i>=0; i--){
   }
   
   // Calculate position on exponential curve (same as grid)
-  const y = projectY(e.progress, vanishY, gameState.HEIGHT);
+  const y = projectY(e.progress, vanishY, gameState.PLAYER_Y);
   e.y = y;
   
   // Update X position along perspective lane + pulse shift

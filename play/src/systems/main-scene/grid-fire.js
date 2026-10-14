@@ -3,7 +3,7 @@ import { gameState, LANES, BULLET_SPEED, FIRE_COOLDOWN, FALLBACK_FIRE_COOLDOWN, 
 import { currentBar, getSection } from '../../audio/music-engine.js';
 import { currentDifficulty, DIFFICULTY_PRESETS } from '../../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../../audio/game-sounds.js';
-import { projectY, unprojectY } from './perspective.js';
+import { projectY, unprojectY, PLAYER_PROGRESS } from './perspective.js';
 
 export function pulseGridSystem() {
   this.pulseActive = true;
@@ -72,18 +72,18 @@ export function drawPerspectiveGridSystem() {
     let lastY = this.vanishY;
 
     for (let t = 0.1; t <= 1; t += 0.1) {
-      const y = projectY(t, this.vanishY, gameState.HEIGHT);
+      const y = projectY(t, this.vanishY, gameState.PLAYER_Y);
       const x = this.vanishX + (bottomX - this.vanishX) * t;
       this.gridGraphics.lineBetween(lastX, lastY, x, y);
       lastX = x;
       lastY = y;
     }
-    this.gridGraphics.lineBetween(lastX, lastY, bottomX, gameState.HEIGHT);
+    this.gridGraphics.lineBetween(lastX, lastY, bottomX, projectY(1, this.vanishY, gameState.PLAYER_Y));
   }
 
   for (let i = 0; i < numLines; i++) {
     const t = (i + this.gridOffset % 1) / numLines;
-    const y = projectY(t, this.vanishY, gameState.HEIGHT);
+    const y = projectY(t, this.vanishY, gameState.PLAYER_Y);
     if (y < this.vanishY || y > gameState.HEIGHT) continue;
 
     const width = gameState.WIDTH * (0.1 + t * 1.5);
@@ -172,7 +172,7 @@ export function fireSystem() {
   b.rotationSpeed = combat.combo >= 6 ? 0.3 : 0;
 
   const vanishY = gameState.HEIGHT * 0.15;
-  b.progress = unprojectY(this.player.y, vanishY, gameState.HEIGHT);
+  b.progress = unprojectY(this.player.y, vanishY, gameState.PLAYER_Y);
 
   if (HORIZONTAL_SHOOTING && isOffScreen) {
     const direction = lane < 0 ? 1 : -1;
@@ -198,7 +198,7 @@ export function fireSystem() {
     const jumpPercent = Math.min(jumpHeight / ARC_SHOT_MAX_JUMP_HEIGHT, 1);
     b.safeDistance = ARC_SHOT_BASE_SAFE_DISTANCE + (jumpPercent * ARC_SHOT_HEIGHT_BONUS);
     b.startY = this.player.y;
-    b.progress = 1.0;
+    b.progress = PLAYER_PROGRESS;
     b.arcDistance = 0;
   }
 

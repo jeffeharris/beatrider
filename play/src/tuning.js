@@ -19,6 +19,11 @@ export const PERSPECTIVE_EXPONENT = 2.5;
 export const PERSPECTIVE_SCALE_BASE = 0.1;
 export const PERSPECTIVE_SCALE_RANGE = 1.2;
 
+// Where the ship sits on the progress axis: the centre of the 0.94-0.97
+// collision window. projectY lands this progress exactly on PLAYER_Y, so an
+// enemy is drawn on the ship's row at the moment it can hit you.
+export const PLAYER_PROGRESS = 0.955;
+
 // ============================================
 // GRID PULSE PATTERNS
 // ============================================

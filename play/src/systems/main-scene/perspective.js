@@ -1,7 +1,8 @@
 // Perspective projection helpers for the lane-based playfield.
 //
 // Entities travel along a normalized `progress` value (0 = at the vanishing
-// point, 1 = at the bottom/player row). Screen Y follows an exponential curve
+// point, PLAYER_PROGRESS = on the ship's row, a little past that = behind the
+// ship and off toward the screen bottom). Screen Y follows an exponential curve
 // so movement accelerates toward the camera, and sprite scale grows linearly
 // with progress.
 //
@@ -14,10 +15,11 @@
 import {
   PERSPECTIVE_EXPONENT,
   PERSPECTIVE_SCALE_BASE,
-  PERSPECTIVE_SCALE_RANGE
+  PERSPECTIVE_SCALE_RANGE,
+  PLAYER_PROGRESS
 } from '../../tuning.js';
 
-export { PERSPECTIVE_EXPONENT, PERSPECTIVE_SCALE_BASE, PERSPECTIVE_SCALE_RANGE };
+export { PERSPECTIVE_EXPONENT, PERSPECTIVE_SCALE_BASE, PERSPECTIVE_SCALE_RANGE, PLAYER_PROGRESS };
 
 // The raw distance curve: progress^2.5. Exposed separately because the
 // starfield projects toward per-star base positions rather than the screen
@@ -26,15 +28,23 @@ export function perspectiveCurve(progress) {
   return Math.pow(progress, PERSPECTIVE_EXPONENT);
 }
 
-// Screen Y for a given progress, projecting from vanishY down to `height`
-// (the bottom of the screen).
-export function projectY(progress, vanishY, height) {
-  return vanishY + (height - vanishY) * perspectiveCurve(progress);
+// Screen Y for a given progress, projecting from vanishY so that PLAYER_PROGRESS
+// lands exactly on `playerY` (the ship's row). Projecting to the screen bottom
+// instead put the collision window ~40px above the ship, so enemies hit you
+// before they visibly reached you. Progress past PLAYER_PROGRESS continues
+// below the ship toward the bottom edge.
+//
+// Progress is clamped at 0 because a fractional exponent of a negative base is
+// NaN, and bullets briefly sit below 0 before they are culled.
+export function projectY(progress, vanishY, playerY) {
+  const reach = perspectiveCurve(Math.max(0, progress) / PLAYER_PROGRESS);
+  return vanishY + (playerY - vanishY) * reach;
 }
 
 // Inverse of projectY: recover progress from a screen Y coordinate.
-export function unprojectY(y, vanishY, height) {
-  return Math.pow((y - vanishY) / (height - vanishY), 1 / PERSPECTIVE_EXPONENT);
+export function unprojectY(y, vanishY, playerY) {
+  const reach = Math.max(0, (y - vanishY) / (playerY - vanishY));
+  return PLAYER_PROGRESS * Math.pow(reach, 1 / PERSPECTIVE_EXPONENT);
 }
 
 // Sprite scale for a given progress (start tiny, grow to full size).
