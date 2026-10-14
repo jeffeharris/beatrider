@@ -138,7 +138,7 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
 for(let i=this.obstacles.length-1; i>=0; i--){
   const o=this.obstacles[i];
   o.progress += (o.vy * dt/1000) / (gameState.HEIGHT * 0.8) + pulseShift;
-  const y = projectY(o.progress, vanishY, gameState.HEIGHT);
+  const y = projectY(o.progress, vanishY, gameState.PLAYER_Y);
   o.y = y;
   o.x = this._laneX(o.lane, o.progress) + pulseXShift;
   const scale = perspectiveScale(o.progress);
@@ -246,7 +246,7 @@ for(let i=this.obstacles.length-1; i>=0; i--){
 for(let i=this.powerUps.length-1; i>=0; i--){
   const p=this.powerUps[i];
   p.progress += (p.vy * dt/1000) / (gameState.HEIGHT * 0.8) + pulseShift;
-  const y = projectY(p.progress, vanishY, gameState.HEIGHT);
+  const y = projectY(p.progress, vanishY, gameState.PLAYER_Y);
   p.y = y;
   p.x = this._laneX(p.lane, p.progress) + pulseXShift;
   const scale = perspectiveScale(p.progress);

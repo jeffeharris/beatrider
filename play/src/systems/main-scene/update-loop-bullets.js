@@ -7,7 +7,7 @@ import {
   resolveComboFromWindow,
   updateMaxComboReached
 } from './score-combo-state.js';
-import { projectY, perspectiveScale } from './perspective.js';
+import { projectY, perspectiveScale, PLAYER_PROGRESS } from './perspective.js';
 
 export function updateBulletsSystem(dt) {
 const { combat } = this.stateSlices;
@@ -22,7 +22,7 @@ for(let i=this.bullets.length-1; i>=0; i--){
     
     // Update position using current lane and constant progress
     b.x = this._laneX(b.currentLane, b.progress);
-    b.y = projectY(b.progress, vanishY, gameState.HEIGHT);
+    b.y = projectY(b.progress, vanishY, gameState.PLAYER_Y);
     
     // Remove if bullet has crossed all lanes
     if((b.vx > 0 && b.currentLane > 5) || (b.vx < 0 && b.currentLane < -1)) {
@@ -36,14 +36,14 @@ for(let i=this.bullets.length-1; i>=0; i--){
     b.progress -= (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
     
     // Calculate base position on exponential curve
-    let y = projectY(b.progress, vanishY, gameState.HEIGHT);
+    let y = projectY(b.progress, vanishY, gameState.PLAYER_Y);
     
     // Apply arc trajectory if this is a jump shot
     if(b.isArcShot) {
       // Update arc distance based on bullet speed
       b.arcDistance += (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
       const distanceTraveled = b.arcDistance;
-      const normalY = projectY(b.progress, vanishY, gameState.HEIGHT);
+      const normalY = projectY(b.progress, vanishY, gameState.PLAYER_Y);
 
       if (distanceTraveled < b.safeDistance) {
         // Draw straight line from A to B
@@ -52,12 +52,12 @@ for(let i=this.bullets.length-1; i>=0; i--){
         // Point A: player position when fired
         const pointA = b.startY;
         
-        // Point B: After traveling safeDistance from progress 1.0
-        // The bullet will be at progress (1.0 - safeDistance)
+        // Point B: After traveling safeDistance from the ship's row
+        // The bullet will be at progress (PLAYER_PROGRESS - safeDistance)
         // But we need to calculate where that is in screen Y
-        const progressAtB = 1.0 - b.safeDistance;
+        const progressAtB = PLAYER_PROGRESS - b.safeDistance;
         // This is the Y position for that progress value on the perspective curve
-        const pointB = projectY(progressAtB, vanishY, gameState.HEIGHT);
+        const pointB = projectY(progressAtB, vanishY, gameState.PLAYER_Y);
         
         // Linear interpolation from A to B
         y = pointA + (pointB - pointA) * arcProgress;
