@@ -85,6 +85,8 @@ window.GameAPI = {
 
 Game-logic decisions are extracted into pure modules (`damage-state.js`, `score-combo-state.js`, `jump-state.js`, `state-transitions.js`, `perspective.js`, leaderboard modules) tested under `node --test` with no browser or Phaser dependency. Tests that transitively touch `config.js` stub `navigator`/`window`/`localStorage` first (see `tests/damage-state.test.js`). Keep new logic testable the same way.
 
+For in-browser checks, `/play/?testMode=1` runs the game on a seeded, fixed-step clock with no audio, analytics, service worker or save writes, and exposes `window.advanceTime(ms)`, `window.render_game_to_text()` and `window.BeatriderTest` (scenarios, spawns, resources). See the README's "Deterministic test mode" section; the runtime lives in `play/src/testing/test-mode.js`.
+
 ## Controls
 
 **Desktop** (keys registered in `create-setup-world.js`)
