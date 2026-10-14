@@ -3,6 +3,9 @@ import StartupScene from './scenes/startup-scene.js';
 import { useCanvas, isMac, isSafariBrowser, isChrome } from './config.js';
 import { initNative } from './native/bootstrap.js';
 import { startLatencyProbe } from './audio/latency-probe.js';
+import { getTestOptions, installTestModeRuntime } from './testing/test-mode.js';
+
+const testOptions = getTestOptions();
 
 // No-ops unless ?latency=1 (see latency-probe.js). Started here rather than in
 // music-engine.js so the overlay is visible from the start screen — the engine
@@ -21,13 +24,13 @@ initNative();
 
 // Helper function for safe GA event tracking
 window.trackEvent = function(eventName, parameters) {
-  if (typeof gtag !== 'undefined') {
-    gtag('event', eventName, parameters);
+  if (!testOptions.enabled && typeof window.gtag === 'function') {
+    window.gtag('event', eventName, parameters);
   }
 };
 
 // Track session start
-window.addEventListener('load', () => {
+if (!testOptions.enabled) window.addEventListener('load', () => {
   window.trackEvent('session_start', {
     platform: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
     screen_size: `${window.innerWidth}x${window.innerHeight}`,
@@ -39,19 +42,21 @@ window.addEventListener('load', () => {
 window.controlType = 'unknown';
 
 // Track time engagement automatically (GA4 does this but we can enhance it)
-let engagementTime = 0;
-setInterval(() => {
-  if (document.hasFocus()) {
-    engagementTime += 10;
-    if (engagementTime === 60) {
-      window.trackEvent('engagement_1min', {});
-    } else if (engagementTime === 300) {
-      window.trackEvent('engagement_5min', {});
-    } else if (engagementTime === 600) {
-      window.trackEvent('engagement_10min', {});
+if (!testOptions.enabled) {
+  let engagementTime = 0;
+  setInterval(() => {
+    if (document.hasFocus()) {
+      engagementTime += 10;
+      if (engagementTime === 60) {
+        window.trackEvent('engagement_1min', {});
+      } else if (engagementTime === 300) {
+        window.trackEvent('engagement_5min', {});
+      } else if (engagementTime === 600) {
+        window.trackEvent('engagement_10min', {});
+      }
     }
-  }
-}, 10000);
+  }, 10000);
+}
 
 // ============================================
 // PHASER INITIALIZATION
@@ -64,7 +69,7 @@ console.log('Renderer:', useCanvas ? 'Canvas (Mac optimization)' : 'WebGL/Auto')
 // Initialize Phaser game with proper scale configuration
 // Exposed on window so music-ui.js can access scene references
 const game = window.game = new Phaser.Game({
-  type: useCanvas ? Phaser.CANVAS : Phaser.AUTO,
+  type: testOptions.enabled || useCanvas ? Phaser.CANVAS : Phaser.AUTO,
   parent: 'gameContainer',
   scene: [StartupScene],
 
@@ -82,6 +87,8 @@ const game = window.game = new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH
   }
 });
+
+installTestModeRuntime(game, Phaser);
 
 // ============================================
 // RESIZE HANDLERS
@@ -137,7 +144,7 @@ setTimeout(() => {
 // resolves above the WebView's webroot anyway, and a second cache layer can
 // serve stale assets across an app update. `__NATIVE_BUILD__` is a build-time
 // constant, so this whole block is eliminated from the native bundle.
-if (!__NATIVE_BUILD__ && 'serviceWorker' in navigator) {
+if (!__NATIVE_BUILD__ && !testOptions.enabled && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('../sw.js')
       .then(registration => {

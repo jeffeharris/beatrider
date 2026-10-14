@@ -4,6 +4,7 @@
 // Pure, dependency-free leaf import - safe despite this module needing to run first,
 // since ES modules fully evaluate imports before the body below executes.
 import { seedLeaderboardFromLegacyHighScore } from './leaderboard/leaderboard-entry.js';
+import { isTestMode } from './testing/test-mode.js';
 
 export const STORAGE_KEY = 'beatrider_data';
 const STORAGE_VERSION = 4; // Version number for migrations
@@ -139,6 +140,10 @@ function migrateV1ToV2(data) {
 }
 
 export function loadGameData() {
+  if (isTestMode()) {
+    return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  }
+
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data) {
@@ -160,6 +165,8 @@ export function loadGameData() {
 }
 
 export function saveGameData(data) {
+  if (isTestMode()) return;
+
   try {
     const current = loadGameData();
     const updated = deepMerge(current, data);
@@ -175,6 +182,8 @@ let saveTimer = null;
 let pendingData = {};
 
 export function saveGameDataDebounced(data) {
+  if (isTestMode()) return;
+
   // Accumulate changes
   pendingData = deepMerge(pendingData, data);
 
