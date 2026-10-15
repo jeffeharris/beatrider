@@ -50,8 +50,6 @@ export function drawPerspectiveGridSystem() {
     this.gridOffset = 0;
   }
 
-  this.vanishX = gameState.WIDTH / 2;
-  this.vanishY = gameState.HEIGHT * 0.15;
 
   if (!this.gridGraphics.scene) {
     this.gridGraphics = this.add.graphics();
@@ -72,28 +70,31 @@ export function drawPerspectiveGridSystem() {
     let lastY = this.vanishY;
 
     for (let t = 0.1; t <= 1; t += 0.1) {
-      const y = projectY(t, this.vanishY, gameState.PLAYER_Y);
+      const y = projectY(t, this.vanishY, gameState.PLAYER_Y, this.perspectiveExponent);
       const x = this.vanishX + (bottomX - this.vanishX) * laneSpread(t);
       this.gridGraphics.lineBetween(lastX, lastY, x, y);
       lastX = x;
       lastY = y;
     }
+    // Run to the bottom of the screen: with the zoom's flatter curve, progress 1
+    // lands above the bottom edge, so extend to wherever the curve reaches it.
+    const endT = Math.max(1, unprojectY(gameState.HEIGHT, this.vanishY, gameState.PLAYER_Y, this.perspectiveExponent));
     this.gridGraphics.lineBetween(
       lastX, lastY,
-      this.vanishX + (bottomX - this.vanishX) * laneSpread(1),
-      projectY(1, this.vanishY, gameState.PLAYER_Y)
+      this.vanishX + (bottomX - this.vanishX) * laneSpread(endT),
+      projectY(endT, this.vanishY, gameState.PLAYER_Y, this.perspectiveExponent)
     );
   }
 
   for (let i = 0; i < numLines; i++) {
     const t = (i + this.gridOffset % 1) / numLines;
-    const y = projectY(t, this.vanishY, gameState.PLAYER_Y);
+    const y = projectY(t, this.vanishY, gameState.PLAYER_Y, this.perspectiveExponent);
     if (y < this.vanishY || y > gameState.HEIGHT) continue;
 
     const width = gameState.WIDTH * (0.1 + t * 1.5);
     const alpha = 0.3 - t * 0.2;
     this.gridGraphics.lineStyle(2, 0x00ff00, alpha);
-    this.gridGraphics.lineBetween(gameState.WIDTH / 2 - width / 2, y, gameState.WIDTH / 2 + width / 2, y);
+    this.gridGraphics.lineBetween(this.vanishX - width / 2, y, this.vanishX + width / 2, y);
   }
 }
 
@@ -175,8 +176,7 @@ export function fireSystem() {
   b.lastY = this.player.y;
   b.rotationSpeed = combat.combo >= 6 ? 0.3 : 0;
 
-  const vanishY = gameState.HEIGHT * 0.15;
-  b.progress = unprojectY(this.player.y, vanishY, gameState.PLAYER_Y);
+  b.progress = unprojectY(this.player.y, this.vanishY, gameState.PLAYER_Y, this.perspectiveExponent);
 
   if (HORIZONTAL_SHOOTING && isOffScreen) {
     const direction = lane < 0 ? 1 : -1;

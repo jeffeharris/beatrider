@@ -2,9 +2,11 @@ import { initCreateSceneState, setupVisibilityAndShutdownHandlers } from './crea
 import { setupSceneVisualBaseAndTutorialUI, startMusicAndWatchdog } from './create-setup-audio-tutorial.js';
 import { initializeSceneWorldAndHUD } from './create-setup-world.js';
 import { setupSceneGameApi } from './create-setup-gameapi.js';
+import { setupPerspectiveCameraSystem } from './perspective-camera.js';
 
 export function createMainSceneSystem(data) {
   initCreateSceneState.call(this, data);
+  setupPerspectiveCameraSystem(this);
   setupVisibilityAndShutdownHandlers.call(this);
   setupSceneVisualBaseAndTutorialUI.call(this);
   startMusicAndWatchdog.call(this);

@@ -4,7 +4,7 @@ export function createSplatEffectSystem(x, y) {
   
   // Main splat circle that expands and fades
   const splat = this.add.circle(x, y, 30, splatColor, 1); // Much bigger initial size
-  splat.setDepth(1000); // Make sure it's on top
+  splat.setDepth(999); // Top of the world, just under the HUD
   this.tweens.add({
     targets: splat,
     scaleX: 6, // Bigger expansion
@@ -18,7 +18,7 @@ export function createSplatEffectSystem(x, y) {
   // Splatter particles that spray outward
   for(let i = 0; i < 12; i++) {
     const particle = this.add.rectangle(x, y, 16, 16, splatColor); // Bigger particles
-    particle.setDepth(1000); // Make sure particles are on top
+    particle.setDepth(999); // Top of the world, just under the HUD
     const angle = (Math.PI * 2 / 12) * i;
     const speed = 150 + Math.random() * 100;
     
@@ -85,7 +85,7 @@ export function createExplosionSystem(x, y, color = 0xff3366, particleCount = 8,
   
   for(let i = 0; i < scaledParticleCount; i++){
     const particle = this.add.rectangle(x, y, particleSize, particleSize, color);
-    particle.setDepth(1000); // Ensure on top
+    particle.setDepth(999); // Top of the world, just under the HUD
     const angle = (Math.PI * 2 / scaledParticleCount) * i;
     const speed = (100 + Math.random() * 100) * scale; // Scale spread distance
     
@@ -103,7 +103,7 @@ export function createExplosionSystem(x, y, color = 0xff3366, particleCount = 8,
   
   // Add a flash effect scaled by distance
   const flash = this.add.circle(x, y, 40 * scale, color, 0.9); // Scale flash size
-  flash.setDepth(999); // Just below particles
+  flash.setDepth(998); // Just below particles
   this.tweens.add({
     targets: flash,
     scale: 3, // Bigger expansion

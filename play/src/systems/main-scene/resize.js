@@ -1,12 +1,12 @@
 import { gameState, getHudLayout, updateDimensions } from '../../config.js';
 import { resizeResourceBarSystem } from './resource-bar.js';
+import { resizePerspectiveCameraSystem } from './perspective-camera.js';
 
 export function resizeMainSceneSystem() {
   const { player } = this.stateSlices;
   updateDimensions(this.cameras.main.width, this.cameras.main.height);
 
-  this.vanishX = gameState.WIDTH / 2;
-  this.vanishY = gameState.HEIGHT * 0.15;
+  resizePerspectiveCameraSystem.call(this);
 
   if (this.player) {
     this.player.x = this._laneX(player.lane);

@@ -1,4 +1,5 @@
 import { gameState, getHudLayout, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../config.js';
+import { HUD_DEPTH } from '../../tuning.js';
 import { DEFAULT_CHARACTER_ID, loadGameData, sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
@@ -519,6 +520,14 @@ function createHud(scene) {
   scene.comboMeter = scene.add.graphics();
   scene.comboMeterY = comboMeterY;
   scene.comboMeterWidth = comboMeterWidth;
+
+  // Screen-space readouts: HUD_DEPTH puts them on the unzoomed HUD camera.
+  for (const obj of [
+    scene.highScoreLabel, scene.highScoreText, scene.scoreLabel, scene.scoreText,
+    scene.comboText, scene.comboMeterBg, scene.comboMeter
+  ]) {
+    obj.setDepth(HUD_DEPTH);
+  }
 }
 
 function wireSceneUiAndDebug(scene) {

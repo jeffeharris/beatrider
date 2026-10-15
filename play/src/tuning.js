@@ -14,6 +14,9 @@
 // Exponent of the distance curve: y grows as progress^2.5.
 export const PERSPECTIVE_EXPONENT = 2.5;
 
+// Horizon height as a fraction of screen height (vanishY = HEIGHT * this).
+export const PERSPECTIVE_VANISH_RATIO = 0.15;
+
 // Sprite scale is PERSPECTIVE_SCALE_BASE at the vanishing point and grows by
 // PERSPECTIVE_SCALE_RANGE per unit of progress (so 1.3 at progress 1).
 export const PERSPECTIVE_SCALE_BASE = 0.1;
@@ -23,6 +26,27 @@ export const PERSPECTIVE_SCALE_RANGE = 1.2;
 // collision window. projectY lands this progress exactly on PLAYER_Y, so an
 // enemy is drawn on the ship's row at the moment it can hit you.
 export const PLAYER_PROGRESS = 0.955;
+
+// ============================================
+// RAPID-FIRE ZOOM
+// ============================================
+
+// While rapid fire is active the camera dollies in on the ship, the horizon
+// drops and the depth curve flattens, so enemies leap off the vanishing point
+// and travel most of the way at size. Purely visual: progress, speed and the
+// collision window are untouched.
+export const ZOOM_IN_MS = 900;
+export const ZOOM_OUT_MS = 600;
+export const ZOOM_CAMERA_NEAR = 1.5;       // camera magnification at full zoom
+export const ZOOM_HORIZON_NEAR = 0.29;     // on-screen horizon, fraction of height
+export const ZOOM_EXPONENT_NEAR = 0.95;    // below 1 the curve flips convex
+export const ZOOM_FOLLOW = 0.7;            // how far the camera pans toward the ship, 0..1
+export const ZOOM_FOLLOW_LAG_MS = 130;     // camera catch-up time constant
+
+// Anything at or above this depth is screen-space UI (HUD, tutorial, pause,
+// game over, debug). It is drawn by an unzoomed HUD camera; everything below
+// it is the world, drawn by the zooming main camera.
+export const HUD_DEPTH = 1000;
 
 // ============================================
 // GRID PULSE PATTERNS
