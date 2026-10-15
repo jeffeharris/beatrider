@@ -11,7 +11,7 @@ import { projectY, perspectiveScale, PLAYER_PROGRESS } from './perspective.js';
 
 export function updateBulletsSystem(dt) {
 const { combat } = this.stateSlices;
-const vanishY = gameState.HEIGHT * 0.15;
+const { vanishY, perspectiveExponent: exponent } = this;
 for(let i=this.bullets.length-1; i>=0; i--){
   const b=this.bullets[i]; 
   
@@ -22,7 +22,7 @@ for(let i=this.bullets.length-1; i>=0; i--){
     
     // Update position using current lane and constant progress
     b.x = this._laneX(b.currentLane, b.progress);
-    b.y = projectY(b.progress, vanishY, gameState.PLAYER_Y);
+    b.y = projectY(b.progress, vanishY, gameState.PLAYER_Y, exponent);
     
     // Remove if bullet has crossed all lanes
     if((b.vx > 0 && b.currentLane > 5) || (b.vx < 0 && b.currentLane < -1)) {
@@ -36,14 +36,14 @@ for(let i=this.bullets.length-1; i>=0; i--){
     b.progress -= (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
     
     // Calculate base position on exponential curve
-    let y = projectY(b.progress, vanishY, gameState.PLAYER_Y);
+    let y = projectY(b.progress, vanishY, gameState.PLAYER_Y, exponent);
     
     // Apply arc trajectory if this is a jump shot
     if(b.isArcShot) {
       // Update arc distance based on bullet speed
       b.arcDistance += (Math.abs(b.vy) * dt/1000) / (gameState.HEIGHT * 0.8);
       const distanceTraveled = b.arcDistance;
-      const normalY = projectY(b.progress, vanishY, gameState.PLAYER_Y);
+      const normalY = projectY(b.progress, vanishY, gameState.PLAYER_Y, exponent);
 
       if (distanceTraveled < b.safeDistance) {
         // Draw straight line from A to B
@@ -57,7 +57,7 @@ for(let i=this.bullets.length-1; i>=0; i--){
         // But we need to calculate where that is in screen Y
         const progressAtB = PLAYER_PROGRESS - b.safeDistance;
         // This is the Y position for that progress value on the perspective curve
-        const pointB = projectY(progressAtB, vanishY, gameState.PLAYER_Y);
+        const pointB = projectY(progressAtB, vanishY, gameState.PLAYER_Y, exponent);
         
         // Linear interpolation from A to B
         y = pointA + (pointB - pointA) * arcProgress;

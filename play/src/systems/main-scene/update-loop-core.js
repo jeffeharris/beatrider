@@ -1,6 +1,7 @@
 import { updateTutorialAndAdaptiveState, handlePauseAndGridInput } from './update-loop-core-state.js';
 import { updateIdleWobble, updateTimeBasedTouchCharge, updateComboMeter, updatePulseAndGrid } from './update-loop-core-visuals.js';
 import { updateResourceBarSystem } from './resource-bar.js';
+import { updatePerspectiveCameraSystem } from './perspective-camera.js';
 import { handleMovementInputAndOffscreen, handleCrouchChargeAndJump, handleFiringInput } from './update-loop-core-player-actions.js';
 import { assertMainSceneStateDev, monitorAndHealPlayerLaneDesync, updateDebugHudSystem } from './debug-tools.js';
 import { currentGenre } from '../../audio/music-engine.js';
@@ -26,6 +27,9 @@ export function runUpdateLoopCore(dt) {
       elapsedMs: this.time.now - this.gameStartTime
     });
   }
+
+  // Zoom first: everything below projects with this frame's camera and curve.
+  updatePerspectiveCameraSystem.call(this, dt);
 
   updateIdleWobble.call(this, dt);
   updateTimeBasedTouchCharge.call(this, dt);

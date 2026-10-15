@@ -1,4 +1,5 @@
 import { gameState, getHudLayout, MAX_AMMO, MAX_SHIELD } from '../../config.js';
+import { HUD_DEPTH } from '../../tuning.js';
 import {
   beatPulseIntensity,
   createBeatPulseState,
@@ -64,12 +65,12 @@ export function createResourceBarSystem(scene) {
 
   // Gauge backgrounds (dark)
   scene.resourceBarBg = scene.add.graphics();
-  scene.resourceBarBg.setDepth(1000);
+  scene.resourceBarBg.setDepth(HUD_DEPTH);
   drawGaugeBackgrounds(scene.resourceBarBg, scene.resourceGaugeLayout);
 
   // Fills, socket outlines and icons
   scene.resourceBarFg = scene.add.graphics();
-  scene.resourceBarFg.setDepth(1001);
+  scene.resourceBarFg.setDepth(HUD_DEPTH + 1);
 }
 
 function drawGaugeBackgrounds(gfx, layout) {

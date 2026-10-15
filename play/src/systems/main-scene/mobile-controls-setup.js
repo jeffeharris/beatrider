@@ -1,4 +1,5 @@
 import { MAIN_SCENE_TUNING } from '../../config.js';
+import { HUD_DEPTH } from '../../tuning.js';
 import { savedData } from '../../storage.js';
 import { handleMobilePointerDown } from './mobile-controls-pointer-down.js';
 import { handleMobilePointerMove } from './mobile-controls-pointer-move.js';
@@ -28,11 +29,13 @@ export function setupMobileControlsSystem() {
   player.charging = false;
   this.jumpThreshold = MAIN_SCENE_TUNING.touch.jumpThresholdPx;
 
+  // Both are drawn at the pointer's screen position, so they live on the HUD camera.
   this.touchIndicator = this.add.circle(0, 0, 15, 0x00ff00, 0.3);
   this.touchIndicator.setVisible(false);
+  this.touchIndicator.setDepth(HUD_DEPTH);
 
   this.zoneVisuals = this.add.graphics();
-  this.zoneVisuals.setDepth(1000);
+  this.zoneVisuals.setDepth(HUD_DEPTH);
 
   this.input.on('pointerdown', pointer => {
     handleMobilePointerDown.call(this, pointer);

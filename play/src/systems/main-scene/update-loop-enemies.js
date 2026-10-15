@@ -7,7 +7,7 @@ import { projectY, perspectiveScale } from './perspective.js';
 
 export function updateEnemiesSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
-const vanishY = gameState.HEIGHT * 0.15;
+const { vanishY, perspectiveExponent: exponent } = this;
 for(let i=this.enemies.length-1; i>=0; i--){
   const e=this.enemies[i]; 
   
@@ -29,7 +29,7 @@ for(let i=this.enemies.length-1; i>=0; i--){
   }
   
   // Calculate position on exponential curve (same as grid)
-  const y = projectY(e.progress, vanishY, gameState.PLAYER_Y);
+  const y = projectY(e.progress, vanishY, gameState.PLAYER_Y, exponent);
   e.y = y;
   
   // Update X position along perspective lane + pulse shift

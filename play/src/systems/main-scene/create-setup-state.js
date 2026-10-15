@@ -18,9 +18,6 @@ export function initCreateSceneState(data) {
   };
   this.tutorialWaveStarted = false;
 
-  this.vanishX = gameState.WIDTH / 2;
-  this.vanishY = gameState.HEIGHT * 0.15;
-
   this.sessionStartTime = Date.now();
   this.maxComboReached = 0;
 

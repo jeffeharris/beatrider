@@ -34,17 +34,21 @@ export function perspectiveCurve(progress) {
 // before they visibly reached you. Progress past PLAYER_PROGRESS continues
 // below the ship toward the bottom edge.
 //
+// `exponent` is the depth curve; the rapid-fire zoom flattens it, and callers
+// in the scene pass `this.perspectiveExponent`. Because the curve is anchored
+// at PLAYER_PROGRESS, the ship row stays put whatever the exponent.
+//
 // Progress is clamped at 0 because a fractional exponent of a negative base is
 // NaN, and bullets briefly sit below 0 before they are culled.
-export function projectY(progress, vanishY, playerY) {
-  const reach = perspectiveCurve(Math.max(0, progress) / PLAYER_PROGRESS);
+export function projectY(progress, vanishY, playerY, exponent = PERSPECTIVE_EXPONENT) {
+  const reach = Math.pow(Math.max(0, progress) / PLAYER_PROGRESS, exponent);
   return vanishY + (playerY - vanishY) * reach;
 }
 
 // Inverse of projectY: recover progress from a screen Y coordinate.
-export function unprojectY(y, vanishY, playerY) {
+export function unprojectY(y, vanishY, playerY, exponent = PERSPECTIVE_EXPONENT) {
   const reach = Math.max(0, (y - vanishY) / (playerY - vanishY));
-  return PLAYER_PROGRESS * Math.pow(reach, 1 / PERSPECTIVE_EXPONENT);
+  return PLAYER_PROGRESS * Math.pow(reach, 1 / exponent);
 }
 
 // How far a lane has fanned out from the vanishing point, as a fraction of its

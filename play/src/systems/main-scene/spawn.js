@@ -1,7 +1,7 @@
 import { gameState, isMobile, ENEMY_SPEED_BASE } from '../../config.js';
 
 export function spawnEnemySystem(lane, speed, texture = 'enemyTex') {
-  const vanishY = gameState.HEIGHT * 0.15;
+  const { vanishY } = this;
   const e = this.add.image(this._laneX(lane, 0), vanishY, texture);
   e.lane = lane;
   e.progress = 0;
@@ -17,7 +17,7 @@ export function spawnEnemySystem(lane, speed, texture = 'enemyTex') {
 }
 
 export function spawnObstacleSystem(lane) {
-  const vanishY = gameState.HEIGHT * 0.15;
+  const { vanishY } = this;
   const baseX = this._laneX(lane, 0);
 
   // Keep sizing formula in place for future obstacle variants.
@@ -57,7 +57,7 @@ export function spawnFloatingStarSystem(obstacle) {
 }
 
 export function spawnPowerUpSystem(lane) {
-  const vanishY = gameState.HEIGHT * 0.15;
+  const { vanishY } = this;
   const p = this.add.image(this._laneX(lane, 0), vanishY, 'powerUpTex');
   p.lane = lane;
   p.progress = 0;
@@ -69,7 +69,7 @@ export function spawnPowerUpSystem(lane) {
 }
 
 export function spawnDrifterSystem(lane) {
-  const vanishY = gameState.HEIGHT * 0.15;
+  const { vanishY } = this;
   const d = this.add.image(this._laneX(lane, 0), vanishY, 'drifterTex');
   d.lane = lane;
   d.targetLane = lane;
