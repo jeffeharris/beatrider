@@ -1,4 +1,4 @@
-import { gameState, getHudRowsY, updateDimensions } from '../../config.js';
+import { gameState, getHudLayout, updateDimensions } from '../../config.js';
 import { resizeResourceBarSystem } from './resource-bar.js';
 
 export function resizeMainSceneSystem() {
@@ -13,7 +13,7 @@ export function resizeMainSceneSystem() {
     this.player.y = gameState.PLAYER_Y;
   }
 
-  const { scoreY, highScoreY, comboY } = getHudRowsY();
+  const { scoreY, highScoreY, comboY, comboMeterY, comboMeterWidth } = getHudLayout();
 
   if (this.scoreLabel) {
     this.scoreLabel.y = scoreY;
@@ -32,11 +32,11 @@ export function resizeMainSceneSystem() {
   }
 
   if (this.comboMeterBg) {
-    const meterY = comboY + 30;
-    this.comboMeterY = meterY;
+    this.comboMeterY = comboMeterY;
+    this.comboMeterWidth = comboMeterWidth;
     this.comboMeterBg.clear();
     this.comboMeterBg.fillStyle(0x333333, 0.5);
-    this.comboMeterBg.fillRect(10, meterY, 200, 8);
+    this.comboMeterBg.fillRect(10, comboMeterY, comboMeterWidth, 8);
   }
 
   if (this.stars) {

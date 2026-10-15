@@ -83,12 +83,18 @@ export function updateDimensions(w, h) {
   MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1;
 }
 
-// Y of each bottom-left HUD row. Shared by HUD creation, resize, and the
+// Bottom-left HUD layout, top to bottom: combo text, combo meter, high score,
+// score. Shared by HUD creation, resize, the combo meter update and the
 // resource gauges, which stop just above the combo row.
-export function getHudRowsY() {
-  return isMobile
-    ? { scoreY: HEIGHT - 36, highScoreY: HEIGHT - 72, comboY: HEIGHT - 108 }
-    : { scoreY: HEIGHT - 24, highScoreY: HEIGHT - 48, comboY: HEIGHT - 72 };
+//
+// The combo text scales up to 1.4x from a top-left origin, so its row leaves
+// room for it to grow down without reaching the meter. The meter is capped at
+// the two left lanes so it never runs under the ship in the centre lane.
+export function getHudLayout() {
+  const rows = isMobile
+    ? { scoreY: HEIGHT - 36, highScoreY: HEIGHT - 72, comboMeterY: HEIGHT - 86, comboY: HEIGHT - 128 }
+    : { scoreY: HEIGHT - 24, highScoreY: HEIGHT - 48, comboMeterY: HEIGHT - 66, comboY: HEIGHT - 96 };
+  return { ...rows, comboMeterWidth: Math.min(200, LANE_W * 2 - 16) };
 }
 
 // PLAYER ANIMATION & CONTROL CONFIG

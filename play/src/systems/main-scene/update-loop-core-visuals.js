@@ -85,7 +85,7 @@ export function updateComboMeter() {
     else if (combo >= 4) meterColor = 0x00ffff;
 
     this.comboMeter.fillStyle(meterColor, 0.8);
-    this.comboMeter.fillRect(10, this.comboMeterY, 200 * meterPercent, 8);
+    this.comboMeter.fillRect(10, this.comboMeterY, this.comboMeterWidth * meterPercent, 8);
 
     if (timeRemaining <= 0) {
       combat.combo = 1;
