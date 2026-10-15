@@ -83,6 +83,14 @@ export function updateDimensions(w, h) {
   MOBILE_SCALE = isMobile ? (isLandscape ? 1.2 : 1.5) : 1;
 }
 
+// Y of each bottom-left HUD row. Shared by HUD creation, resize, and the
+// resource gauges, which stop just above the combo row.
+export function getHudRowsY() {
+  return isMobile
+    ? { scoreY: HEIGHT - 36, highScoreY: HEIGHT - 72, comboY: HEIGHT - 108 }
+    : { scoreY: HEIGHT - 24, highScoreY: HEIGHT - 48, comboY: HEIGHT - 72 };
+}
+
 // PLAYER ANIMATION & CONTROL CONFIG
 // Critical: These timings affect gameplay - isMoving blocks shooting/collision during animations
 export const PLAYER_CONFIG = {

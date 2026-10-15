@@ -1,4 +1,4 @@
-import { gameState, isMobile, updateDimensions } from '../../config.js';
+import { gameState, getHudRowsY, updateDimensions } from '../../config.js';
 import { resizeResourceBarSystem } from './resource-bar.js';
 
 export function resizeMainSceneSystem() {
@@ -13,9 +13,7 @@ export function resizeMainSceneSystem() {
     this.player.y = gameState.PLAYER_Y;
   }
 
-  const scoreY = isMobile ? gameState.HEIGHT - 36 : gameState.HEIGHT - 24;
-  const highScoreY = isMobile ? gameState.HEIGHT - 72 : gameState.HEIGHT - 48;
-  const comboY = isMobile ? gameState.HEIGHT - 108 : gameState.HEIGHT - 72;
+  const { scoreY, highScoreY, comboY } = getHudRowsY();
 
   if (this.scoreLabel) {
     this.scoreLabel.y = scoreY;

@@ -1,4 +1,4 @@
-import { gameState, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../config.js';
+import { gameState, getHudRowsY, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../config.js';
 import { DEFAULT_CHARACTER_ID, loadGameData, sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
@@ -496,9 +496,7 @@ function initializeRuntimeState(scene) {
 
 function createHud(scene) {
   const scoreFontSize = isMobile ? '24px' : '16px';
-  const scoreY = isMobile ? gameState.HEIGHT - 36 : gameState.HEIGHT - 24;
-  const highScoreY = isMobile ? gameState.HEIGHT - 72 : gameState.HEIGHT - 48;
-  const comboY = isMobile ? gameState.HEIGHT - 108 : gameState.HEIGHT - 72;
+  const { scoreY, highScoreY, comboY } = getHudRowsY();
 
   const labelOffset = 10;
   const valueOffset = 80;
