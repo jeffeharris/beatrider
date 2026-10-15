@@ -1,4 +1,4 @@
-import { gameState, getHudRowsY, MAX_AMMO, MAX_SHIELD } from '../../config.js';
+import { gameState, getHudLayout, MAX_AMMO, MAX_SHIELD } from '../../config.js';
 import {
   beatPulseIntensity,
   createBeatPulseState,
@@ -52,7 +52,7 @@ function currentLayout() {
   return computeGaugeLayout({
     width: gameState.WIDTH,
     height: gameState.HEIGHT,
-    comboY: getHudRowsY().comboY
+    comboY: getHudLayout().comboY
   });
 }
 

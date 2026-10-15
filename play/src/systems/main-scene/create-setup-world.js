@@ -1,4 +1,4 @@
-import { gameState, getHudRowsY, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../config.js';
+import { gameState, getHudLayout, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../config.js';
 import { DEFAULT_CHARACTER_ID, loadGameData, sessionHighScore } from '../../storage.js';
 import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
@@ -496,7 +496,7 @@ function initializeRuntimeState(scene) {
 
 function createHud(scene) {
   const scoreFontSize = isMobile ? '24px' : '16px';
-  const { scoreY, highScoreY, comboY } = getHudRowsY();
+  const { scoreY, highScoreY, comboY, comboMeterY, comboMeterWidth } = getHudLayout();
 
   const labelOffset = 10;
   const valueOffset = 80;
@@ -511,14 +511,14 @@ function createHud(scene) {
   scene.comboText = scene.add.text(10, comboY, '', { font: `${scoreFontSize} monospace`, fill: '#ff00ff' });
   scene.comboText.setAlpha(0);
 
-  const meterY = comboY + 30;
   scene.comboMeterBg = scene.add.graphics();
   scene.comboMeterBg.fillStyle(0x333333, 0.5);
-  scene.comboMeterBg.fillRect(10, meterY, 200, 8);
+  scene.comboMeterBg.fillRect(10, comboMeterY, comboMeterWidth, 8);
   scene.comboMeterBg.setVisible(false);
 
   scene.comboMeter = scene.add.graphics();
-  scene.comboMeterY = meterY;
+  scene.comboMeterY = comboMeterY;
+  scene.comboMeterWidth = comboMeterWidth;
 }
 
 function wireSceneUiAndDebug(scene) {

@@ -15,9 +15,9 @@ globalThis.localStorage = {
 const { computeGaugeLayout } = await import('../src/systems/main-scene/resource-bar.js');
 
 const SCREENS = {
-  desktop: { width: 1280, height: 720, comboY: 720 - 72 },
-  phone: { width: 390, height: 844, comboY: 844 - 108 },
-  landscapePhone: { width: 844, height: 390, comboY: 390 - 108 }
+  desktop: { width: 1280, height: 720, comboY: 720 - 96 },
+  phone: { width: 390, height: 844, comboY: 844 - 128 },
+  landscapePhone: { width: 844, height: 390, comboY: 390 - 128 }
 };
 
 test('ammo hugs the left edge and shield the right edge', () => {
@@ -47,6 +47,6 @@ test('gauges stay in the lower part of the screen', () => {
 });
 
 test('gauge height is capped on tall screens', () => {
-  const { ammo } = computeGaugeLayout({ width: 1080, height: 2400, comboY: 2400 - 108 });
+  const { ammo } = computeGaugeLayout({ width: 1080, height: 2400, comboY: 2400 - 128 });
   assert.equal(ammo.h, 320);
 });
