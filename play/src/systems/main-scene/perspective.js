@@ -59,6 +59,30 @@ export function laneSpread(progress) {
   return progress / PLAYER_PROGRESS;
 }
 
+// Render order along the track. Entities behind the ship (progress below
+// PLAYER_PROGRESS) draw under it, further ones lower; anything that has passed
+// the ship's row draws over it. That is the moment an enemy can first hit you,
+// so it visibly arrives in front of the ship instead of sliding underneath.
+//
+// The two bands sit either side of the ship's own block (player sprite and
+// unicorn parts, depths 498-510) so nothing can interleave with its parts, and
+// stay below the effects at 998+ and the HUD at 1000+. The bias breaks ties
+// between entity types at the same progress (a star over its obstacle).
+const DEPTH_BEHIND_MIN = 100;
+const DEPTH_BEHIND_MAX = 480;
+const DEPTH_PAST_MIN = 520;
+const DEPTH_PAST_RANGE = 400;
+
+export const TRACK_DEPTH_BIAS = Object.freeze({ obstacle: 0, powerUp: 1, enemy: 2, star: 3 });
+
+export function trackDepth(progress, bias = 0) {
+  const p = Math.max(0, progress);
+  const depth = p < PLAYER_PROGRESS
+    ? DEPTH_BEHIND_MIN + (DEPTH_BEHIND_MAX - DEPTH_BEHIND_MIN) * (p / PLAYER_PROGRESS)
+    : DEPTH_PAST_MIN + DEPTH_PAST_RANGE * (p - PLAYER_PROGRESS);
+  return Math.round(depth) + bias;
+}
+
 // Sprite scale for a given progress (start tiny, grow to full size).
 export function perspectiveScale(progress) {
   return PERSPECTIVE_SCALE_BASE + progress * PERSPECTIVE_SCALE_RANGE;

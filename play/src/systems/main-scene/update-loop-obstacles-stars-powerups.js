@@ -8,7 +8,7 @@ import {
   updateMaxComboReached
 } from './score-combo-state.js';
 import { applyDamage, fillResourcesFromPickup } from './damage-state.js';
-import { projectY, perspectiveScale } from './perspective.js';
+import { projectY, perspectiveScale, trackDepth, TRACK_DEPTH_BIAS } from './perspective.js';
 
 
 // Hi-hat hits make shields already on screen surge with an electric flash. Sets the
@@ -64,6 +64,7 @@ for(let i=this.floatingStars.length-1; i>=0; i--){
     star.x = obstacle.x;
     star.y = obstacle.y - (60 * scale) + floatY; // Scale the offset with perspective
     star.setScale(scale); // Just use obstacle's scale for perspective
+    star.setDepth(trackDepth(obstacle.progress, TRACK_DEPTH_BIAS.star));
     
     // Spin the star
     star.rotation += star.rotationSpeed;
@@ -173,6 +174,7 @@ for(let i=this.obstacles.length-1; i>=0; i--){
   const y = projectY(o.progress, vanishY, gameState.PLAYER_Y, exponent);
   o.y = y;
   o.x = this._laneX(o.lane, o.progress) + pulseXShift;
+  o.setDepth(trackDepth(o.progress, TRACK_DEPTH_BIAS.obstacle));
   const scale = perspectiveScale(o.progress);
   o.setScale(scale, scale * 1.2); // Much taller shields
   o.w = o.baseSize * scale;
@@ -258,6 +260,7 @@ for(let i=this.powerUps.length-1; i>=0; i--){
   const y = projectY(p.progress, vanishY, gameState.PLAYER_Y, exponent);
   p.y = y;
   p.x = this._laneX(p.lane, p.progress) + pulseXShift;
+  p.setDepth(trackDepth(p.progress, TRACK_DEPTH_BIAS.powerUp));
   const scale = perspectiveScale(p.progress);
   p.setScale(scale);
   p.angle += dt * 0.2; // Rotate
