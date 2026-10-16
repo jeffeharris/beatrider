@@ -1,10 +1,10 @@
 /**
- * @typedef {'move_left'|'move_right'|'dash_left'|'dash_right'|'jump'|'super_jump'|'fire'|'resume'} MainSceneActionType
+ * @typedef {'move_left'|'move_right'|'dash_left'|'dash_right'|'jump'|'super_jump'|'fire'} MainSceneActionType
  * @typedef {'keyboard'|'touch'|'unknown'} MainSceneActionSource
  * @typedef {{ source?: MainSceneActionSource, chargePercent?: number }} MainSceneActionPayload
  */
 
-/** @type {{ MOVE_LEFT: MainSceneActionType, MOVE_RIGHT: MainSceneActionType, DASH_LEFT: MainSceneActionType, DASH_RIGHT: MainSceneActionType, JUMP: MainSceneActionType, SUPER_JUMP: MainSceneActionType, FIRE: MainSceneActionType, RESUME: MainSceneActionType }} */
+/** @type {{ MOVE_LEFT: MainSceneActionType, MOVE_RIGHT: MainSceneActionType, DASH_LEFT: MainSceneActionType, DASH_RIGHT: MainSceneActionType, JUMP: MainSceneActionType, SUPER_JUMP: MainSceneActionType, FIRE: MainSceneActionType }} */
 export const MAIN_SCENE_ACTIONS = {
   MOVE_LEFT: 'move_left',
   MOVE_RIGHT: 'move_right',
@@ -12,8 +12,7 @@ export const MAIN_SCENE_ACTIONS = {
   DASH_RIGHT: 'dash_right',
   JUMP: 'jump',
   SUPER_JUMP: 'super_jump',
-  FIRE: 'fire',
-  RESUME: 'resume'
+  FIRE: 'fire'
 };
 
 /**
@@ -46,9 +45,6 @@ export function dispatchMainSceneAction(action, payload = {}) {
       break;
     case MAIN_SCENE_ACTIONS.FIRE:
       this._fire();
-      break;
-    case MAIN_SCENE_ACTIONS.RESUME:
-      this.resumeGame();
       break;
     default:
       break;

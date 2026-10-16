@@ -3,14 +3,14 @@ import * as Tone from 'tone';
 import { gameState, isMobile, LANES, ENEMY_SPEED_BASE, BULLET_SPEED, FIRE_COOLDOWN, HORIZONTAL_SHOOTING, ARC_SHOT_BASE_SAFE_DISTANCE, ARC_SHOT_HEIGHT_BONUS, ARC_SHOT_MAX_JUMP_HEIGHT, PLAYER_CONFIG, pulsePatternPool, sectionPatternMap, updateDimensions } from '../config.js';
 import { savedData, saveGameData, sessionHighScore, setSessionHighScore } from '../storage.js';
 import { currentBar, setCurrentBar, currentChordIndex, setCurrentChordIndex, lastSection, setLastSection, currentGenre, updatePatterns, getSection, ensureTransportScheduled, getMusicWatchdogStatus, recoverMusicLoops } from '../audio/music-engine.js';
-import { currentDifficulty, DIFFICULTY_PRESETS, uiState, updateGridButton, updatePlayPauseButton } from '../audio/music-ui.js';
+import { currentDifficulty, DIFFICULTY_PRESETS } from '../audio/music-ui.js';
 import { gameSounds, getGameNote } from '../audio/game-sounds.js';
 import { createStarfieldSystem, updateStarfieldSystem } from '../systems/main-scene/starfield.js';
 import { handleTutorialSpawnSystem, updateTutorialProgressSystem, advanceTutorialSystem, skipTutorialSystem, completeTutorialSystem } from '../systems/main-scene/tutorial.js';
 import { updateTrailsSystem } from '../systems/main-scene/trails.js';
 import { updateZoneVisualsSystem, setupMobileControlsSystem } from '../systems/main-scene/mobile-controls.js';
 import { moveLeftSystem, moveRightSystem, jumpSystem, dashLeftSystem, dashRightSystem, checkDashCollisionSystem, superJumpSystem } from '../systems/main-scene/movement.js';
-import { pauseGameSystem, resumeGameSystem, showGameOverScreenSystem } from '../systems/main-scene/pause-gameover.js';
+import { pauseGameSystem, resumeGameSystem, openSettingsSystem, closeSettingsSystem, restartRunSystem, quitToTitleSystem, showGameOverScreenSystem } from '../systems/main-scene/pause-gameover.js';
 import { createSplatEffectSystem, createDeathExplosionSystem, createExplosionSystem } from '../systems/main-scene/fx.js';
 import { spawnEnemySystem, spawnObstacleSystem, spawnFloatingStarSystem, spawnPowerUpSystem, spawnDrifterSystem } from '../systems/main-scene/spawn.js';
 import { pulseGridSystem, drawPerspectiveGridSystem, fireSystem } from '../systems/main-scene/grid-fire.js';
@@ -27,14 +27,6 @@ export default class Main extends Phaser.Scene {
     this.isBreakSection = false;
     this.floatingStars = [];
   }
-  updateSoundDisplay() {
-    const soundNames = ['Triangle', 'Acid', 'Chord', 'Sub', 'Pluck', 'Pew Pew'];
-    const display = document.getElementById('soundDisplay');
-    if (display) {
-      display.textContent = soundNames[gameSounds.currentLaserSound];
-    }
-  }
-  
   createStarfield() {
     return createStarfieldSystem.call(this);
   }
@@ -119,6 +111,22 @@ export default class Main extends Phaser.Scene {
 
   resumeGame() {
     return resumeGameSystem.call(this);
+  }
+
+  openSettings() {
+    return openSettingsSystem.call(this);
+  }
+
+  closeSettings() {
+    return closeSettingsSystem.call(this);
+  }
+
+  restartRun() {
+    return restartRunSystem.call(this);
+  }
+
+  quitToTitle() {
+    return quitToTitleSystem.call(this);
   }
 
   showGameOverScreen() {

@@ -1,7 +1,6 @@
 import { gameState, getHudLayout, isMobile, PLAYER_CONFIG, MAIN_SCENE_TUNING } from '../../config.js';
 import { HUD_DEPTH } from '../../tuning.js';
 import { DEFAULT_CHARACTER_ID, loadGameData, sessionHighScore } from '../../storage.js';
-import { uiState, updateGridButton } from '../../audio/music-ui.js';
 import { setupDebugToolsSystem } from './debug-tools.js';
 import { createResourceBarSystem } from './resource-bar.js';
 
@@ -487,7 +486,7 @@ function initializeRuntimeState(scene) {
   scene.lastLeftPress = 0;
   scene.lastRightPress = 0;
   scene.doubleTapWindow = PLAYER_CONFIG.dash.doubleTapWindow;
-  scene.keys = scene.input.keyboard.addKeys(`LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,C,ONE,TWO,THREE,FOUR,FIVE,SIX,ESC,${MAIN_SCENE_TUNING.debug.toggleKey}`);
+  scene.keys = scene.input.keyboard.addKeys(`LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,G,C,ONE,TWO,THREE,FOUR,FIVE,SIX,${MAIN_SCENE_TUNING.debug.toggleKey}`);
 
   scene.comboTimer = 0;
   scene.lastKillTime = 0;
@@ -532,9 +531,6 @@ function createHud(scene) {
 
 function wireSceneUiAndDebug(scene) {
   scene.gridVisible = gameState.gridEnabled;
-
-  uiState.gridVisible = gameState.gridEnabled;
-  updateGridButton();
 
   scene.setupMobileControls();
   setupDebugToolsSystem.call(scene);

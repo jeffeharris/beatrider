@@ -2,11 +2,19 @@ import Phaser from 'phaser';
 import { gameState, isMobile, LANES, ENEMY_SPEED_BASE } from '../../config.js';
 import { saveGameData } from '../../storage.js';
 import { getSection } from '../../audio/music-engine.js';
-import { currentDifficulty, uiState, updateGridButton } from '../../audio/music-ui.js';
+import { currentDifficulty } from '../../audio/music-ui.js';
 import { createBeatPulseState, recordBeat } from './resource-pulse.js';
 
 export function setupSceneGameApi() {
   const { flow, combat } = this.stateSlices;
+
+  // While a menu is open the run is frozen, but settings keeps the music playing so
+  // changes can be heard. Those beats spawn nothing (no catch-up wall on resume) and
+  // don't count toward beat-driven difficulty; they only pulse what's on screen.
+  const pulseFrozen = (targets) => {
+    for (const target of targets) target.pulseTime = this.time.now;
+  };
+
   window.GameAPI = {
     onBeat: () => {
       // Record beat timing for the HUD low-resource pulse BEFORE any early
@@ -15,6 +23,8 @@ export function setupSceneGameApi() {
       // player most needs it.
       if (!this.beatPulse) this.beatPulse = createBeatPulseState();
       this.beatPulse = recordBeat(this.beatPulse, this.time.now);
+
+      if (flow.paused) return pulseFrozen(this.enemies.filter(e => e.enemyType === 'enemyTex'));
 
       combat.beats++;
 
@@ -44,6 +54,7 @@ export function setupSceneGameApi() {
       }
     },
     onSnare: () => {
+      if (flow.paused) return pulseFrozen(this.enemies.filter(e => e.enemyType === 'fastEnemyTex'));
       if (this.isTutorial && this.tutorialWave < 7) return;
 
       if (this.adaptiveState.isAssisting) {
@@ -64,6 +75,7 @@ export function setupSceneGameApi() {
       }
     },
     onHihat: () => {
+      if (flow.paused) return pulseFrozen(this.obstacles);
       if (this.isTutorial && this.tutorialWave < 7) return;
 
       if (this.adaptiveState.isAssisting) {
@@ -80,12 +92,14 @@ export function setupSceneGameApi() {
       }
     },
     onAcid: () => {
+      if (flow.paused) return;
       if (this.isTutorial && this.tutorialWave < 5) return;
 
       const lane = Phaser.Math.Between(0, LANES - 1);
       this._spawnPowerUp(lane);
     },
     onStab: () => {
+      if (flow.paused) return pulseFrozen(this.enemies.filter(e => e.isDrifter));
       if (this.isTutorial) return;
 
       const lane = Phaser.Math.Between(0, LANES - 1);
@@ -126,8 +140,6 @@ export function setupSceneGameApi() {
       } else if (this.gridVisible && flow.paused) {
         this._drawPerspectiveGrid();
       }
-      uiState.gridVisible = this.gridVisible;
-      updateGridButton();
     },
     reset: () => {
       this.scene.restart();

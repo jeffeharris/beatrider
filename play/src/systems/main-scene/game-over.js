@@ -16,6 +16,7 @@ import { createGenreAttributionState, summarizeGenreAttribution } from '../../le
 import { buildLeaderboardEntry } from '../../leaderboard/leaderboard-entry.js';
 import { loadLeaderboard, recordLeaderboardEntry } from '../../leaderboard/leaderboard-store.js';
 import { renderLeaderboardTable } from '../../leaderboard/leaderboard-view.js';
+import { setHudVisible } from '../../ui/menus.js';
 
 // The between-rounds countdown holds long enough to read the table before auto-restart.
 const RESTART_COUNTDOWN_SECONDS = 6;
@@ -334,6 +335,7 @@ function resetRoundState(scene, slices) {
   const { player, combat, flow, input } = slices;
 
   applyGameResetTransition({ player, combat, flow, input });
+  setHudVisible(true);
   scene.scoreText.setText('0');
   scene.comboText.setAlpha(0);
 
@@ -404,6 +406,8 @@ export function showGameOverScreenSystem() {
   const { player, flow, combat, input } = slices;
 
   applyGameOverTransition(flow);
+  // Pause and settings are refused during the between-rounds countdown; hide their buttons.
+  setHudVisible(false);
 
   updateRecentDeathsAndAdaptiveAssist(this, combat.score);
 

@@ -1,19 +1,88 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  MENU,
   applyPauseTransition,
   applyResumeTransition,
+  applyOpenSettingsTransition,
+  applyCloseSettingsTransition,
+  shouldMusicPlay,
   applyGameOverTransition,
   applyGameResetTransition,
   resolveTouchReleaseAction,
   recoverOffScreenPlayer
 } from '../src/systems/main-scene/state-transitions.js';
 
-test('pause and resume transitions toggle flow.paused', () => {
-  const flow = { paused: false, gameOver: false, invincible: false, playerCanControl: true };
-  applyPauseTransition(flow);
+const playingFlow = () => ({
+  paused: false, menu: MENU.NONE, settingsReturnTo: MENU.NONE,
+  gameOver: false, invincible: false, playerCanControl: true
+});
+
+test('pause and resume transitions toggle flow.paused and the pause menu', () => {
+  const flow = playingFlow();
+  assert.equal(applyPauseTransition(flow), true);
   assert.equal(flow.paused, true);
+  assert.equal(flow.menu, MENU.PAUSE);
+  assert.equal(applyResumeTransition(flow), true);
+  assert.equal(flow.paused, false);
+  assert.equal(flow.menu, MENU.NONE);
+});
+
+test('pausing during game over is refused so the two screens never stack', () => {
+  const flow = { ...playingFlow(), gameOver: true };
+  assert.equal(applyPauseTransition(flow), false);
+  assert.equal(flow.paused, false);
+  assert.equal(applyOpenSettingsTransition(flow), false);
+  assert.equal(flow.paused, false);
+});
+
+test('repeat pause and resume are no-ops', () => {
+  const flow = playingFlow();
+  assert.equal(applyResumeTransition(flow), false);
+  applyPauseTransition(flow);
+  assert.equal(applyPauseTransition(flow), false);
+});
+
+test('settings opened from play freezes gameplay but keeps the music, and closes back to play', () => {
+  const flow = playingFlow();
+  assert.equal(applyOpenSettingsTransition(flow), true);
+  assert.equal(flow.paused, true);
+  assert.equal(flow.menu, MENU.SETTINGS);
+  assert.equal(shouldMusicPlay(flow), true);
+
+  assert.equal(applyCloseSettingsTransition(flow), true);
+  assert.equal(flow.paused, false);
+  assert.equal(flow.menu, MENU.NONE);
+});
+
+test('settings opened from the pause menu previews music and closes back to the pause menu', () => {
+  const flow = playingFlow();
+  applyPauseTransition(flow);
+  assert.equal(shouldMusicPlay(flow), false);
+
+  applyOpenSettingsTransition(flow);
+  assert.equal(shouldMusicPlay(flow), true);
+
+  applyCloseSettingsTransition(flow);
+  assert.equal(flow.menu, MENU.PAUSE);
+  assert.equal(flow.paused, true);
+  assert.equal(shouldMusicPlay(flow), false);
+});
+
+test('pausing from settings (e.g. app backgrounded) lands on the pause menu', () => {
+  const flow = playingFlow();
+  applyOpenSettingsTransition(flow);
+  assert.equal(applyPauseTransition(flow), true);
+  assert.equal(flow.menu, MENU.PAUSE);
+  assert.equal(applyCloseSettingsTransition(flow), false);
+});
+
+test('resume from settings closes every menu', () => {
+  const flow = playingFlow();
+  applyPauseTransition(flow);
+  applyOpenSettingsTransition(flow);
   applyResumeTransition(flow);
+  assert.equal(flow.menu, MENU.NONE);
   assert.equal(flow.paused, false);
 });
 

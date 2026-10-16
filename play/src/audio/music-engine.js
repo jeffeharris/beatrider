@@ -968,19 +968,17 @@ function applyAutomation(section, prevSection, scheduleTime) {
   }
 }
 
+// Where the arrangement is, for the F2 debug HUD.
+export const musicProgress = { section: 'INTRO', bar: 0, chord: 'Cm', next: '' };
+
 // Main evolution function
 export function evolve(scheduleTime) {
   const section = getSection(currentBar);
   const nextBar = (currentBar + 1) % 64;
   const nextSection = getSection(nextBar);
 
-  // Update displays
-  document.getElementById('section').textContent = section;
-  document.getElementById('bar').textContent = currentBar;
+  // Calculate next transition (read by the F2 debug HUD)
   const currentChord = currentProgression ? currentProgression[currentChordIndex % currentProgression.length] : { root: 'C' };
-  document.getElementById('chord').textContent = currentChord.root + (currentChord.chord.length > 3 ? '7' : 'm');
-
-  // Calculate next transition
   const barsUntilNext = nextSection !== section ? 1 :
     nextBar < 8 ? 8 - nextBar :
     nextBar < 16 ? 16 - nextBar :
@@ -988,9 +986,12 @@ export function evolve(scheduleTime) {
     nextBar < 40 ? 40 - nextBar :
     nextBar < 56 ? 56 - nextBar :
     64 - nextBar;
-  document.getElementById('nextSection').textContent =
-    nextSection !== section ? `${nextSection} next bar` :
-    `${getSection(currentBar + barsUntilNext)} in ${barsUntilNext} bars`;
+  musicProgress.section = section;
+  musicProgress.bar = currentBar;
+  musicProgress.chord = currentChord.root + (currentChord.chord?.length > 3 ? '7' : 'm');
+  musicProgress.next = nextSection !== section
+    ? `${nextSection} next bar`
+    : `${getSection(currentBar + barsUntilNext)} in ${barsUntilNext} bars`;
 
   // Apply automation on section changes
   if (section !== lastSection) {

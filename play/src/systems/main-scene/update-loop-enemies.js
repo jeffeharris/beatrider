@@ -5,6 +5,36 @@ import { gameSounds } from '../../audio/game-sounds.js';
 import { applyDamage } from './damage-state.js';
 import { projectY, perspectiveScale } from './perspective.js';
 
+// Kick/snare/stab hits make enemies already on screen swell and flash. Returns the
+// pulsed scale and sets the tint. Shared with the frozen settings view, where the
+// music keeps playing but nothing moves.
+export function applyEnemyBeatPulse(e, scale, now) {
+  if (!e.pulseTime) return scale;
+  const timeSincePulse = now - e.pulseTime;
+  if (timeSincePulse >= 300) { // Pulse lasts 300ms
+    e.setTint(0xffffff); // Reset tint
+    return scale;
+  }
+  const pulseProgress = 1 - (timeSincePulse / 300);
+  const pulseMagnitude = Math.sin(pulseProgress * Math.PI) * 0.5;
+
+  // Different tint colors based on enemy type
+  if (e.isDrifter) {
+    // Purple enemies - flash with purple-white
+    const tintValue = Math.floor(255 * (1 - pulseProgress * 0.5));
+    e.setTint(Phaser.Display.Color.GetColor(255, tintValue, 255));
+  } else if (e.enemyType === 'fastEnemyTex') {
+    // Yellow enemies - flash with yellow-white
+    const tintValue = Math.floor(255 * (1 - pulseProgress * 0.3));
+    e.setTint(Phaser.Display.Color.GetColor(255, 255, tintValue));
+  } else if (e.enemyType === 'enemyTex') {
+    // Red enemies - flash with red-white
+    const tintValue = Math.floor(255 * (1 - pulseProgress * 0.5));
+    e.setTint(Phaser.Display.Color.GetColor(255, tintValue, tintValue));
+  }
+  return scale * (1 + pulseMagnitude);
+}
+
 export function updateEnemiesSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
 const { vanishY, perspectiveExponent: exponent } = this;
@@ -65,32 +95,7 @@ for(let i=this.enemies.length-1; i>=0; i--){
   // Scale based on distance
   let scale = perspectiveScale(e.progress); // Start tiny, grow to normal size
   
-  // Apply pulse effect for all enemy types
-  if(e.pulseTime) {
-    const timeSincePulse = this.time.now - e.pulseTime;
-    if(timeSincePulse < 300) { // Pulse lasts 300ms
-      const pulseProgress = 1 - (timeSincePulse / 300);
-      const pulseMagnitude = Math.sin(pulseProgress * Math.PI) * 0.5;
-      scale *= (1 + pulseMagnitude);
-      
-      // Different tint colors based on enemy type
-      if(e.isDrifter) {
-        // Purple enemies - flash with purple-white
-        const tintValue = Math.floor(255 * (1 - pulseProgress * 0.5));
-        e.setTint(Phaser.Display.Color.GetColor(255, tintValue, 255));
-      } else if(e.enemyType === 'fastEnemyTex') {
-        // Yellow enemies - flash with yellow-white
-        const tintValue = Math.floor(255 * (1 - pulseProgress * 0.3));
-        e.setTint(Phaser.Display.Color.GetColor(255, 255, tintValue));
-      } else if(e.enemyType === 'enemyTex') {
-        // Red enemies - flash with red-white
-        const tintValue = Math.floor(255 * (1 - pulseProgress * 0.5));
-        e.setTint(Phaser.Display.Color.GetColor(255, tintValue, tintValue));
-      }
-    } else {
-      e.setTint(0xffffff); // Reset tint
-    }
-  }
+  scale = applyEnemyBeatPulse(e, scale, this.time.now);
   
   e.setScale(scale);
   

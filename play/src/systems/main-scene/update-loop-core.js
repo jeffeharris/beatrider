@@ -1,5 +1,6 @@
 import { updateTutorialAndAdaptiveState, handlePauseAndGridInput } from './update-loop-core-state.js';
-import { updateIdleWobble, updateTimeBasedTouchCharge, updateComboMeter, updatePulseAndGrid } from './update-loop-core-visuals.js';
+import { updateIdleWobble, updateTimeBasedTouchCharge, updateComboMeter, updatePulseAndGrid, updateFrozenPulseVisuals } from './update-loop-core-visuals.js';
+import { shouldMusicPlay } from './state-transitions.js';
 import { updateResourceBarSystem } from './resource-bar.js';
 import { updatePerspectiveCameraSystem } from './perspective-camera.js';
 import { handleMovementInputAndOffscreen, handleCrouchChargeAndJump, handleFiringInput } from './update-loop-core-player-actions.js';
@@ -13,12 +14,13 @@ export function runUpdateLoopCore(dt) {
   updateTutorialAndAdaptiveState.call(this, dt);
 
   if (!handlePauseAndGridInput.call(this)) {
+    if (shouldMusicPlay(this.stateSlices.flow)) updateFrozenPulseVisuals.call(this, dt);
     updateDebugHudSystem.call(this);
     return null;
   }
 
   // Sample the live genre each frame. switchGenre() is driven by DOM buttons in the
-  // settings drawer and exposes no scene-facing event, so polling keeps the music UI
+  // settings menu and exposes no scene-facing event, so polling keeps the music UI
   // decoupled from the scene; recordGenreSwitch is a no-op while the genre is unchanged.
   // Sits after the pause gate, and uses elapsed play time, so paused time is excluded.
   if (this.genreAttribution) {

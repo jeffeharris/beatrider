@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { LANES, MAIN_SCENE_TUNING } from '../../config.js';
+import { musicProgress } from '../../audio/music-engine.js';
 
 function warnInvariant(scene, key, message) {
   const now = scene.time.now;
@@ -98,10 +99,11 @@ export function updateDebugHudSystem() {
   const { player, flow, input, combat } = this.stateSlices;
 
   const text = [
-    `paused=${!!flow.paused} gameOver=${!!flow.gameOver}`,
+    `paused=${!!flow.paused} menu=${flow.menu} gameOver=${!!flow.gameOver}`,
     `lane=${player.lane} moving=${!!player.moving} dashing=${!!player.dashing} jumping=${!!player.jumping}`,
     `charging=${!!player.charging} charge=${(input.jumpChargeAmount || 0).toFixed(2)} touch=${!!input.touchActive}`,
     `combo=${combat.combo} beats=${combat.beats} score=${combat.score}`,
+    `music: ${musicProgress.section} bar ${musicProgress.bar}/64 chord ${musicProgress.chord} next ${musicProgress.next}`,
     `assist=${!!this.adaptiveState?.isAssisting} spawnMul=${(this.adaptiveState?.currentSpawnMultiplier ?? 1).toFixed(2)} speedMul=${(this.adaptiveState?.currentSpeedMultiplier ?? 1).toFixed(2)}`,
     `${MAIN_SCENE_TUNING.debug.toggleKey}: toggle debug HUD`
   ].join('\n');

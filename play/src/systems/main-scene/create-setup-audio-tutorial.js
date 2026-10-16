@@ -9,7 +9,7 @@ import {
   getMusicWatchdogStatus,
   recoverMusicLoops
 } from '../../audio/music-engine.js';
-import { uiState, updatePlayPauseButton } from '../../audio/music-ui.js';
+import { shouldMusicPlay } from './state-transitions.js';
 import { isTestMode } from '../../testing/test-mode.js';
 
 export function setupSceneVisualBaseAndTutorialUI() {
@@ -63,12 +63,7 @@ export function setupSceneVisualBaseAndTutorialUI() {
 }
 
 export function startMusicAndWatchdog() {
-  if (isTestMode()) {
-    uiState.isPlaying = false;
-    const status = document.getElementById('status');
-    if (status) status.textContent = 'TEST MODE';
-    return;
-  }
+  if (isTestMode()) return;
 
   const { flow } = this.stateSlices;
   if (typeof Tone !== 'undefined' && Tone.Transport.state !== 'started') {
@@ -88,10 +83,6 @@ export function startMusicAndWatchdog() {
         await new Promise(resolve => setTimeout(resolve, 50));
 
         Tone.Transport.start('+0.1');
-
-        if (document.getElementById('status')) {
-          document.getElementById('status').textContent = 'PLAYING';
-        }
       } catch (error) {
         console.error('Error starting music:', error);
         Tone.Transport.start();
@@ -99,8 +90,6 @@ export function startMusicAndWatchdog() {
     };
 
     startMusic();
-    uiState.isPlaying = true;
-    updatePlayPauseButton();
   }
 
   this.lastWatchdogRecoveryAt = 0;
@@ -108,7 +97,8 @@ export function startMusicAndWatchdog() {
     delay: 1000,
     loop: true,
     callback: () => {
-      if (flow.paused || flow.gameOver) return;
+      // Settings keeps the music playing over a frozen run, so watch it then too.
+      if (!shouldMusicPlay(flow) || flow.gameOver) return;
       if (Tone.Transport.state !== 'started') return;
 
       const status = getMusicWatchdogStatus(Tone.now());

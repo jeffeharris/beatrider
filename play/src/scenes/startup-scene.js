@@ -9,6 +9,7 @@ import {
   toggleHighScorePanelSystem
 } from '../systems/startup-scene/leaderboard-panel.js';
 import { isTestMode } from '../testing/test-mode.js';
+import { isMenuOpen, openStartScreenSettings } from '../ui/menus.js';
 
 export default class StartupScene extends Phaser.Scene {
   constructor() {
@@ -23,9 +24,9 @@ export default class StartupScene extends Phaser.Scene {
     const WIDTH = gameState.WIDTH;
     const HEIGHT = gameState.HEIGHT;
 
-    // Register resize handler with proper binding
+    // The scene instance is reused when a run quits back to the title, so unhook on shutdown.
     this.scale.on('resize', this.resize, this);
-
+    this.events.once('shutdown', () => this.scale.off('resize', this.resize, this));
 
     // Black background
     this.cameras.main.setBackgroundColor('#000');
@@ -59,7 +60,7 @@ export default class StartupScene extends Phaser.Scene {
       }
     };
 
-    this.title = this.add.text(WIDTH/2, HEIGHT/3, 'BEATRIDER', titleStyle);
+    this.title = this.add.text(0, 0, 'BEATRIDER', titleStyle);
     this.title.setOrigin(0.5);
 
     // Pulsing glow animation for title
@@ -75,7 +76,7 @@ export default class StartupScene extends Phaser.Scene {
 
     // Subtitle with typewriter effect
     const subtitleText = 'ENDLESS BEAT SURVIVOR';
-    this.subtitle = this.add.text(WIDTH/2, HEIGHT/3 + 80, '', {
+    this.subtitle = this.add.text(0, 0, '', {
       font: '24px monospace',
       fill: '#ff00ff',
       stroke: '#ff00ff',
@@ -111,7 +112,7 @@ export default class StartupScene extends Phaser.Scene {
 
     this.instructions = [];
     instructions.forEach((text, index) => {
-      const instruction = this.add.text(WIDTH/2, HEIGHT/2 + 40 + index * 30, text, {
+      const instruction = this.add.text(0, 0, text, {
         font: '18px monospace',
         fill: '#00ff00'
       });
@@ -133,8 +134,7 @@ export default class StartupScene extends Phaser.Scene {
 
     // Press start message - different for mobile
     const startMessage = isMobile ? 'TAP TO START' : 'PRESS SPACE TO START';
-    const startY = (WIDTH > HEIGHT) ? HEIGHT - 100 : HEIGHT - 150;
-    this.startText = this.add.text(WIDTH/2, startY, startMessage, {
+    this.startText = this.add.text(0, 0, startMessage, {
       font: 'bold 28px monospace',
       fill: '#ffff00',
       stroke: '#ffff00',
@@ -151,15 +151,15 @@ export default class StartupScene extends Phaser.Scene {
       repeat: -1
     });
 
-    // Tutorial button - place it above the start text, not below
-    const tutorialY = startY - 50;
+    // Tutorial button, laid out between the instructions and the start prompt
     const tutorialMessage = tutorialCompleted ? '[REPLAY TUTORIAL]' : '[TUTORIAL MODE]';
-    this.tutorialText = this.add.text(WIDTH/2, tutorialY, tutorialMessage, {
+    this.tutorialText = this.add.text(0, 0, tutorialMessage, {
       font: '18px monospace',
       fill: '#00ff00',
       stroke: '#00ff00',
       strokeThickness: 1
     });
+    this.tutorialText.setPadding(12, 8);
     this.tutorialText.setOrigin(0.5);
     this.tutorialText.setInteractive({ useHandCursor: true });
     this.tutorialText.setDepth(1000);
@@ -195,45 +195,44 @@ export default class StartupScene extends Phaser.Scene {
       'SYSTEM READY'
     ];
 
-    this.bootTexts = [];
-    const bootY = 60;
-    bootLines.forEach((line, index) => {
-      this.time.delayedCall(index * 300, () => {
-        const bootText = this.add.text(40, bootY + index * 20, '> ' + line, {
-          font: '14px monospace',
-          fill: '#0f0'
-        });
-
-        bootText.setAlpha(0);
-        this.bootTexts.push(bootText);
-        this.tweens.add({
-          targets: bootText,
-          alpha: 1,
-          duration: 200
-        });
-
-        if(index === bootLines.length - 1) {
-          const cursor = this.add.text(bootText.x + bootText.width + 5, bootText.y, '_', {
-            font: '14px monospace',
-            fill: '#0f0'
-          });
-          this.tweens.add({
-            targets: cursor,
-            alpha: 0,
-            duration: 400,
-            yoyo: true,
-            repeat: -1
-          });
-        }
+    this.bootTexts = bootLines.map(line => {
+      const bootText = this.add.text(0, 0, '> ' + line, {
+        font: '14px monospace',
+        fill: '#0f0'
       });
+      bootText.setAlpha(0);
+      return bootText;
+    });
+    this.bootCursor = this.add.text(0, 0, '_', {
+      font: '14px monospace',
+      fill: '#0f0'
+    });
+    this.bootCursor.setAlpha(0);
+
+    this.bootTexts.forEach((bootText, index) => {
+      this.tweens.add({
+        targets: bootText,
+        alpha: 1,
+        delay: index * 300,
+        duration: 200
+      });
+    });
+    this.tweens.add({
+      targets: this.bootCursor,
+      alpha: { from: 1, to: 0 },
+      delay: bootLines.length * 300,
+      duration: 400,
+      yoyo: true,
+      repeat: -1
     });
 
     // About link - upper right corner
-    const aboutText = this.add.text(WIDTH - 30, 30, 'ABOUT', {
+    const aboutText = this.aboutText = this.add.text(0, 0, 'ABOUT', {
       font: '14px monospace',
       fill: '#00ff00'
     });
     aboutText.setOrigin(1, 0);
+    aboutText.setPadding(12, 8);
     aboutText.setInteractive({ useHandCursor: true });
     aboutText.setAlpha(0.6);
 
@@ -251,6 +250,32 @@ export default class StartupScene extends Phaser.Scene {
     });
 
     createHighScoresButtonSystem.call(this);
+
+    // Settings - bottom-left, mirroring high scores. Opens the same DOM settings menu
+    // used in game; its controls need the music modules, loaded on this tap.
+    this.settingsButton = this.add.text(0, 0, '[SETTINGS]', {
+      font: '14px monospace',
+      fill: '#00ff00'
+    });
+    this.settingsButton.setOrigin(0, 1);
+    this.settingsButton.setPadding(12, 8);
+    this.settingsButton.setAlpha(0.6);
+    this.settingsButton.setDepth(1000);
+    this.settingsButton.setInteractive({ useHandCursor: true });
+    this.settingsButton.on('pointerover', () => this.settingsButton.setAlpha(1));
+    this.settingsButton.on('pointerout', () => this.settingsButton.setAlpha(0.6));
+    this.settingsButton.on('pointerdown', async () => {
+      if (isHighScorePanelOpen.call(this)) return;
+      const musicUI = await import('../audio/music-ui.js');
+      musicUI.setupMusicUI();
+      // SPACE would start the game from under the menu otherwise.
+      this.input.keyboard.enabled = false;
+      openStartScreenSettings(() => {
+        this.input.keyboard.enabled = true;
+      });
+    });
+
+    this.layoutStartScreen();
 
     // Floating particles in background
     this.particles = [];
@@ -340,7 +365,7 @@ export default class StartupScene extends Phaser.Scene {
         }
 
         // Register the dynamically-loaded Main scene and wire up music UI
-        this.scene.add('Main', MainScene, false);
+        if (!this.scene.get('Main')) this.scene.add('Main', MainScene, false);
         musicUI?.setupMusicUI();
 
         // Transition to game
@@ -393,7 +418,8 @@ export default class StartupScene extends Phaser.Scene {
       if (consumeHighScoreClick.call(this)) return;
       if (dismissHighScoresIfOpen()) return;
 
-      const buttons = [this.tutorialText, aboutText, this.highScoresButton];
+      if (isMenuOpen()) return;
+      const buttons = [this.tutorialText, aboutText, this.highScoresButton, this.settingsButton];
       if (buttons.some(button => button?.getBounds().contains(pointer.x, pointer.y))) {
         return;
       }
@@ -420,6 +446,68 @@ export default class StartupScene extends Phaser.Scene {
     }
     for(let y = 0; y < HEIGHT; y += 40) {
       this.gridGraphics.lineBetween(0, y, WIDTH, y);
+    }
+  }
+
+  // One layout for create and resize: a centred column that shrinks as a whole to fit
+  // between the boot log and the corner buttons, so nothing overlaps at any size.
+  layoutStartScreen() {
+    const W = gameState.WIDTH;
+    const H = gameState.HEIGHT;
+    const margin = 16;
+    // Corner buttons carry 12x8 padding for a bigger tap target; offset by it.
+    const cornerInset = 6;
+
+    this.aboutText.setPosition(W - cornerInset, cornerInset);
+    this.settingsButton.setPosition(cornerInset, H - cornerInset);
+    repositionHighScoreUiSystem.call(this);
+
+    // The boot log is decoration; short screens (phones held sideways) skip it.
+    const showBoot = H >= 560;
+    const bootFont = Math.max(10, Math.min(14, Math.floor((W - 48) / 24)));
+    const bootLine = Math.round(bootFont * 1.45);
+    const bootTop = 52; // below the ABOUT link, which shares the top edge on narrow screens
+    this.bootTexts.forEach((bootText, index) => {
+      bootText.setFontSize(bootFont);
+      bootText.setPosition(24, bootTop + index * bootLine);
+      bootText.setVisible(showBoot);
+    });
+    const lastBoot = this.bootTexts[this.bootTexts.length - 1];
+    this.bootCursor.setFontSize(bootFont);
+    this.bootCursor.setPosition(lastBoot.x + lastBoot.width + 4, lastBoot.y);
+    this.bootCursor.setVisible(showBoot);
+
+    const top = showBoot ? bootTop + this.bootTexts.length * bootLine + 12 : 52;
+    const bottom = H - 52;
+
+    // Column at full scale: [object, font px, gap after px].
+    const column = [
+      [this.title, 72, 20],
+      [this.subtitle, 24, 36],
+      ...this.instructions.map((line, index) => [line, 18, index === this.instructions.length - 1 ? 32 : 12]),
+      [this.tutorialText, 18, 20],
+      [this.startText, 28, 0]
+    ];
+    const lineHeight = 1.2;
+    const fullHeight = column.reduce((sum, [, size, gap]) => sum + size * lineHeight + gap, 0);
+
+    // Widest line at full scale. The subtitle types itself in, so it is not measured;
+    // it is narrower than the title at every size anyway.
+    const fullWidth = Math.max(...column
+      .filter(([obj]) => obj !== this.subtitle)
+      .map(([obj, size]) => {
+        obj.setFontSize(size);
+        return obj.width;
+      }));
+
+    const scale = Math.max(0.4, Math.min(1, (bottom - top) / fullHeight, (W - margin * 2) / fullWidth));
+
+    let y = top + Math.max(0, (bottom - top - fullHeight * scale) / 2);
+    for (const [obj, size, gap] of column) {
+      const px = Math.round(size * scale);
+      obj.setFontSize(px);
+      obj.setPosition(W / 2, y + px * lineHeight / 2);
+      y += px * lineHeight + gap * scale;
     }
   }
 
@@ -452,37 +540,7 @@ export default class StartupScene extends Phaser.Scene {
         });
       }
 
-      if (this.title) {
-        this.title.x = WIDTH / 2;
-        this.title.y = HEIGHT / 3;
-      }
-
-      if (this.subtitle) {
-        this.subtitle.x = WIDTH / 2;
-        this.subtitle.y = HEIGHT / 3 + 80;
-      }
-
-      if (this.instructions) {
-        this.instructions.forEach((instruction, index) => {
-          instruction.x = WIDTH / 2;
-          instruction.y = HEIGHT / 2 + 40 + index * 30;
-        });
-      }
-
-      if (this.startText) {
-        this.startText.x = WIDTH / 2;
-        const startY = (WIDTH > HEIGHT) ? HEIGHT - 50 : HEIGHT - 100;
-        this.startText.y = startY;
-      }
-
-      if (this.invisibleButton) {
-        this.invisibleButton.x = WIDTH / 2;
-        this.invisibleButton.y = HEIGHT / 2;
-        this.invisibleButton.width = WIDTH;
-        this.invisibleButton.height = HEIGHT;
-      }
-
-      repositionHighScoreUiSystem.call(this);
+      this.layoutStartScreen();
 
       if (this.particles) {
         this.particles.forEach(particle => {

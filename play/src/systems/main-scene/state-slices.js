@@ -1,7 +1,7 @@
 /**
  * @typedef {{ lane:number, moving:boolean, dashing:boolean, jumping:boolean, crouching:boolean, charging:boolean, stretching:boolean }} PlayerStateSlice
  * @typedef {{ score:number, combo:number, beats:number, rapidFire:boolean, rapidFireTimer:number, offScreenTimer:number, ammo:number, shield:number, rapidFireFromShield:boolean }} CombatStateSlice
- * @typedef {{ paused:boolean, gameOver:boolean, invincible:boolean, playerCanControl:boolean }} FlowStateSlice
+ * @typedef {{ paused:boolean, gameOver:boolean, invincible:boolean, playerCanControl:boolean, menu:string, settingsReturnTo:string }} FlowStateSlice
  * @typedef {{ touchActive:boolean, touchFiring:boolean, currentZone:string, jumpChargeAmount:number }} InputStateSlice
  * @typedef {{ player: PlayerStateSlice, combat: CombatStateSlice, flow: FlowStateSlice, input: InputStateSlice }} MainSceneStateSlices
  */
@@ -31,6 +31,8 @@ export function initializeMainSceneStateSlices() {
     },
     flow: {
       paused: false,
+      menu: 'none',
+      settingsReturnTo: 'none',
       gameOver: false,
       invincible: false,
       playerCanControl: true

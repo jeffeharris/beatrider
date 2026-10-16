@@ -1,22 +1,70 @@
 /**
- * @typedef {{paused:boolean, gameOver:boolean, invincible:boolean, playerCanControl:boolean}} FlowSlice
+ * @typedef {{paused:boolean, gameOver:boolean, invincible:boolean, playerCanControl:boolean, menu?:string, settingsReturnTo?:string}} FlowSlice
  * @typedef {{lane:number, moving:boolean, dashing:boolean, jumping:boolean, crouching:boolean, charging:boolean, stretching:boolean}} PlayerSlice
  * @typedef {{score:number, combo:number, beats:number, rapidFire:boolean, rapidFireTimer:number, offScreenTimer:number}} CombatSlice
  * @typedef {{touchActive:boolean, touchFiring:boolean, currentZone:string, jumpChargeAmount:number}} InputSlice
  */
 
 /**
+ * Which menu is on screen. Any menu freezes gameplay (flow.paused); only the
+ * pause menu also stops the music, so settings changes can be heard live.
+ */
+export const MENU = Object.freeze({ NONE: 'none', PAUSE: 'pause', SETTINGS: 'settings' });
+
+/**
+ * Open the pause menu, from play or from settings.
  * @param {FlowSlice} flow
+ * @returns {boolean} whether anything changed
  */
 export function applyPauseTransition(flow) {
+  if (flow.gameOver || flow.menu === MENU.PAUSE) return false;
   flow.paused = true;
+  flow.menu = MENU.PAUSE;
+  return true;
+}
+
+/**
+ * Close every menu and return to play.
+ * @param {FlowSlice} flow
+ * @returns {boolean} whether anything changed
+ */
+export function applyResumeTransition(flow) {
+  if (!flow.paused) return false;
+  flow.paused = false;
+  flow.menu = MENU.NONE;
+  return true;
+}
+
+/**
+ * Open settings over play or over the pause menu; closing returns to whichever it was.
+ * @param {FlowSlice} flow
+ * @returns {boolean} whether anything changed
+ */
+export function applyOpenSettingsTransition(flow) {
+  if (flow.gameOver || flow.menu === MENU.SETTINGS) return false;
+  flow.settingsReturnTo = flow.menu === MENU.PAUSE ? MENU.PAUSE : MENU.NONE;
+  flow.paused = true;
+  flow.menu = MENU.SETTINGS;
+  return true;
 }
 
 /**
  * @param {FlowSlice} flow
+ * @returns {boolean} whether anything changed
  */
-export function applyResumeTransition(flow) {
-  flow.paused = false;
+export function applyCloseSettingsTransition(flow) {
+  if (flow.menu !== MENU.SETTINGS) return false;
+  flow.menu = flow.settingsReturnTo === MENU.PAUSE ? MENU.PAUSE : MENU.NONE;
+  flow.paused = flow.menu !== MENU.NONE;
+  return true;
+}
+
+/**
+ * Music plays during play and while settings is open; only the pause menu silences it.
+ * @param {FlowSlice} flow
+ */
+export function shouldMusicPlay(flow) {
+  return flow.menu !== MENU.PAUSE;
 }
 
 /**
