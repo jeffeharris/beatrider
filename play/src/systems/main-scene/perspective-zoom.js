@@ -5,6 +5,10 @@
 // drops, and the depth curve flattens, so enemies leap off the vanishing point
 // rather than easing out of it.
 //
+// While zoomed the camera is locked over the shoulder: it centres on the ship
+// and rises with its jumps, so the ship holds still on screen and the track
+// swings and drops beneath it. The lock scales with the zoom.
+//
 // The world never moves to make room for the zoom: lanes keep their X, the ship
 // keeps its row, and progress/collision are untouched. Only the camera and the
 // projection parameters change, so nothing in gameplay can drift out of step
@@ -21,6 +25,7 @@ import {
   ZOOM_HORIZON_NEAR,
   ZOOM_EXPONENT_NEAR,
   ZOOM_FOLLOW,
+  ZOOM_JUMP_FOLLOW,
   ZOOM_FOLLOW_LAG_MS
 } from '../../tuning.js';
 
@@ -38,7 +43,7 @@ export function easeZoom(t) {
   return t * t * (3 - 2 * t);
 }
 
-// Where the camera wants to centre horizontally: part of the way toward the ship.
+// Where the camera wants to centre horizontally: toward the ship as it zooms.
 export function followTargetX(width, playerX, ease) {
   return lerp(width / 2, playerX, ZOOM_FOLLOW * ease);
 }
@@ -53,18 +58,24 @@ export function followTowards(current, target, dt) {
  *
  * Returns the visible world rectangle (viewLeft/viewTop at `zoom`) and the
  * projection the world should be drawn with:
- * - The view is clamped inside the world, so the zoom never reveals empty space.
- * - viewTop keeps the ship's row at the same height on screen.
+ * - viewTop keeps the ship (at `shipY`, its live height) at the ship row's
+ *   screen height, so with ZOOM_JUMP_FOLLOW = 1 a jump carries the camera up.
+ * - The view may leave the world only in proportion to the zoom, so the
+ *   unzoomed view is always exactly the world. (The starfield is drawn per view,
+ *   so space past the world's edge is still full of stars.)
  * - vanishX sits at the centre of the view: a camera that pans keeps looking
  *   straight down the track, so the corridor converges ahead of it.
- * - vanishY puts the horizon at a chosen fraction of the screen height.
+ * - vanishY puts the horizon at a fixed fraction of the screen height, so a jump
+ *   reads as the camera rising rather than tilting.
  */
-export function computeZoomFrame({ ease, width, height, playerY, followX }) {
+export function computeZoomFrame({ ease, width, height, playerY, followX, shipY = playerY }) {
   const zoom = lerp(1, ZOOM_CAMERA_NEAR, ease);
   const viewW = width / zoom;
   const viewH = height / zoom;
-  const viewLeft = clamp(followX - viewW / 2, 0, width - viewW);
-  const viewTop = playerY - playerY / zoom;
+  const overflowX = width * ease;
+  const viewLeft = clamp(followX - viewW / 2, 0 - overflowX, width - viewW + overflowX);
+  const anchorY = playerY + (shipY - playerY) * ZOOM_JUMP_FOLLOW * ease;
+  const viewTop = clamp(anchorY - playerY / zoom, 0 - height * ease, height - viewH);
   const horizon = lerp(PERSPECTIVE_VANISH_RATIO, ZOOM_HORIZON_NEAR, ease);
   return {
     zoom,

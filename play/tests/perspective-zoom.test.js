@@ -63,15 +63,28 @@ test('the ship row stays at the same screen height at every zoom', () => {
   }
 });
 
-test('the view never leaves the world, wherever the ship is', () => {
-  for (const followX of [-500, 0, 128, 640, 1152, 1280, 2000]) {
-    for (const ease of [0.3, 1]) {
-      const f = computeZoomFrame({ ease, followX, ...SCREEN });
-      const viewW = SCREEN.width / f.zoom;
-      const viewH = SCREEN.height / f.zoom;
-      assert.ok(f.viewLeft >= 0 && f.viewLeft + viewW <= SCREEN.width + 1e-9);
-      assert.ok(f.viewTop >= 0 && f.viewTop + viewH <= SCREEN.height + 1e-9);
-    }
+test('unzoomed, the view is the world wherever the ship is or jumps', () => {
+  for (const followX of [-500, 0, 128, 640, 1152, 2000]) {
+    const f = computeZoomFrame({ ease: 0, followX, shipY: SCREEN.playerY - 200, ...SCREEN });
+    assert.equal(f.viewLeft, 0);
+    assert.equal(f.viewTop, 0);
+  }
+});
+
+test('fully zoomed, the camera centres on the ship even in the outer lanes', () => {
+  for (const shipX of [128, 640, 1152]) {
+    const f = computeZoomFrame({ ease: 1, followX: shipX, ...SCREEN });
+    close((shipX - f.viewLeft) * f.zoom, SCREEN.width / 2, `shipX ${shipX}`);
+  }
+});
+
+test('fully zoomed, a jump carries the camera: the ship holds its screen height', () => {
+  for (const jump of [0, 60, 150, 240]) {
+    const shipY = SCREEN.playerY - jump;
+    const f = computeZoomFrame({ ease: 1, followX: 640, shipY, ...SCREEN });
+    close((shipY - f.viewTop) * f.zoom, SCREEN.playerY, `jump ${jump}`);
+    // ...and the horizon stays put on screen, so it reads as rising, not tilting.
+    close((f.vanishY - f.viewTop) * f.zoom, SCREEN.height * ZOOM_HORIZON_NEAR, `horizon at jump ${jump}`);
   }
 });
 
@@ -85,10 +98,9 @@ test('the collision depth still projects onto the ship row with the near curve',
   assert.equal(projectY(PLAYER_PROGRESS, f.vanishY, SCREEN.playerY, f.exponent), SCREEN.playerY);
 });
 
-test('follow pans part of the way toward the ship, only while zoomed', () => {
+test('follow targets the ship only while zoomed', () => {
   assert.equal(followTargetX(1280, 128, 0), 640);
-  const target = followTargetX(1280, 128, 1);
-  assert.ok(target < 640 && target > 128);
+  assert.equal(followTargetX(1280, 128, 1), 128);
 });
 
 test('followTowards converges without overshooting', () => {
