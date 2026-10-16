@@ -40,8 +40,12 @@ export const ZOOM_OUT_MS = 600;
 export const ZOOM_CAMERA_NEAR = 1.5;       // camera magnification at full zoom
 export const ZOOM_HORIZON_NEAR = 0.29;     // on-screen horizon, fraction of height
 export const ZOOM_EXPONENT_NEAR = 0.95;    // below 1 the curve flips convex
-export const ZOOM_FOLLOW = 0.7;            // how far the camera pans toward the ship, 0..1
-export const ZOOM_FOLLOW_LAG_MS = 130;     // camera catch-up time constant
+// Over-the-shoulder lock while zoomed: 1 keeps the ship centred left-right and
+// at a fixed screen height through jumps (the world drops away beneath it).
+// Lower values let the ship drift off-centre / visibly rise.
+export const ZOOM_FOLLOW = 1;              // sideways, 0..1
+export const ZOOM_JUMP_FOLLOW = 1;         // vertical, 0..1
+export const ZOOM_FOLLOW_LAG_MS = 130;     // sideways catch-up time constant; jumps are rigid
 
 // Anything at or above this depth is screen-space UI (HUD, tutorial, pause,
 // game over, debug). It is drawn by an unzoomed HUD camera; everything below

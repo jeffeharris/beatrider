@@ -83,7 +83,8 @@ function applyZoomFrame(scene, ease) {
     width: WIDTH,
     height: HEIGHT,
     playerY: PLAYER_Y,
-    followX: scene.zoomFollowX ?? WIDTH / 2
+    followX: scene.zoomFollowX ?? WIDTH / 2,
+    shipY: scene.player ? scene.player.y : PLAYER_Y
   });
 
   // Phaser zooms about the camera's centre, so convert the visible rectangle's
@@ -98,4 +99,5 @@ function applyZoomFrame(scene, ease) {
   scene.vanishX = frame.vanishX;
   scene.vanishY = frame.vanishY;
   scene.perspectiveExponent = frame.exponent;
+  scene.zoomView = { left: frame.viewLeft, top: frame.viewTop, zoom: frame.zoom };
 }

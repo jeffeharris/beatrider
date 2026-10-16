@@ -29,12 +29,17 @@ export function createStarfieldSystem() {
   }
 }
 
+// Stars are a backdrop at infinity, so they are laid out in screen space and
+// mapped into whatever the camera is looking at: they stream from the on-screen
+// horizon, fill the view even when the zoomed camera looks past the world's
+// edge, and keep a constant on-screen size. Unzoomed, the mapping is identity.
 export function updateStarfieldSystem(dt) {
   if (!this.starGraphics) return;
   this.starGraphics.clear();
 
-  const vanishY = gameState.HEIGHT * 0.15;
+  const view = this.zoomView ?? { left: 0, top: 0, zoom: 1 };
   const vanishX = gameState.WIDTH / 2;
+  const vanishY = ((this.vanishY ?? gameState.HEIGHT * 0.15) - view.top) * view.zoom;
 
   for (let layer = 0; layer < 3; layer++) {
     for (const star of this.stars[layer]) {
@@ -52,14 +57,14 @@ export function updateStarfieldSystem(dt) {
 
       if (x < -50 || x > gameState.WIDTH + 50) continue;
 
-      const size = star.size * (0.1 + star.progress * 1.5);
+      const size = star.size * (0.1 + star.progress * 1.5) / view.zoom;
       star.twinkle += dt * 0.003;
       const twinkleAlpha = 0.8 + Math.sin(star.twinkle) * 0.2;
       const distanceAlpha = Math.min(1, star.progress * 2);
       const alpha = twinkleAlpha * distanceAlpha * 0.85;
 
       this.starGraphics.fillStyle(star.color, alpha);
-      this.starGraphics.fillCircle(x, y, size);
+      this.starGraphics.fillCircle(view.left + x / view.zoom, view.top + y / view.zoom, size);
     }
   }
 }
