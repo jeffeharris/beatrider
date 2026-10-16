@@ -3,7 +3,7 @@ import * as Tone from 'tone';
 import { gameState, LANES, DAMAGE_VALUES } from '../../config.js';
 import { gameSounds } from '../../audio/game-sounds.js';
 import { applyDamage } from './damage-state.js';
-import { projectY, perspectiveScale } from './perspective.js';
+import { projectY, perspectiveScale, trackDepth, TRACK_DEPTH_BIAS } from './perspective.js';
 
 // Kick/snare/stab hits make enemies already on screen swell and flash. Returns the
 // pulsed scale and sets the tint. Shared with the frozen settings view, where the
@@ -65,27 +65,8 @@ for(let i=this.enemies.length-1; i>=0; i--){
   // Update X position along perspective lane + pulse shift
   e.x = this._laneX(e.lane, e.progress) + pulseXShift;
   
-  // Check if enemy should be in front or behind obstacles based on progress
-  // Find the closest obstacle ahead in the same lane
-  let closestObstacleAhead = null;
-  let minDistance = Infinity;
-  
-  for(let obstacle of this.obstacles) {
-    if(Math.floor(obstacle.lane) === Math.floor(e.lane)) {
-      // Only consider obstacles that are ahead or at same position
-      if(obstacle.progress >= e.progress) {
-        const distance = obstacle.progress - e.progress;
-        if(distance < minDistance) {
-          minDistance = distance;
-          closestObstacleAhead = obstacle;
-        }
-      }
-    }
-  }
-  
-  // If there's an obstacle ahead in our lane, be behind it
-  // Otherwise be in front (we've passed all obstacles in our lane)
-  e.setDepth(closestObstacleAhead ? 80 : 180); // 80 = behind obstacles, 180 = in front
+  // Nearer draws over farther, including over the ship once past its row.
+  e.setDepth(trackDepth(e.progress, TRACK_DEPTH_BIAS.enemy));
   
   // Add position to trail history
   if(!e.trailPoints) e.trailPoints = [];

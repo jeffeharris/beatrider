@@ -10,7 +10,9 @@ const {
   projectY,
   unprojectY,
   perspectiveScale,
-  laneSpread
+  laneSpread,
+  trackDepth,
+  TRACK_DEPTH_BIAS
 } = await import('../src/systems/main-scene/perspective.js');
 
 // Representative screen setup: 720px tall, vanishing point at 15% and the ship
@@ -84,4 +86,36 @@ test('exported constants keep the tuned values', () => {
   assert.equal(PERSPECTIVE_SCALE_BASE, 0.1);
   assert.equal(PERSPECTIVE_SCALE_RANGE, 1.2);
   assert.equal(PLAYER_PROGRESS, 0.955);
+});
+
+// The ship's own block: player sprite at 500 with unicorn parts from 498 to 510.
+const SHIP_BLOCK = { min: 498, max: 510 };
+
+test('trackDepth: nearer always draws over farther', () => {
+  let last = -Infinity;
+  for (let p = 0; p <= 1.2; p += 0.01) {
+    const d = trackDepth(p);
+    assert.ok(d >= last, `depth went down at progress ${p.toFixed(2)}`);
+    last = d;
+  }
+});
+
+test('trackDepth: behind the ship row draws under the ship, past it draws over', () => {
+  const maxBias = Math.max(...Object.values(TRACK_DEPTH_BIAS));
+  assert.ok(trackDepth(PLAYER_PROGRESS - 0.001, maxBias) < SHIP_BLOCK.min);
+  assert.ok(trackDepth(PLAYER_PROGRESS) > SHIP_BLOCK.max);
+  assert.ok(trackDepth(0.94, maxBias) < SHIP_BLOCK.min);
+});
+
+test('trackDepth stays inside the world band, below effects and HUD', () => {
+  for (const p of [-0.2, 0, 0.5, PLAYER_PROGRESS, 1, 1.1, 1.2]) {
+    for (const bias of Object.values(TRACK_DEPTH_BIAS)) {
+      const d = trackDepth(p, bias);
+      assert.ok(d >= 100 && d < 998, `progress ${p} bias ${bias} -> ${d}`);
+    }
+  }
+});
+
+test('trackDepth bias puts a star over its obstacle at the same progress', () => {
+  assert.ok(trackDepth(0.5, TRACK_DEPTH_BIAS.star) > trackDepth(0.5, TRACK_DEPTH_BIAS.obstacle));
 });

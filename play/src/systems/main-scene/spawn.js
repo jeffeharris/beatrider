@@ -1,4 +1,5 @@
 import { gameState, isMobile, ENEMY_SPEED_BASE } from '../../config.js';
+import { trackDepth, TRACK_DEPTH_BIAS } from './perspective.js';
 
 export function spawnEnemySystem(lane, speed, texture = 'enemyTex') {
   const { vanishY } = this;
@@ -11,7 +12,7 @@ export function spawnEnemySystem(lane, speed, texture = 'enemyTex') {
   e.h = e.baseSize;
   e.enemyType = texture;
   e.setScale(0.1);
-  e.setDepth(100);
+  e.setDepth(trackDepth(0, TRACK_DEPTH_BIAS.enemy));
   e.trailPoints = [];
   this.enemies.push(e);
 }
@@ -32,7 +33,7 @@ export function spawnObstacleSystem(lane) {
   o.w = o.baseSize;
   o.h = Math.floor(22 * gameState.MOBILE_SCALE);
   o.setScale(0.1);
-  o.setDepth(150);
+  o.setDepth(trackDepth(0, TRACK_DEPTH_BIAS.obstacle));
   o.trailPoints = [];
   o.isObstacle = true;
   this.obstacles.push(o);
@@ -48,7 +49,7 @@ export function spawnFloatingStarSystem(obstacle) {
   const star = this.add.image(obstacle.x, obstacle.y - 25, 'starTex');
   star.attachedObstacle = obstacle;
   star.setScale(1.0);
-  star.setDepth(160);
+  star.setDepth(trackDepth(0, TRACK_DEPTH_BIAS.star));
   star.collected = false;
   star.rotationSpeed = 0.05;
   star.floatOffset = 0;
@@ -64,7 +65,7 @@ export function spawnPowerUpSystem(lane) {
   p.vy = ENEMY_SPEED_BASE * 1.2;
   p.baseSize = Math.floor(20 * gameState.MOBILE_SCALE);
   p.setScale(0.1);
-  p.setDepth(100);
+  p.setDepth(trackDepth(0, TRACK_DEPTH_BIAS.powerUp));
   this.powerUps.push(p);
 }
 
@@ -82,7 +83,7 @@ export function spawnDrifterSystem(lane) {
   d.isDrifter = true;
   d.driftTimer = 0;
   d.setScale(0.1);
-  d.setDepth(100);
+  d.setDepth(trackDepth(0, TRACK_DEPTH_BIAS.enemy));
   d.trailPoints = [];
   this.enemies.push(d);
 }
