@@ -159,7 +159,10 @@ function renderTrackMute(track) {
   if (!square) return;
   square.classList.toggle('muted', muteStates[track]);
   square.setAttribute('aria-pressed', String(!muteStates[track]));
-  square.title = `${square.textContent}: ${muteStates[track] ? 'muted' : 'on'}`;
+  const label = square.querySelector('.track-label')?.textContent || track;
+  square.title = muteStates[track]
+    ? `${label}: muted, no ${square.dataset.spawns}`
+    : `${label}: on, spawns ${square.dataset.spawns}`;
 }
 
 // Apply saved music settings to the engine and the controls. This used to wait for

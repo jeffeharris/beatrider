@@ -251,29 +251,35 @@ export default class StartupScene extends Phaser.Scene {
 
     createHighScoresButtonSystem.call(this);
 
-    // Settings - bottom-left, mirroring high scores. Opens the same DOM settings menu
-    // used in game; its controls need the music modules, loaded on this tap.
-    this.settingsButton = this.add.text(0, 0, '[SETTINGS]', {
-      font: '14px monospace',
-      fill: '#00ff00'
-    });
-    this.settingsButton.setOrigin(0, 1);
-    this.settingsButton.setPadding(12, 8);
-    this.settingsButton.setAlpha(0.6);
-    this.settingsButton.setDepth(1000);
-    this.settingsButton.setInteractive({ useHandCursor: true });
-    this.settingsButton.on('pointerover', () => this.settingsButton.setAlpha(1));
-    this.settingsButton.on('pointerout', () => this.settingsButton.setAlpha(0.6));
-    this.settingsButton.on('pointerdown', async () => {
-      if (isHighScorePanelOpen.call(this)) return;
-      const musicUI = await import('../audio/music-ui.js');
-      musicUI.setupMusicUI();
-      // SPACE would start the game from under the menu otherwise.
-      this.input.keyboard.enabled = false;
-      openStartScreenSettings(() => {
-        this.input.keyboard.enabled = true;
+    // Settings and music - bottom-left, mirroring high scores. Both open the same DOM
+    // settings menu used in game, on their own tab; its controls need the music
+    // modules, loaded on this tap.
+    const createSettingsLink = (label, tab) => {
+      const link = this.add.text(0, 0, label, {
+        font: '14px monospace',
+        fill: '#00ff00'
       });
-    });
+      link.setOrigin(0, 1);
+      link.setPadding(12, 8);
+      link.setAlpha(0.6);
+      link.setDepth(1000);
+      link.setInteractive({ useHandCursor: true });
+      link.on('pointerover', () => link.setAlpha(1));
+      link.on('pointerout', () => link.setAlpha(0.6));
+      link.on('pointerdown', async () => {
+        if (isHighScorePanelOpen.call(this)) return;
+        const musicUI = await import('../audio/music-ui.js');
+        musicUI.setupMusicUI();
+        // SPACE would start the game from under the menu otherwise.
+        this.input.keyboard.enabled = false;
+        openStartScreenSettings(tab, () => {
+          this.input.keyboard.enabled = true;
+        });
+      });
+      return link;
+    };
+    this.settingsButton = createSettingsLink('[SETTINGS]', 'game');
+    this.musicButton = createSettingsLink('[MUSIC]', 'music');
 
     this.layoutStartScreen();
 
@@ -419,7 +425,7 @@ export default class StartupScene extends Phaser.Scene {
       if (dismissHighScoresIfOpen()) return;
 
       if (isMenuOpen()) return;
-      const buttons = [this.tutorialText, aboutText, this.highScoresButton, this.settingsButton];
+      const buttons = [this.tutorialText, aboutText, this.highScoresButton, this.settingsButton, this.musicButton];
       if (buttons.some(button => button?.getBounds().contains(pointer.x, pointer.y))) {
         return;
       }
@@ -460,6 +466,7 @@ export default class StartupScene extends Phaser.Scene {
 
     this.aboutText.setPosition(W - cornerInset, cornerInset);
     this.settingsButton.setPosition(cornerInset, H - cornerInset);
+    this.musicButton.setPosition(this.settingsButton.x + this.settingsButton.width, H - cornerInset);
     repositionHighScoreUiSystem.call(this);
 
     // The boot log is decoration; short screens (phones held sideways) skip it.

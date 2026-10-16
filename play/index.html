@@ -59,6 +59,9 @@
       <button id="pauseBtn" class="hud-btn" type="button" aria-label="Pause" title="Pause (Esc)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
       </button>
+      <button id="musicBtn" class="hud-btn" type="button" aria-label="Music" title="Music">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+      </button>
       <button id="settingsBtn" class="hud-btn" type="button" aria-label="Settings" title="Settings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
       </button>
@@ -74,6 +77,7 @@
         </div>
         <div class="menu-actions">
           <button class="menu-btn primary" type="button" data-action="resume">RESUME</button>
+          <button class="menu-btn" type="button" data-action="music">MUSIC</button>
           <button class="menu-btn" type="button" data-action="settings">SETTINGS</button>
           <button class="menu-btn" type="button" data-action="restart">RESTART</button>
           <button class="menu-btn" type="button" data-action="quit">QUIT TO TITLE</button>
@@ -161,14 +165,32 @@
               <span id="musicPresetDisplay" class="field-hint">Classic driving</span>
             </div>
             <div class="field stacked">
-              <span class="field-label">Tracks <span class="field-hint inline">tap to mute</span></span>
+              <span class="field-label">Tracks <span class="field-hint inline">muting a track stops what it spawns</span></span>
               <div class="track-squares">
-                <button type="button" class="track-square" id="kickSquare" data-track="kick">Kick</button>
-                <button type="button" class="track-square" id="snareSquare" data-track="snare">Snare</button>
-                <button type="button" class="track-square" id="hatSquare" data-track="hat">Hat</button>
-                <button type="button" class="track-square" id="acidSquare" data-track="acid">Acid</button>
-                <button type="button" class="track-square" id="stabSquare" data-track="stab">Stab</button>
-                <button type="button" class="track-square" id="subSquare" data-track="sub">Sub</button>
+                <button type="button" class="track-square" id="kickSquare" data-track="kick" data-spawns="red enemies">
+                  <span class="track-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" fill="#ff3366"/></svg></span>
+                  <span class="track-label">Kick</span>
+                </button>
+                <button type="button" class="track-square" id="snareSquare" data-track="snare" data-spawns="fast yellow enemies">
+                  <span class="track-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,4 21,20 3,20" fill="#ffff00"/></svg></span>
+                  <span class="track-label">Snare</span>
+                </button>
+                <button type="button" class="track-square" id="hatSquare" data-track="hat" data-spawns="shield barriers">
+                  <span class="track-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="3" height="15" fill="#bf40ff"/><rect x="18" y="5" width="3" height="15" fill="#bf40ff"/><rect x="7" y="7" width="10" height="11" fill="#ffccff" opacity="0.55"/></svg></span>
+                  <span class="track-label">Hat</span>
+                </button>
+                <button type="button" class="track-square" id="acidSquare" data-track="acid" data-spawns="power-ups">
+                  <span class="track-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="#00ff00"/></svg></span>
+                  <span class="track-label">Acid</span>
+                </button>
+                <button type="button" class="track-square" id="stabSquare" data-track="stab" data-spawns="drifting purple enemies">
+                  <span class="track-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,3 21,12 12,21 3,12" fill="#ff00ff"/></svg></span>
+                  <span class="track-label">Stab</span>
+                </button>
+                <button type="button" class="track-square" id="subSquare" data-track="sub" data-spawns="grid pulses">
+                  <span class="track-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8q5-5 10 0t10 0M2 16q5-5 10 0t10 0" fill="none" stroke="#00ffcc" stroke-width="2"/></svg></span>
+                  <span class="track-label">Sub</span>
+                </button>
               </div>
             </div>
             <details class="advanced">

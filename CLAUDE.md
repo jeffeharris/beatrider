@@ -34,7 +34,7 @@ Root `python serve.py [port]` (default 5174) serves the static landing page/lega
 - `play/src/systems/main-scene/` — ~40 modules holding the Main scene's logic (setup, update loops per entity type, movement/jump/dash, mobile controls, grid/fire, starfield, tutorial, game over, state slices)
 - `play/src/systems/startup-scene/` — startup scene systems
 - `play/src/audio/` — `music-engine.js` (procedural music), `music-ui.js` (binds the settings menu's controls: difficulty, genre/preset, track mutes), `game-sounds.js` (synthesized SFX, 6 laser variants), `ios-unlock.js`, `latency-probe.js`
-- `play/src/ui/menus.js` — the DOM menus in `play/index.html`: in-game buttons (`#hud`), pause menu, settings menu; shows screens and routes clicks/ESC/SPACE to the scene
+- `play/src/ui/menus.js` — the DOM menus in `play/index.html`: in-game buttons (`#hud`: pause, music, settings), pause menu, settings menu (Game/Music tabs; each entry point names the tab it opens on); shows screens and routes clicks/ESC/SPACE to the scene
 - `play/src/leaderboard/` — local leaderboard entries, formatting, genre attribution, store, view
 - `play/src/native/bootstrap.js` + `play/ios/` — Capacitor native shell (config at `play/capacitor.config.json`, `webDir: dist`)
 - `play/tests/` — `node:test` + `node:assert` unit tests for the pure state modules

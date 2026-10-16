@@ -81,11 +81,20 @@ export function isMenuOpen() {
 
 /**
  * Open settings from the start screen, where no run exists to freeze.
+ * @param {'game'|'music'} tab
  * @param {() => void} [onClose]
  */
-export function openStartScreenSettings(onClose) {
+export function openStartScreenSettings(tab, onClose) {
   startScreenClose = onClose || null;
+  selectTab(tab);
   showMenu('settings');
+}
+
+// Music has its own shortcuts (HUD, pause menu, start screen), so each entry point
+// names the tab it opens on.
+function openRunSettings(run, tab) {
+  selectTab(tab);
+  run.openSettings();
 }
 
 /** Called each time settings opens, so its controls show current values. */
@@ -115,7 +124,8 @@ function goBack() {
 
 const PAUSE_ACTIONS = {
   resume: (run) => run.resumeGame(),
-  settings: (run) => run.openSettings(),
+  settings: (run) => openRunSettings(run, 'game'),
+  music: (run) => openRunSettings(run, 'music'),
   restart: (run) => run.restartRun(),
   quit: (run) => run.quitToTitle(),
   feedback: (run) => {
@@ -131,7 +141,14 @@ export function initMenus() {
   initialized = true;
 
   byId('pauseBtn').addEventListener('click', () => activeRun()?.pauseGame());
-  byId('settingsBtn').addEventListener('click', () => activeRun()?.openSettings());
+  byId('settingsBtn').addEventListener('click', () => {
+    const run = activeRun();
+    if (run) openRunSettings(run, 'game');
+  });
+  byId('musicBtn').addEventListener('click', () => {
+    const run = activeRun();
+    if (run) openRunSettings(run, 'music');
+  });
 
   byId('pauseMenu').addEventListener('click', (e) => {
     const run = activeRun();
