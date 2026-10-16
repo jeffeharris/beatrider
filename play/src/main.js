@@ -4,6 +4,7 @@ import { useCanvas, isMac, isSafariBrowser, isChrome } from './config.js';
 import { initNative } from './native/bootstrap.js';
 import { startLatencyProbe } from './audio/latency-probe.js';
 import { getTestOptions, installTestModeRuntime } from './testing/test-mode.js';
+import { initMenus } from './ui/menus.js';
 
 const testOptions = getTestOptions();
 
@@ -67,7 +68,7 @@ console.log('Platform:', isMac ? 'Mac' : 'Other', '| Browser:', isSafariBrowser 
 console.log('Renderer:', useCanvas ? 'Canvas (Mac optimization)' : 'WebGL/Auto');
 
 // Initialize Phaser game with proper scale configuration
-// Exposed on window so music-ui.js can access scene references
+// Exposed on window so the DOM menus can reach scene references
 const game = window.game = new Phaser.Game({
   type: testOptions.enabled || useCanvas ? Phaser.CANVAS : Phaser.AUTO,
   parent: 'gameContainer',
@@ -99,8 +100,9 @@ setTimeout(() => {
   if (game && game.scale) {
     // Proper way to listen for Phaser resize events
     game.scale.on('resize', (gameSize) => {
+      // Main stays registered after quitting to the title screen; only resize it while it runs.
       const mainScene = game.scene.getScene('Main');
-      if (mainScene && mainScene.resize) {
+      if (mainScene?.scene.isActive() && mainScene.resize) {
         mainScene.resize(gameSize);
       }
     });
@@ -133,8 +135,10 @@ setTimeout(() => {
 }, 500);
 
 // ============================================
-// MUSIC UI (loaded dynamically after user gesture in StartupScene)
+// MENUS (pause/settings; music controls bind later, after a user gesture)
 // ============================================
+
+initMenus();
 
 // ============================================
 // SERVICE WORKER (PWA)

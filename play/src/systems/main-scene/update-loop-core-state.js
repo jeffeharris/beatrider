@@ -1,8 +1,5 @@
 import Phaser from 'phaser';
-import { gameState } from '../../config.js';
 import { saveGameData } from '../../storage.js';
-import { uiState, updateGridButton } from '../../audio/music-ui.js';
-import { MAIN_SCENE_ACTIONS, dispatchMainSceneAction } from './action-dispatch.js';
 
 export function updateTutorialAndAdaptiveState(dt) {
   const { flow } = this.stateSlices;
@@ -27,57 +24,20 @@ export function updateTutorialAndAdaptiveState(dt) {
   }
 }
 
+// Pause/resume (ESC, SPACE, taps) is handled by ui/menus.js: the scene's keyboard is
+// switched off while a menu is open. Returns false while gameplay is frozen.
 export function handlePauseAndGridInput() {
-  const { flow, input } = this.stateSlices;
-
-  if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
-    if (flow.gameOver) return true;
-    if (!flow.paused) {
-      this.pauseGame();
-    } else {
-      this.resumeGame();
-    }
-  }
+  const { flow } = this.stateSlices;
 
   if (Phaser.Input.Keyboard.JustDown(this.keys.G)) {
-    this.gridVisible = !this.gridVisible;
-    gameState.gridEnabled = this.gridVisible;
-    saveGameData({ settings: { gridEnabled: gameState.gridEnabled } });
-
-    if (!this.gridVisible && this.gridGraphics) {
-      this.gridGraphics.clear();
-    } else if (this.gridVisible && flow.paused) {
-      this._drawPerspectiveGrid();
-    }
-
-    uiState.gridVisible = this.gridVisible;
-    updateGridButton();
+    window.GameAPI?.toggleGrid();
   }
 
   if (Phaser.Input.Keyboard.JustDown(this.keys.C) && typeof this.setPlayerCharacter === 'function') {
     const nextCharacter = this.playerCharacter === 'unicorn' ? 'classic' : 'unicorn';
     const appliedCharacter = this.setPlayerCharacter(nextCharacter);
     saveGameData({ settings: { character: appliedCharacter } });
-
-    const characterSelector = document.getElementById('characterSelector');
-    const characterDisplay = document.getElementById('characterDisplay');
-    if (characterSelector) {
-      characterSelector.value = appliedCharacter;
-    }
-    if (characterDisplay) {
-      characterDisplay.textContent = appliedCharacter === 'unicorn' ? 'Unicorn' : 'Classic';
-    }
   }
 
-  if (flow.paused) {
-    if ((this.keys.SPACE.isDown || input.touchFiring) && !this.isHandlingFeedback) {
-      dispatchMainSceneAction.call(this, MAIN_SCENE_ACTIONS.RESUME, {
-        source: this.keys.SPACE.isDown ? 'keyboard' : 'touch'
-      });
-      this.fireBlockTime = this.time.now + 100;
-    }
-    return false;
-  }
-
-  return true;
+  return !flow.paused;
 }

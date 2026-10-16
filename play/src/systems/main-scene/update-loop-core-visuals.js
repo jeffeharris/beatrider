@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import * as Tone from 'tone';
 import { gameSounds } from '../../audio/game-sounds.js';
+import { perspectiveScale } from './perspective.js';
+import { applyEnemyBeatPulse } from './update-loop-enemies.js';
+import { applyObstacleBeatPulse, obstacleShimmerAlpha } from './update-loop-obstacles-stars-powerups.js';
 
 export function updateIdleWobble(dt) {
   const { player } = this.stateSlices;
@@ -98,7 +101,8 @@ export function updateComboMeter() {
   }
 }
 
-export function updatePulseAndGrid(dt) {
+// Advance the sub-bass grid pulse and return this frame's lurch (progress) and sway (x).
+function advanceGridPulse(dt) {
   let pulseShift = 0;
   let pulseXShift = 0;
 
@@ -120,32 +124,62 @@ export function updatePulseAndGrid(dt) {
     }
   }
 
+  return { pulseShift, pulseXShift };
+}
+
+function applyGridSway(pulseXShift) {
+  if (this.gridGraphics) {
+    this.gridGraphics.x = pulseXShift;
+  }
+}
+
+/**
+ * While settings is open over a run, the world is frozen but the music keeps playing.
+ * Keep the beat visible: grid pulses and enemy/shield flashes still fire, nothing moves.
+ */
+export function updateFrozenPulseVisuals(dt) {
+  const { pulseShift, pulseXShift } = advanceGridPulse.call(this, dt);
+
+  if (this.gridVisible) {
+    this.gridOffset = (this.gridOffset || 0) + pulseShift;
+    this._drawPerspectiveGrid();
+  }
+  applyGridSway.call(this, pulseXShift);
+
+  const now = this.time.now;
+  for (const e of this.enemies) {
+    e.setScale(applyEnemyBeatPulse(e, perspectiveScale(e.progress), now));
+  }
+  for (const o of this.obstacles) {
+    const scale = perspectiveScale(o.progress);
+    o.setScale(scale, scale * 1.2);
+    o.setAlpha(applyObstacleBeatPulse(o, scale, obstacleShimmerAlpha(o), now));
+  }
+}
+
+export function updatePulseAndGrid(dt) {
+  const { pulseShift, pulseXShift } = advanceGridPulse.call(this, dt);
+
   if (!this.gridOffset) this.gridOffset = 0;
   const currentBPM = typeof Tone !== 'undefined' && Tone.Transport ? Tone.Transport.bpm.value : 132;
 
   if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) {
     gameSounds.currentLaserSound = 0;
-    this.updateSoundDisplay();
   }
   if (Phaser.Input.Keyboard.JustDown(this.keys.TWO)) {
     gameSounds.currentLaserSound = 1;
-    this.updateSoundDisplay();
   }
   if (Phaser.Input.Keyboard.JustDown(this.keys.THREE)) {
     gameSounds.currentLaserSound = 2;
-    this.updateSoundDisplay();
   }
   if (Phaser.Input.Keyboard.JustDown(this.keys.FOUR)) {
     gameSounds.currentLaserSound = 3;
-    this.updateSoundDisplay();
   }
   if (Phaser.Input.Keyboard.JustDown(this.keys.FIVE)) {
     gameSounds.currentLaserSound = 4;
-    this.updateSoundDisplay();
   }
   if (Phaser.Input.Keyboard.JustDown(this.keys.SIX)) {
     gameSounds.currentLaserSound = 5;
-    this.updateSoundDisplay();
   }
 
   this.gridOffset += (dt / 1000) * (currentBPM / 60) + pulseShift;
@@ -153,11 +187,7 @@ export function updatePulseAndGrid(dt) {
     this._drawPerspectiveGrid();
   }
 
-  if (this.gridGraphics && pulseXShift !== 0) {
-    this.gridGraphics.x = pulseXShift;
-  } else if (this.gridGraphics) {
-    this.gridGraphics.x = 0;
-  }
+  applyGridSway.call(this, pulseXShift);
 
   return { pulseShift, pulseXShift };
 }

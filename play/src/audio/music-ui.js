@@ -1,35 +1,25 @@
-// music-ui.js - Music UI setup extracted from monolith
-// All DOM event listeners for music controls, settings panel, genre switching, etc.
+// music-ui.js - binds the settings menu's controls (index.html #settingsMenu) to the
+// music engine and the saved game settings. Opening and closing menus lives in ui/menus.js.
 
 import * as Tone from 'tone';
-import { DEFAULT_CHARACTER_ID, saveGameDataDebounced, savedData } from '../storage.js';
-import { unlockIOSAudio } from './ios-unlock.js';
+import { DEFAULT_CHARACTER_ID, saveGameData, saveGameDataDebounced, savedData } from '../storage.js';
+import { gameState } from '../config.js';
 import {
   energyLevel, setEnergyLevel,
   tensionLevel, setTensionLevel,
   currentGenre, setCurrentGenre,
-  currentBar, setCurrentBar,
-  currentChordIndex, setCurrentChordIndex,
-  lastSection, setLastSection,
   muteStates,
   updatePatterns,
-  ensureTransportScheduled,
   applyTension,
   GENRE_CONFIGS,
-  raveSynth, setRaveSynth,
+  setRaveSynth,
   kick,
   technoStab,
   dnbReese,
   tropicalPluck
 } from './music-engine.js';
 import { gameSounds } from './game-sounds.js';
-
-// UI State Management
-const uiState = {
-  isPlaying: false,
-  settingsOpen: false,
-  gridVisible: false
-};
+import { onSettingsOpen } from '../ui/menus.js';
 
 // Music preset definitions
 const MUSIC_PRESETS = {
@@ -53,10 +43,17 @@ const DIFFICULTY_PRESETS = {
   'chaos': { key: 'chaos', speedMult: 2.0, fireMult: 0.5, spawnMult: 2.0, description: 'Maximum chaos' }
 };
 
-const CHARACTER_LABELS = {
-  unicorn: 'Unicorn',
-  classic: 'Classic'
+const CHARACTER_IDS = ['unicorn', 'classic'];
+
+const GENRE_BUTTONS = {
+  techno: 'genreTechno',
+  dnb: 'genreDnb',
+  tropical: 'genreTropical',
+  dubstep: 'genreDubstep',
+  trance: 'genreTrance'
 };
+
+const TRACKS = ['kick', 'snare', 'hat', 'acid', 'stab', 'sub'];
 
 // Derive from saved settings, not a hardcoded default: the settings panel only restored
 // the <select> value on load, so a player who had chosen e.g. chaos was shown "chaos"
@@ -73,51 +70,17 @@ const trackEventSafe = (eventName, params) => {
     window.trackEvent(eventName, params);
   }
 };
+const byId = (id) => document.getElementById(id);
 
-function updatePlayPauseButton() {
-  const btn = document.getElementById('playPauseBtn');
-  if (!btn) return;
-
-  // Use simple text that won't render as emojis
-  if (uiState.isPlaying) {
-    btn.textContent = '||';
-    btn.title = 'Pause';
-  } else {
-    btn.textContent = '\u25b6';
-    btn.title = 'Play';
-  }
-}
-
-function updateSettingsButton() {
-  const btn = document.getElementById('expandBtn');
-  if (!btn) return;
-
-  if (uiState.settingsOpen) {
-    btn.textContent = 'X';
-    btn.title = 'Close Settings';
-  } else {
-    btn.textContent = '\u2630';
-    btn.title = 'Settings';
-  }
-}
-
-function updateGridButton() {
-  const btn = document.getElementById('gridToggleBtn');
-  if (!btn) return;
-
-  btn.textContent = '\u229e';
-
-  if (uiState.gridVisible) {
-    btn.style.color = '#0f0';
-  } else {
-    btn.style.color = '#666';
-  }
+function setSliderValue(name, value) {
+  byId(`${name}Slider`).value = value;
+  byId(`${name}Display`).textContent = value;
 }
 
 // Update sliders to set preset to custom
 const markCustomPreset = () => {
-  document.getElementById('musicPresetSelector').value = '';
-  document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
+  byId('musicPresetSelector').value = '';
+  byId('musicPresetDisplay').textContent = 'Custom settings';
 };
 
 function switchGenre(genre) {
@@ -136,16 +99,14 @@ function switchGenre(genre) {
   }
 
   // Update BPM slider range and value
-  const bpmSlider = document.getElementById('bpmSlider');
+  const bpmSlider = byId('bpmSlider');
   bpmSlider.min = config.bpmMin;
   bpmSlider.max = config.bpmMax;
-  bpmSlider.value = config.bpmDefault;
+  setSliderValue('bpm', config.bpmDefault);
 
-  // Update BPM
   withTransport((transport) => {
     transport.bpm.value = config.bpmDefault;
   });
-  document.getElementById('bpmDisplay').textContent = config.bpmDefault;
 
   // Switch stab synth based on genre
   if (genre === 'dnb') {
@@ -185,122 +146,93 @@ function switchGenre(genre) {
     }
   }
 
-  // Update button styles
-  const genreButtonMap = {
-    'techno': 'genreTechno',
-    'dnb': 'genreDnb',
-    'tropical': 'genreTropical',
-    'dubstep': 'genreDubstep',
-    'trance': 'genreTrance'
-  };
-
-  Object.keys(genreButtonMap).forEach(g => {
-    const btn = document.getElementById(genreButtonMap[g]);
-    if (btn) {
-      btn.style.setProperty('background', genre === g ? '#0f0' : '#333', 'important');
-      btn.style.setProperty('color', genre === g ? '#000' : '#0f0', 'important');
-    }
+  Object.entries(GENRE_BUTTONS).forEach(([g, id]) => {
+    byId(id)?.setAttribute('aria-pressed', String(genre === g));
   });
 
   // Force pattern update on next bar
   updatePatterns();
 }
 
-// Handle touch events for transparency
-function addTouchHandlers(element) {
-  if (!element) return;
-
-  let touchTimeout;
-
-  // Only add touch handlers on actual touch devices
-  if ('ontouchstart' in window) {
-    element.addEventListener('touchstart', () => {
-      element.classList.add('touched');
-      clearTimeout(touchTimeout);
-    });
-
-    element.addEventListener('touchend', () => {
-      // Keep opaque for a bit after touch ends
-      touchTimeout = setTimeout(() => {
-        element.classList.remove('touched');
-      }, 3000); // Stay visible for 3 seconds after touch
-    });
-  }
-
-  // For desktop, ensure touched class is removed on mouse leave
-  element.addEventListener('mouseleave', () => {
-    // Remove immediately on desktop
-    element.classList.remove('touched');
-  });
+function renderTrackMute(track) {
+  const square = byId(track + 'Square');
+  if (!square) return;
+  square.classList.toggle('muted', muteStates[track]);
+  square.setAttribute('aria-pressed', String(!muteStates[track]));
+  square.title = `${square.textContent}: ${muteStates[track] ? 'muted' : 'on'}`;
 }
 
-export { uiState, MUSIC_PRESETS, DIFFICULTY_PRESETS, currentDifficulty, switchGenre, updatePlayPauseButton, updateSettingsButton, updateGridButton };
+// Apply saved music settings to the engine and the controls. This used to wait for
+// window 'load', but setup runs from a tap long after the page loaded, so it never ran:
+// saved moods, custom sliders and mute squares were never restored.
+function applySavedMusicSettings() {
+  const settings = savedData.settings || {};
 
-export function setupMusicUI() {
-  // Play/pause button handler
-  const playPauseBtn = document.getElementById('playPauseBtn');
-  if (playPauseBtn) {
-    playPauseBtn.addEventListener('click', async () => {
-      // iOS audio unlock - critical for iPhone/iPad
-      if (typeof unlockIOSAudio === 'function') {
-        await unlockIOSAudio();
-      }
-
-      // Ensure proper audio context initialization
-      try {
-        await Tone.start();
-
-        // Mac-specific: ensure context is truly running
-        if (Tone.context.state === 'suspended') {
-          await Tone.context.resume();
-        }
-      } catch (error) {
-        console.error('Error initializing audio:', error);
-      }
-
-      // Check if game is running and handle game pause
-      const gameScene = window.gameScene;
-      if (gameScene && gameScene.scene.isActive()) {
-        if (Tone.Transport.state === 'started') {
-          // Pause both music and game
-          gameScene.pauseGame();
-        } else {
-          // Resume both music and game
-          gameScene.resumeGame();
-        }
-      } else {
-        // No game running, just handle music
-        if (Tone.Transport.state !== 'started') {
-          // Play
-          setCurrentBar(0);
-          window.currentBar = 0;
-          setCurrentChordIndex(0);
-          setLastSection('');
-          updatePatterns();
-          ensureTransportScheduled();
-          Tone.Transport.start();
-          document.getElementById('status').textContent = 'PLAYING';
-          uiState.isPlaying = true;
-          updatePlayPauseButton();
-        } else {
-          // Pause
-          Tone.Transport.pause();
-          document.getElementById('status').textContent = 'PAUSED';
-          uiState.isPlaying = false;
-          updatePlayPauseButton();
-        }
-      }
-    });
+  if (settings.musicPreset === 'custom' && settings.customMusic) {
+    const custom = settings.customMusic;
+    if (custom.bpm) {
+      withTransport((transport) => {
+        transport.bpm.value = custom.bpm;
+      });
+      setSliderValue('bpm', custom.bpm);
+    }
+    if (custom.energy !== undefined) {
+      setEnergyLevel(custom.energy);
+      setSliderValue('energy', custom.energy);
+    }
+    if (custom.tension !== undefined) {
+      setTensionLevel(custom.tension);
+      setSliderValue('tension', custom.tension);
+    }
+    markCustomPreset();
+  } else {
+    const presetKey = MUSIC_PRESETS[settings.musicPreset] ? settings.musicPreset : byId('musicPresetSelector').value;
+    const preset = MUSIC_PRESETS[presetKey];
+    if (preset) {
+      setEnergyLevel(preset.energy);
+      setTensionLevel(preset.tension);
+      byId('musicPresetSelector').value = presetKey;
+      byId('musicPresetDisplay').textContent = preset.description;
+      setSliderValue('energy', preset.energy);
+      setSliderValue('tension', preset.tension);
+    }
   }
 
-  // BPM slider
-  document.getElementById('bpmSlider').addEventListener('input', (e) => {
+  byId('difficultySelector').value = currentDifficulty.key;
+  byId('difficultyDisplay').textContent = currentDifficulty.description;
+
+  TRACKS.forEach(renderTrackMute);
+}
+
+/**
+ * Reflect settings that can also change outside the menu (C, G and 1-6 keys) into its
+ * controls. Called every time the settings menu opens.
+ */
+export function syncSettingsControls() {
+  const sceneCharacter = window.gameScene?.playerCharacter;
+  const character = CHARACTER_IDS.includes(sceneCharacter)
+    ? sceneCharacter
+    : (CHARACTER_IDS.includes(savedData.settings?.character) ? savedData.settings.character : DEFAULT_CHARACTER_ID);
+  byId('characterSelector').value = character;
+  byId('soundSelector').value = String(gameSounds.currentLaserSound);
+  byId('gridToggle').checked = Boolean(gameState.gridEnabled);
+}
+
+export { MUSIC_PRESETS, DIFFICULTY_PRESETS, currentDifficulty, switchGenre };
+
+let musicUIReady = false;
+
+export function setupMusicUI() {
+  // The start screen's settings button and the game start both call this.
+  if (musicUIReady) return;
+  musicUIReady = true;
+
+  byId('bpmSlider').addEventListener('input', (e) => {
     const bpm = parseInt(e.target.value);
     withTransport((transport) => {
       transport.bpm.value = bpm;
     });
-    document.getElementById('bpmDisplay').textContent = bpm;
-    // Mark as custom and save
+    byId('bpmDisplay').textContent = bpm;
     markCustomPreset();
     saveGameDataDebounced({
       settings: {
@@ -310,11 +242,9 @@ export function setupMusicUI() {
     });
   });
 
-  // Energy slider
-  document.getElementById('energySlider').addEventListener('input', (e) => {
+  byId('energySlider').addEventListener('input', (e) => {
     setEnergyLevel(parseInt(e.target.value));
-    document.getElementById('energyDisplay').textContent = energyLevel;
-    // Mark as custom and save
+    byId('energyDisplay').textContent = energyLevel;
     markCustomPreset();
     saveGameDataDebounced({
       settings: {
@@ -324,15 +254,13 @@ export function setupMusicUI() {
     });
   });
 
-  // Tension slider
-  document.getElementById('tensionSlider').addEventListener('input', (e) => {
+  byId('tensionSlider').addEventListener('input', (e) => {
     setTensionLevel(parseInt(e.target.value));
-    document.getElementById('tensionDisplay').textContent = tensionLevel;
+    byId('tensionDisplay').textContent = tensionLevel;
     // Apply tension immediately when slider moves
     if (Tone.Transport.state === 'started') {
       applyTension();
     }
-    // Mark as custom and save
     markCustomPreset();
     saveGameDataDebounced({
       settings: {
@@ -342,19 +270,13 @@ export function setupMusicUI() {
     });
   });
 
-  // Sound selector
-  document.getElementById('soundSelector').addEventListener('change', (e) => {
+  byId('soundSelector').addEventListener('change', (e) => {
     gameSounds.currentLaserSound = parseInt(e.target.value);
-    document.getElementById('soundDisplay').textContent = e.target.options[e.target.selectedIndex].text;
-    // Save laser sound selection
     saveGameDataDebounced({ settings: { laserSound: gameSounds.currentLaserSound } });
   });
 
-  // Character selector
-  document.getElementById('characterSelector')?.addEventListener('change', (e) => {
-    const character = CHARACTER_LABELS[e.target.value] ? e.target.value : DEFAULT_CHARACTER_ID;
-    const label = CHARACTER_LABELS[character];
-    document.getElementById('characterDisplay').textContent = label;
+  byId('characterSelector').addEventListener('change', (e) => {
+    const character = CHARACTER_IDS.includes(e.target.value) ? e.target.value : DEFAULT_CHARACTER_ID;
 
     const gameScene = window.gameScene;
     if (gameScene && typeof gameScene.setPlayerCharacter === 'function') {
@@ -368,8 +290,17 @@ export function setupMusicUI() {
     });
   });
 
-  // Music preset selector
-  document.getElementById('musicPresetSelector')?.addEventListener('change', (e) => {
+  byId('gridToggle').addEventListener('change', (e) => {
+    if (e.target.checked === Boolean(gameState.gridEnabled)) return;
+    if (window.gameScene?.scene?.isActive() && window.GameAPI?.toggleGrid) {
+      window.GameAPI.toggleGrid();
+    } else {
+      gameState.gridEnabled = e.target.checked;
+      saveGameData({ settings: { gridEnabled: gameState.gridEnabled } });
+    }
+  });
+
+  byId('musicPresetSelector').addEventListener('change', (e) => {
     const presetKey = e.target.value;
     if (presetKey && MUSIC_PRESETS[presetKey]) {
       const preset = MUSIC_PRESETS[presetKey];
@@ -377,41 +308,29 @@ export function setupMusicUI() {
       // Apply preset values (no BPM - let genre control that)
       setEnergyLevel(preset.energy);
       setTensionLevel(preset.tension);
+      setSliderValue('energy', preset.energy);
+      setSliderValue('tension', preset.tension);
+      byId('musicPresetDisplay').textContent = preset.description;
 
-      // Update sliders (energy and tension only)
-      document.getElementById('energySlider').value = preset.energy;
-      document.getElementById('energyDisplay').textContent = preset.energy;
-      document.getElementById('tensionSlider').value = preset.tension;
-      document.getElementById('tensionDisplay').textContent = preset.tension;
-
-      // Update description
-      document.getElementById('musicPresetDisplay').textContent = preset.description;
-
-      // Apply tension if playing
       if (Tone.Transport.state === 'started') {
         applyTension();
       }
 
-      // Save preset selection
       saveGameDataDebounced({ settings: { musicPreset: presetKey } });
     } else {
-      document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
-      // Save custom preset marker
+      byId('musicPresetDisplay').textContent = 'Custom settings';
       saveGameDataDebounced({ settings: { musicPreset: 'custom' } });
     }
   });
 
-  // Difficulty selector
-  document.getElementById('difficultySelector')?.addEventListener('change', (e) => {
+  byId('difficultySelector').addEventListener('change', (e) => {
     const diffKey = e.target.value;
     if (DIFFICULTY_PRESETS[diffKey]) {
       currentDifficulty = DIFFICULTY_PRESETS[diffKey];
-      document.getElementById('difficultyDisplay').textContent = currentDifficulty.description;
+      byId('difficultyDisplay').textContent = currentDifficulty.description;
 
-      // Save difficulty setting
       saveGameDataDebounced({ settings: { difficulty: diffKey } });
 
-      // Track difficulty change
       trackEventSafe('settings_change', {
         setting_type: 'difficulty',
         difficulty_level: diffKey,
@@ -420,236 +339,19 @@ export function setupMusicUI() {
     }
   });
 
-  // Genre switching handlers
-  document.getElementById('genreTechno').addEventListener('click', () => switchGenre('techno'));
-  document.getElementById('genreDnb').addEventListener('click', () => switchGenre('dnb'));
-  document.getElementById('genreTropical').addEventListener('click', () => switchGenre('tropical'));
-  document.getElementById('genreDubstep').addEventListener('click', () => switchGenre('dubstep'));
-  document.getElementById('genreTrance').addEventListener('click', () => switchGenre('trance'));
+  Object.entries(GENRE_BUTTONS).forEach(([genre, id]) => {
+    byId(id).addEventListener('click', () => switchGenre(genre));
+  });
 
-  // Initial BPM and genre - will be overridden by saved settings if they exist
-  document.getElementById('bpmDisplay').textContent = 132;
-  // Set initial genre button highlighting
+  TRACKS.forEach(track => {
+    byId(track + 'Square')?.addEventListener('click', () => {
+      muteStates[track] = !muteStates[track];
+      renderTrackMute(track);
+      saveGameDataDebounced({ settings: { trackMutes: { [track]: muteStates[track] } } });
+    });
+  });
+
   switchGenre('techno');
-
-  // Apply saved music settings after page loads
-  window.addEventListener('load', () => {
-    if (savedData.settings) {
-      // Apply saved music preset or custom values
-      if (savedData.settings.musicPreset === 'custom' && savedData.settings.customMusic) {
-        // Apply custom BPM/energy/tension
-        const custom = savedData.settings.customMusic;
-        if (custom.bpm) {
-          withTransport((transport) => {
-            transport.bpm.value = custom.bpm;
-          });
-          document.getElementById('bpmSlider').value = custom.bpm;
-          document.getElementById('bpmDisplay').textContent = custom.bpm;
-        }
-        if (custom.energy !== undefined) {
-          setEnergyLevel(custom.energy);
-          document.getElementById('energySlider').value = custom.energy;
-          document.getElementById('energyDisplay').textContent = custom.energy;
-        }
-        if (custom.tension !== undefined) {
-          setTensionLevel(custom.tension);
-          document.getElementById('tensionSlider').value = custom.tension;
-          document.getElementById('tensionDisplay').textContent = custom.tension;
-        }
-        // Set preset selector to custom
-        document.getElementById('musicPresetSelector').value = '';
-        document.getElementById('musicPresetDisplay').textContent = 'Custom settings';
-      } else if (savedData.settings.musicPreset && MUSIC_PRESETS[savedData.settings.musicPreset]) {
-        // Apply preset
-        const preset = MUSIC_PRESETS[savedData.settings.musicPreset];
-        setEnergyLevel(preset.energy);
-        setTensionLevel(preset.tension);
-        document.getElementById('musicPresetSelector').value = savedData.settings.musicPreset;
-        document.getElementById('musicPresetDisplay').textContent = preset.description;
-        document.getElementById('energySlider').value = preset.energy;
-        document.getElementById('energyDisplay').textContent = preset.energy;
-        document.getElementById('tensionSlider').value = preset.tension;
-        document.getElementById('tensionDisplay').textContent = preset.tension;
-      }
-
-      // Apply saved difficulty UI
-      if (savedData.settings.difficulty) {
-        document.getElementById('difficultySelector').value = savedData.settings.difficulty;
-        document.getElementById('difficultyDisplay').textContent = currentDifficulty.description;
-      }
-
-      // Apply saved laser sound UI
-      if (savedData.settings.laserSound !== undefined) {
-        document.getElementById('soundSelector').value = savedData.settings.laserSound;
-        const soundNames = ['Triangle', 'Acid', 'Chord', 'Echo', 'Pluck', 'Pew Pew'];
-        document.getElementById('soundDisplay').textContent = soundNames[savedData.settings.laserSound];
-      }
-
-      // Apply saved character UI and active scene character
-      const savedCharacter = CHARACTER_LABELS[savedData.settings.character]
-        ? savedData.settings.character
-        : DEFAULT_CHARACTER_ID;
-      const characterSelector = document.getElementById('characterSelector');
-      const characterDisplay = document.getElementById('characterDisplay');
-      if (characterSelector) {
-        characterSelector.value = savedCharacter;
-      }
-      if (characterDisplay) {
-        characterDisplay.textContent = CHARACTER_LABELS[savedCharacter];
-      }
-      const gameScene = window.gameScene;
-      if (gameScene && typeof gameScene.setPlayerCharacter === 'function') {
-        gameScene.setPlayerCharacter(savedCharacter);
-      }
-
-      // Apply mute states to UI
-      Object.keys(muteStates).forEach(track => {
-        const square = document.getElementById(track + 'Square');
-        if (square) {
-          if (muteStates[track]) {
-            square.classList.remove('active');
-            square.classList.add('muted');
-          } else {
-            square.classList.add('active');
-            square.classList.remove('muted');
-          }
-        }
-      });
-    }
-  });
-
-  // Track square handlers for minimized controls
-  ['kick', 'snare', 'hat', 'acid', 'stab', 'sub'].forEach(track => {
-    const square = document.getElementById(track + 'Square');
-    if (square) {
-      // Initialize as active (not muted)
-      square.classList.add('active');
-
-      square.addEventListener('click', () => {
-        muteStates[track] = !muteStates[track];
-        if (muteStates[track]) {
-          square.classList.remove('active');
-          square.classList.add('muted');
-        } else {
-          square.classList.add('active');
-          square.classList.remove('muted');
-        }
-        // Save track mute state
-        saveGameDataDebounced({ settings: { trackMutes: { [track]: muteStates[track] } } });
-      });
-    }
-  });
-
-  // Expand/minimize panel with smooth animation
-  const expandBtn = document.getElementById('expandBtn');
-  const expandedPanel = document.getElementById('expandedPanel');
-  const musicControls = document.getElementById('musicControls');
-
-  // Add touch handlers to both panels
-  addTouchHandlers(musicControls);
-  addTouchHandlers(expandedPanel);
-
-  // Grid toggle button handler
-  const gridToggleBtn = document.getElementById('gridToggleBtn');
-  if (gridToggleBtn) {
-    // Don't set initial color here - wait for game to initialize
-    gridToggleBtn.addEventListener('click', () => {
-      // Trigger grid toggle in the game
-      if (window.GameAPI && window.GameAPI.toggleGrid) {
-        window.GameAPI.toggleGrid();
-      }
-    });
-  }
-
-  if (expandBtn) {
-    expandBtn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevent document click from firing
-      const musicControls = document.getElementById('musicControls');
-
-      if (expandedPanel.classList.contains('expanded')) {
-        // Panel is open, close it
-        expandedPanel.classList.remove('expanded');
-        musicControls.classList.remove('settings-open');
-        uiState.settingsOpen = false;
-        updateSettingsButton();
-
-        // Make player vulnerable again
-        const mainScene = window.game?.scene?.getScene('Main');
-        if (mainScene && mainScene.player) {
-          mainScene.isInvincible = false;
-        }
-      } else {
-        // Panel is closed, open it
-        expandedPanel.classList.add('expanded');
-        musicControls.classList.add('settings-open');
-        uiState.settingsOpen = true;
-        updateSettingsButton();
-
-        // Make player invincible and flash
-        const mainScene = window.game?.scene?.getScene('Main');
-        if (mainScene && mainScene.player) {
-          mainScene.isInvincible = true;
-
-          // Flash effect
-          mainScene.player.setTint(0xffff00);
-          mainScene.time.delayedCall(100, () => {
-            mainScene.player.setTint(0xffffff);
-            mainScene.time.delayedCall(100, () => {
-              mainScene.player.setTint(0xffff00);
-              mainScene.time.delayedCall(100, () => {
-                mainScene.player.clearTint();
-              });
-            });
-          });
-        }
-      }
-    });
-  }
-
-  // Close menu when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!uiState.settingsOpen) return;
-
-    const panel = document.getElementById('expandedPanel');
-    const btn = document.getElementById('expandBtn');
-    const musicControls = document.getElementById('musicControls');
-
-    // Check if click is outside panel, button, and music controls
-    if (!panel.contains(e.target) && !btn.contains(e.target) && !musicControls.contains(e.target)) {
-      panel.classList.remove('expanded');
-      musicControls.classList.remove('settings-open');
-      uiState.settingsOpen = false;
-      updateSettingsButton();
-
-      // Make player vulnerable again
-      const mainScene = window.game?.scene?.getScene('Main');
-      if (mainScene && mainScene.player) {
-        mainScene.isInvincible = false;
-      }
-    }
-  });
-
-  // Close menu when game control keys are pressed
-  document.addEventListener('keydown', (e) => {
-    if (!uiState.settingsOpen) return;
-
-    // Game control keys that should close the menu
-    const gameKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
-                      'a', 'd', 'w', 's', ' ', 'Escape'];
-
-    if (gameKeys.includes(e.key) || gameKeys.includes(e.key.toLowerCase())) {
-      const panel = document.getElementById('expandedPanel');
-      const musicControls = document.getElementById('musicControls');
-      panel.classList.remove('expanded');
-      musicControls.classList.remove('settings-open');
-      uiState.settingsOpen = false;
-      updateSettingsButton();
-
-      // Make player vulnerable again
-      const mainScene = window.game?.scene?.getScene('Main');
-      if (mainScene && mainScene.player) {
-        mainScene.isInvincible = false;
-      }
-    }
-  });
+  applySavedMusicSettings();
+  onSettingsOpen(syncSettingsControls);
 }

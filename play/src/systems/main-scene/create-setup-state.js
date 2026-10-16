@@ -4,6 +4,7 @@ import { currentGenre } from '../../audio/music-engine.js';
 import { currentDifficulty } from '../../audio/music-ui.js';
 import { initializeMainSceneStateSlices } from './state-slices.js';
 import { createGenreAttributionState } from '../../leaderboard/genre-attribution.js';
+import { setHudVisible } from '../../ui/menus.js';
 
 export function initCreateSceneState(data) {
   this.isTutorial = data?.tutorialMode || false;
@@ -46,12 +47,6 @@ export function initCreateSceneState(data) {
 
   initializeMainSceneStateSlices.call(this);
 
-  this.pauseOverlay = null;
-  this.pauseText = null;
-  this.wasAutoPaused = false;
-  this.pauseScoreText = null;
-  this.pauseHighScoreText = null;
-
   window.gameScene = this;
   window.currentGameScene = this;
 }
@@ -59,28 +54,21 @@ export function initCreateSceneState(data) {
 export function setupVisibilityAndShutdownHandlers() {
   if (this.visibilityHandler) return;
 
+  // Leaving the app mid-run (or mid-settings, with music playing) lands on the pause menu.
   this.visibilityHandler = () => {
-    const { flow } = this.stateSlices;
-    if (document.hidden) {
-      if (!flow.paused && !flow.gameOver) {
-        this.pauseGame();
-        this.wasAutoPaused = true;
-      }
-    } else if (this.wasAutoPaused) {
-      this.wasAutoPaused = false;
-      if (flow.paused && this.pauseOverlay) {
-        this.pauseOverlay.setVisible(true);
-        this.pauseText.setVisible(true);
-      }
-    }
+    if (document.hidden) this.pauseGame();
   };
 
   document.addEventListener('visibilitychange', this.visibilityHandler);
+  setHudVisible(true);
 
   this.events.once('shutdown', () => {
     if (this.visibilityHandler) {
       document.removeEventListener('visibilitychange', this.visibilityHandler);
+      // Cleared so a restarted scene registers its handler again.
+      this.visibilityHandler = null;
     }
+    setHudVisible(false);
     if (this.musicWatchdog) {
       this.musicWatchdog.remove(false);
       this.musicWatchdog = null;

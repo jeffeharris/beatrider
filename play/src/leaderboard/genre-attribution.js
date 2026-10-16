@@ -6,8 +6,8 @@
 // detect mixed runs.
 //
 // CRITICAL: `elapsedMs` values passed in here are play time
-// (scene.time.now - scene.gameStartTime), never raw clock time. resumeGameSystem()
-// already advances gameStartTime by the pause duration (pause-overlay.js), so elapsed
+// (scene.time.now - scene.gameStartTime), never raw clock time. Thawing a frozen run
+// already advances gameStartTime by the pause duration (menu-flow.js), so elapsed
 // time excludes paused time and every segment boundary is pause-compensated without
 // this module needing to know that pause exists.
 //

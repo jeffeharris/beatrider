@@ -1,2 +1,2 @@
-export { pauseGameSystem, resumeGameSystem } from './pause-overlay.js';
+export { pauseGameSystem, resumeGameSystem, openSettingsSystem, closeSettingsSystem, restartRunSystem, quitToTitleSystem } from './menu-flow.js';
 export { showGameOverScreenSystem } from './game-over.js';

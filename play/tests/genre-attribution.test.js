@@ -58,7 +58,7 @@ test('genres switched through without elapsed time do not make a run mixed', () 
 });
 
 test('paused time is excluded because elapsed play time is what advances', () => {
-  // resumeGameSystem() shifts gameStartTime by the pause duration, so elapsed play time
+  // Thawing a frozen run (menu-flow.js) shifts gameStartTime by the pause duration, so elapsed play time
   // simply stops advancing while paused. A switch made either side of a pause must
   // therefore attribute only real play time.
   let state = createGenreAttributionState('techno');

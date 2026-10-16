@@ -15,7 +15,8 @@ function buttonPosition() {
   // Bottom-right. The top-right corner collides with the boot-sequence text on narrow
   // viewports, and the centre column is already crowded by the instruction stack;
   // nothing else on this screen is anchored to the bottom-right at any size.
-  return { x: gameState.WIDTH - 20, y: gameState.HEIGHT - 20 };
+  // Inset by less than the button's padding so the label still sits ~20px in.
+  return { x: gameState.WIDTH - 6, y: gameState.HEIGHT - 6 };
 }
 
 export function isHighScorePanelOpen() {
@@ -44,6 +45,7 @@ export function createHighScoresButtonSystem() {
     fill: '#00ff00'
   });
   button.setOrigin(1, 1);
+  button.setPadding(12, 8);
   button.setAlpha(0.6);
   button.setDepth(BUTTON_DEPTH);
   button.setInteractive({ useHandCursor: true });

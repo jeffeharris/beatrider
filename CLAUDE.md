@@ -33,7 +33,8 @@ Root `python serve.py [port]` (default 5174) serves the static landing page/lega
 - `play/src/scenes/` — `startup-scene.js` (`StartupScene`: start screen, audio unlock) and `main-scene.js` (`Main`: core gameplay)
 - `play/src/systems/main-scene/` — ~40 modules holding the Main scene's logic (setup, update loops per entity type, movement/jump/dash, mobile controls, grid/fire, starfield, tutorial, game over, state slices)
 - `play/src/systems/startup-scene/` — startup scene systems
-- `play/src/audio/` — `music-engine.js` (procedural music), `music-ui.js` (settings panel, difficulty, genre/preset UI), `game-sounds.js` (synthesized SFX, 6 laser variants), `ios-unlock.js`, `latency-probe.js`
+- `play/src/audio/` — `music-engine.js` (procedural music), `music-ui.js` (binds the settings menu's controls: difficulty, genre/preset, track mutes), `game-sounds.js` (synthesized SFX, 6 laser variants), `ios-unlock.js`, `latency-probe.js`
+- `play/src/ui/menus.js` — the DOM menus in `play/index.html`: in-game buttons (`#hud`), pause menu, settings menu; shows screens and routes clicks/ESC/SPACE to the scene
 - `play/src/leaderboard/` — local leaderboard entries, formatting, genre attribution, store, view
 - `play/src/native/bootstrap.js` + `play/ios/` — Capacitor native shell (config at `play/capacitor.config.json`, `webDir: dist`)
 - `play/tests/` — `node:test` + `node:assert` unit tests for the pure state modules
@@ -71,6 +72,13 @@ window.GameAPI = {
 - **Rapid-fire zoom**: while `combat.rapidFire` is on, the main camera dollies in (1.5x), pans toward the ship, the horizon drops and the depth curve flattens. The pure geometry is in `perspective-zoom.js` (tested in `tests/perspective-zoom.test.js`). The Phaser glue is in `perspective-camera.js`, which sets `this.vanishX` / `this.vanishY` / `this.perspectiveExponent` at the start of every frame. Read those instead of recomputing the vanishing point. The world never moves for the zoom: lanes, the ship row, progress and collision are unchanged; only the camera and projection parameters change. Tuning lives in `tuning.js` (`ZOOM_*`).
 - **Two cameras**: the main camera draws the world and zooms; a HUD camera draws screen-space UI and never moves. Which one draws an object is decided by its depth every frame: `depth >= HUD_DEPTH` (1000) is UI. Give new HUD, overlay or tutorial objects a depth of `HUD_DEPTH` or higher, and keep world objects (including effects) below it.
 
+### Menus
+
+- Which menu is open lives in `flow.menu` (`'none' | 'pause' | 'settings'`), driven by the pure transitions in `state-transitions.js` (`applyPauseTransition`, `applyOpenSettingsTransition`, ...; unit-tested). Any open menu sets `flow.paused` (gameplay frozen); `shouldMusicPlay(flow)` is false only behind the pause menu.
+- Settings opened mid-run freezes the world but keeps the music playing so changes are audible. The GameAPI beat handlers spawn nothing while `flow.paused` (no catch-up on resume, no beat count); they only re-pulse what's on screen, drawn by `updateFrozenPulseVisuals`.
+- `systems/main-scene/menu-flow.js` is the scene glue: freeze/thaw bookkeeping, Transport pause/resume, blur, keyboard hand-off (the scene keyboard is disabled while a menu is open), restart and quit-to-title. It calls `showMenu()` in `ui/menus.js`.
+- Pause and settings are refused during game over, so the two screens never stack.
+
 ### Game Systems
 
 - Collision: lane + progress window checks (e.g. enemies hit only at progress 0.94–0.97, a window centred on `PLAYER_PROGRESS`, so you can step behind them)
@@ -96,7 +104,7 @@ For in-browser checks, `/play/?testMode=1` runs the game on a seeded, fixed-step
 - W / Up: jump
 - S / Down: hold to charge super jump
 - Space: fire
-- G: toggle grid, C: switch character, ESC: pause
+- G: toggle grid, C: switch character, ESC: pause / back out of a menu (SPACE also resumes from pause)
 - 1–6: switch laser sound
 - F2: debug HUD
 

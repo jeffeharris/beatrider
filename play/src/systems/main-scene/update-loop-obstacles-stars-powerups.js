@@ -10,6 +10,38 @@ import {
 import { applyDamage, fillResourcesFromPickup } from './damage-state.js';
 import { projectY, perspectiveScale } from './perspective.js';
 
+
+// Hi-hat hits make shields already on screen surge with an electric flash. Sets the
+// pulsed scale and tint and returns the boosted alpha. Shared with the frozen settings
+// view, where the music keeps playing but nothing moves.
+export function applyObstacleBeatPulse(o, scale, alpha, now) {
+  if (!o.pulseTime) return alpha;
+  const timeSincePulse = now - o.pulseTime;
+  if (timeSincePulse >= 200) { // Shorter, sharper pulse for electric effect
+    o.clearTint(); // Reset tint after pulse
+    return alpha;
+  }
+  const pulseProgress = 1 - (timeSincePulse / 200);
+  const pulseMagnitude = Math.sin(pulseProgress * Math.PI);
+
+  // Scale pulse - make shield "surge" with electricity
+  const pulseScale = 1 + pulseMagnitude * 0.3;
+  o.setScale(scale * pulseScale, scale * 1.2 * pulseScale);
+
+  // Bright electric flash - purple to white
+  const tintR = 191 + (64 * pulseMagnitude); // 191 -> 255
+  const tintG = 64 + (191 * pulseMagnitude);  // 64 -> 255
+  o.setTint(Phaser.Display.Color.GetColor(tintR, tintG, 255));
+
+  // Boost alpha for electric surge
+  return Math.min(1, alpha + pulseMagnitude * 0.3);
+}
+
+/** Resting shimmer alpha for a shield, from its shimmer phase and depth. */
+export function obstacleShimmerAlpha(o) {
+  return 0.85 + Math.sin((o.shimmerTime || 0) + o.progress * 3) * 0.15;
+}
+
 export function updateObstaclesStarsPowerUpsSystem(dt, pulseShift, pulseXShift) {
 const { player: playerState, flow, combat } = this.stateSlices;
 const { vanishY, perspectiveExponent: exponent } = this;
@@ -149,32 +181,9 @@ for(let i=this.obstacles.length-1; i>=0; i--){
   // Animate the whole obstacle with shimmer effect on the barrier part
   if (!o.shimmerTime) o.shimmerTime = 0;
   o.shimmerTime += dt * 0.004; // Slow shimmer
-  let shimmerAlpha = 0.85 + Math.sin(o.shimmerTime + o.progress * 3) * 0.15;
+  let shimmerAlpha = obstacleShimmerAlpha(o);
   
-  // Add electric pulse effect on hi-hat beats
-  if(o.pulseTime) {
-    const timeSincePulse = this.time.now - o.pulseTime;
-    if(timeSincePulse < 200) { // Shorter, sharper pulse for electric effect
-      const pulseProgress = 1 - (timeSincePulse / 200);
-      const pulseMagnitude = Math.sin(pulseProgress * Math.PI);
-      
-      // Scale pulse - make shield "surge" with electricity
-      const pulseScale = 1 + pulseMagnitude * 0.3;
-      o.setScale(scale * pulseScale, scale * 1.2 * pulseScale);
-      
-      // Bright electric flash - purple to white
-      const flashIntensity = pulseMagnitude;
-      const tintR = 191 + (64 * flashIntensity); // 191 -> 255
-      const tintG = 64 + (191 * flashIntensity);  // 64 -> 255  
-      const tintB = 255; // Keep full blue
-      o.setTint(Phaser.Display.Color.GetColor(tintR, tintG, tintB));
-      
-      // Boost alpha for electric surge
-      shimmerAlpha = Math.min(1, shimmerAlpha + pulseMagnitude * 0.3);
-    } else {
-      o.clearTint(); // Reset tint after pulse
-    }
-  }
+  shimmerAlpha = applyObstacleBeatPulse(o, scale, shimmerAlpha, this.time.now);
   
   o.setAlpha(shimmerAlpha);
   
